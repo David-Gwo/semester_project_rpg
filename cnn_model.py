@@ -3,26 +3,40 @@ import tensorflow as tf
 
 def cnn_model_fn(features, labels, mode):
     """Model function for CNN."""
+
+    with tf.name_scope("input"):
+        x = features["x"]
+        y = labels
+
     # Input Layer
-    input_layer = tf.reshape(features["x"], [-1, 28, 28, 1])
+    with tf.name_scope("reshape_layer"):
+        input_layer = tf.reshape(x, [-1, 28, 28, 1])
 
     # Convolutional Layer #1
-    conv1 = tf.layers.Conv2D(filters=32, kernel_size=5, padding="same", activation=tf.nn.relu)(input_layer)
+    with tf.name_scope("convolutional_1"):
+        conv1 = tf.layers.Conv2D(filters=32, kernel_size=5, padding="same", activation=tf.nn.relu)(input_layer)
 
     # Pooling Layer #1
-    pool1 = tf.layers.MaxPooling2D(pool_size=2, strides=2)(conv1)
+    with tf.name_scope("pooling_1"):
+        pool1 = tf.layers.MaxPooling2D(pool_size=2, strides=2)(conv1)
 
     # Convolutional Layer #2 and Pooling Layer #2
-    conv2 = tf.layers.Conv2D(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(pool1)
-    pool2 = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(conv2)
+    with tf.name_scope("convolutional_2"):
+        conv2 = tf.layers.Conv2D(filters=64, kernel_size=5, padding="same", activation=tf.nn.relu)(pool1)
+    with tf.name_scope("pooling_2"):
+        pool2 = tf.layers.MaxPooling2D(pool_size=[2, 2], strides=2)(conv2)
 
     # Dense Layer and Dropout
-    pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
-    dense = tf.layers.Dense(units=1024, activation=tf.nn.relu)(pool2_flat)
-    dropout = tf.layers.Dropout(rate=0.4)(dense)
+    with tf.name_scope("dense_1"):
+        pool2_flat = tf.reshape(pool2, [-1, 7 * 7 * 64])
+        dense = tf.layers.Dense(units=1024, activation=tf.nn.relu)(pool2_flat)
+
+    with tf.name_scope("dropout"):
+        dropout = tf.layers.Dropout(rate=0.4)(dense)
 
     # Logits Layer
-    logits = tf.layers.Dense(units=10)(dropout)
+    with tf.name_scope("logits"):
+        logits = tf.layers.Dense(units=10)(dropout)
 
     predictions = {
         # Generate predictions (for PREDICT and EVAL mode)
