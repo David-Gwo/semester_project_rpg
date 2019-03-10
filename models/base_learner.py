@@ -5,7 +5,6 @@ from itertools import count
 import math
 import random
 import tensorflow as tf
-import numpy as np
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.training.adam import AdamOptimizer
 
@@ -13,7 +12,7 @@ from tensorflow.python.training.adam import AdamOptimizer
 # IMPORT YOUR FAVORITE NETWORK HERE (in place of resnet8) #
 ###########################################################
 
-from .nets import resnet8 as prediction_network
+from .nets import resnet8_model as prediction_network
 from data import DirectoryIterator
 
 #############################################################################
@@ -62,6 +61,7 @@ class Learner(object):
 
     def generate_batches(self, data_dir):
         seed = random.randint(0, 2**31 - 1)
+
         # Load the list of training files into queues
         file_list, pnt_list = self.get_filenames_list(data_dir)
 
@@ -74,8 +74,9 @@ class Learner(object):
 
         # Combine the image and label datasets into a zipped dataset
         inputs_queue = tf.data.Dataset.zip((image_ds, label_ds))
-        inputs_queue = inputs_queue.shuffle(tf.shape(file_list, out_type=tf.int64)[0], seed=seed)
+        inputs_queue = inputs_queue.shuffle(tf.shape(file_list, out_type=tf.int64)[0], seed=seed).repeat()
         inputs_queue = inputs_queue.batch(batch_size=self.config.batch_size, drop_remainder=False)
+        inputs_queue = inputs_queue.prefetch(buffer_size=self.config.batch_size)
 
         # # Form training batches
         # image_batch, pnt_batch = tf.train.batch([image_seq,
@@ -87,7 +88,8 @@ class Learner(object):
         # return [image_batch, pnt_batch], len(file_list)
         return inputs_queue, len(file_list)
 
-    def get_filenames_list(self, directory):
+    @staticmethod
+    def get_filenames_list(directory):
         """ This function should return all the filenames of the
             files you want to train on.
             In case of classification, it should also return labels.
@@ -109,10 +111,11 @@ class Learner(object):
             val_batch, n_samples_test = self.generate_batches(self.config.val_dir)
 
             current_batch = tf.cond(is_training_ph, lambda: train_batch, lambda: val_batch)
-            # image_batch, label_batch = current_batch[0], current_batch[1]
 
         with tf.name_scope("CNN_prediction"):
-            logits = prediction_network(current_batch,
+            image_batch, label_batch = next(iter(current_batch))
+
+            logits = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 3),
                                         l2_reg_scale=self.config.l2_reg_scale,
                                         output_dim=self.config.output_dim)
 
