@@ -5,6 +5,8 @@ from itertools import count
 import math
 import random
 import tensorflow as tf
+from tensorflow.python.keras import callbacks
+from tensorflow.python.keras.losses import SparseCategoricalCrossentropy
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.training.adam import AdamOptimizer
 
@@ -24,6 +26,8 @@ sys.path.append("../")
 
 class Learner(object):
     def __init__(self):
+        self.config = None
+        self.classifier_model = None
         pass
 
     def read_image_from_dir(self, image_dir):
@@ -33,7 +37,7 @@ class Learner(object):
     def read_from_disk(self, inputs_queue):
         """Consumes the inputs queue.
         Args:
-            filename_and_label_tensor: A scalar string tensor.
+            inputs_queue: A scalar string tensor.
         Returns:
             Two tensors: the decoded images, and the labels.
         """
@@ -44,12 +48,12 @@ class Learner(object):
         return image_seq, pnt_seq
 
     def preprocess_image(self, image):
-        #############################
-        # DO YOUR PREPROCESSING HERE#
-        #############################
+        ##############################
+        # DO YOUR PREPROCESSING HERE #
+        ##############################
         """ Preprocess an input image.
         Args:
-            Image: A uint8 tensor
+            image: A uint8 tensor
         Returns:
             image: A preprocessed float32 tensor.
         """
@@ -102,6 +106,26 @@ class Learner(object):
         iterator = DirectoryIterator(directory, shuffle=False)
         return iterator.filenames, iterator.ground_truth
 
+    def build_and_compile_model(self):
+        model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
+                                   l2_reg_scale=self.config.l2_reg_scale,
+                                   output_dim=self.config.output_dim)
+
+        with tf.name_scope("compile_model"):
+            model.compile(optimizer=AdamOptimizer(self.config.learning_rate, self.config.beta1),
+                          loss=SparseCategoricalCrossentropy(),
+                          metrics=['accuracy'])
+        return model
+
+    def get_datasets(self):
+        with tf.name_scope("data_loading"):
+
+            # In case of classification, this should be unchanged. Otherwise, adapt to load your inputs
+            train_ds, n_samples_train = self.generate_batches(self.config.train_dir)
+            val_ds, n_samples_val = self.generate_batches(self.config.val_dir)
+
+        return train_ds, val_ds, (n_samples_train, n_samples_val)
+
     def build_train_graph(self):
         is_training_ph = True
         with tf.name_scope("data_loading"):
@@ -115,16 +139,21 @@ class Learner(object):
         with tf.name_scope("CNN_prediction"):
             image_batch, label_batch = next(iter(current_batch))
 
-            logits = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 3),
-                                        l2_reg_scale=self.config.l2_reg_scale,
-                                        output_dim=self.config.output_dim)
+            model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 3),
+                                       l2_reg_scale=self.config.l2_reg_scale,
+                                       output_dim=self.config.output_dim)
 
-        with tf.name_scope("compute_loss"):
+        with tf.name_scope("compile_model"):
             ####################################
             # CHANGE HERE TO YOUR PROBLEM LOSS #
             ####################################
-            train_loss = tf.nn.sparse_softmax_cross_entropy_with_logits(labels=label_batch, logits=logits)
-            train_loss = tf.reduce_mean(train_loss)
+
+            model.compile(optimizer=AdamOptimizer(self.config.learning_rate, self.config.beta1),
+                          loss=SparseCategoricalCrossentropy(),
+                          metrics=['accuracy'])
+
+            # train_loss = .sparse_softmax_cross_entropy_with_logits(labels=label_batch, logits=logits)
+            # train_loss = tf.reduce_mean(train_loss)
 
         with tf.name_scope("accuracy"):
             pred_out = tf.cast(tf.argmax(logits, 1), tf.int32)
@@ -203,68 +232,92 @@ class Learner(object):
         """
 
         self.config = config
-        self.build_train_graph()
-        self.collect_summaries()
-        self.min_val_loss = math.inf  # Initialize to max value
-        with tf.name_scope("parameter_count"):
-            parameter_count = tf.reduce_sum([tf.reduce_prod(tf.shape(v)) for v in tf.compat.v1.trainable_variables()])
-        self.saver = tf.compat.v1.train.Saver([var for var in tf.compat.v1.trainable_variables()] + [self.global_step], max_to_keep=5)
-        sv = tf.train.Supervisor(logdir=config.checkpoint_dir, save_summaries_secs=0, saver=None)
-        with sv.managed_session() as sess:
-            print("Number of trainable params: {}".format(sess.run(parameter_count)))
-            if config.resume_train:
-                print("Resume training from previous checkpoint")
-                checkpoint = tf.train.latest_checkpoint(config.checkpoint_dir)
-                self.saver.restore(sess, checkpoint)
+        self.classifier_model = self.build_and_compile_model()
+        train_ds, validation_ds, ds_lengths = self.get_datasets()
 
-            progbar = Progbar(target=self.train_steps_per_epoch)
-            for step in count(start=1):
-                if sv.should_stop():
-                    break
-                start_time = time.time()
-                fetches = { "train" : self.train_op,
-                              "global_step" : self.global_step,
-                              "incr_global_step": self.incr_global_step
-                             }
-                if step % config.summary_freq == 0:
-                    #########################################################
-                    # ADD HERE THE TENSORS YOU WANT TO EVALUATE (maybe loss)#
-                    #########################################################
-                    fetches["loss"] = self.total_loss
-                    fetches["accuracy"] = self.accuracy
-                    fetches["summary"] = self.step_sum
+        train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
+        val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))
 
-                # Runs the series of operations
-                ######################################################
-                # REMOVE THE LEARNING PHASE IF NOT USING KERAS MODELS#
-                ######################################################
-                results = sess.run(fetches,
-                                   feed_dict={ self.is_training : True })
-                progbar.update(step % self.train_steps_per_epoch)
+        keras_callbacks = [
+            # Interrupt training if `val_loss` stops improving for over 2 epochs
+            callbacks.EarlyStopping(patience=2, monitor='val_loss'),
+            # Write TensorBoard logs to `./logs` directory
+            callbacks.TensorBoard(log_dir=config.checkpoint_dir),
+            # Model checkpoint and saver
+            callbacks.ModelCheckpoint(filepath=config.checkpoint_dir, verbose=1)
+        ]
 
-                gs = results["global_step"]
-                if step % config.summary_freq == 0:
-                    sv.summary_writer.add_summary(results["summary"], gs)
-                    train_epoch = math.ceil( gs /self.train_steps_per_epoch)
-                    train_step = gs - (train_epoch - 1) * self.train_steps_per_epoch
-                    print("Epoch: [%2d] [%5d/%5d] time: %4.4f/it loss: %.3f "
-                          " accuracy: %.3f" \
-                       % (train_epoch, train_step, self.train_steps_per_epoch, \
-                                time.time() - start_time, results["loss"], \
-                          results["accuracy"]))
+        self.classifier_model.fit(
+            train_ds,
+            verbose=1,
+            epochs=self.config.max_epochs,
+            steps_per_epoch=train_steps_per_epoch,
+            validation_data=validation_ds,
+            validation_steps=val_steps_per_epoch,
+            callbacks=keras_callbacks)
 
-                if step % self.train_steps_per_epoch == 0:
-                    # This differ from the last when resuming training
-                    train_epoch = int(gs / self.train_steps_per_epoch)
-                    progbar = Progbar(target=self.train_steps_per_epoch)
-                    self.epoch_end_callback(sess, sv, train_epoch)
-                    if (train_epoch == self.config.max_epochs):
-                        print("-------------------------------")
-                        print("Training completed successfully")
-                        print("-------------------------------")
-                        break
+        # TODO: implement resume training?
 
-
+        # self.build_train_graph()
+        # self.collect_summaries()
+        # self.min_val_loss = math.inf  # Initialize to max value
+        # with tf.name_scope("parameter_count"):
+        #     parameter_count = tf.reduce_sum([tf.reduce_prod(tf.shape(v)) for v in tf.compat.v1.trainable_variables()])
+        # self.saver = tf.compat.v1.train.Saver([var for var in tf.compat.v1.trainable_variables()] + [self.global_step], max_to_keep=5)
+        # sv = tf.train.Supervisor(logdir=config.checkpoint_dir, save_summaries_secs=0, saver=None)
+        # with sv.managed_session() as sess:
+        #     print("Number of trainable params: {}".format(sess.run(parameter_count)))
+        #     if config.resume_train:
+        #         print("Resume training from previous checkpoint")
+        #         checkpoint = tf.train.latest_checkpoint(config.checkpoint_dir)
+        #         self.saver.restore(sess, checkpoint)
+        #
+        #     progbar = Progbar(target=self.train_steps_per_epoch)
+        #     for step in count(start=1):
+        #         if sv.should_stop():
+        #             break
+        #         start_time = time.time()
+        #         fetches = { "train" : self.train_op,
+        #                       "global_step" : self.global_step,
+        #                       "incr_global_step": self.incr_global_step
+        #                      }
+        #         if step % config.summary_freq == 0:
+        #             #########################################################
+        #             # ADD HERE THE TENSORS YOU WANT TO EVALUATE (maybe loss)#
+        #             #########################################################
+        #             fetches["loss"] = self.total_loss
+        #             fetches["accuracy"] = self.accuracy
+        #             fetches["summary"] = self.step_sum
+        #
+        #         # Runs the series of operations
+        #         ######################################################
+        #         # REMOVE THE LEARNING PHASE IF NOT USING KERAS MODELS#
+        #         ######################################################
+        #         results = sess.run(fetches,
+        #                            feed_dict={ self.is_training : True })
+        #         progbar.update(step % self.train_steps_per_epoch)
+        #
+        #         gs = results["global_step"]
+        #         if step % config.summary_freq == 0:
+        #             sv.summary_writer.add_summary(results["summary"], gs)
+        #             train_epoch = math.ceil( gs /self.train_steps_per_epoch)
+        #             train_step = gs - (train_epoch - 1) * self.train_steps_per_epoch
+        #             print("Epoch: [%2d] [%5d/%5d] time: %4.4f/it loss: %.3f "
+        #                   " accuracy: %.3f" \
+        #                % (train_epoch, train_step, self.train_steps_per_epoch, \
+        #                         time.time() - start_time, results["loss"], \
+        #                   results["accuracy"]))
+        #
+        #         if step % self.train_steps_per_epoch == 0:
+        #             # This differ from the last when resuming training
+        #             train_epoch = int(gs / self.train_steps_per_epoch)
+        #             progbar = Progbar(target=self.train_steps_per_epoch)
+        #             self.epoch_end_callback(sess, sv, train_epoch)
+        #             if (train_epoch == self.config.max_epochs):
+        #                 print("-------------------------------")
+        #                 print("Training completed successfully")
+        #                 print("-------------------------------")
+        #                 break
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy
