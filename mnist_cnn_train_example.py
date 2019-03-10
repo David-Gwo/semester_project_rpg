@@ -33,7 +33,7 @@ train_input_fn = tf.estimator.inputs.numpy_input_fn(
     num_epochs=None,
     shuffle=True)
 
-# train one step and display the probabilties
+# train one step and display the probabilities
 mnist_classifier.train(
     input_fn=train_input_fn,
     steps=1000,
