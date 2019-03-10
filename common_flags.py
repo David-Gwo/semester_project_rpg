@@ -29,13 +29,13 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
                       'number speeds up computation but requires more RAM')
 
 # Reading parameters
-gflags.DEFINE_string('train_dir', "", 'Folder containing training experiments')
-gflags.DEFINE_string('val_dir', "", 'Folder containing validation experiments')
+gflags.DEFINE_string('train_dir', "./data/sample_data/training", 'Folder containing training experiments')
+gflags.DEFINE_string('val_dir', "./data/sample_data/testing", 'Folder containing validation experiments')
 gflags.DEFINE_string('checkpoint_dir', "./tests/test_0/", "Directory name to save checkpoints and logs.")
 
 # Log parameters
 gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
-gflags.DEFINE_integer("summary_freq", 100, "Logging every log_freq iterations")
+gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
 gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epochs")
 
 # Testing parameters
