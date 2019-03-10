@@ -5,12 +5,14 @@ from itertools import count
 import math
 import random
 import tensorflow as tf
+import numpy as np
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.training.adam import AdamOptimizer
 
 ###########################################################
 # IMPORT YOUR FAVORITE NETWORK HERE (in place of resnet8) #
 ###########################################################
+
 from .nets import resnet8 as prediction_network
 from data import DirectoryIterator
 
@@ -25,6 +27,10 @@ class Learner(object):
     def __init__(self):
         pass
 
+    def read_image_from_dir(self, image_dir):
+        image = tf.io.read_file(image_dir)
+        return self.preprocess_image(image)
+
     def read_from_disk(self, inputs_queue):
         """Consumes the inputs queue.
         Args:
@@ -32,8 +38,8 @@ class Learner(object):
         Returns:
             Two tensors: the decoded images, and the labels.
         """
-        pnt_seq = tf.cast(inputs_queue[1], dtype=tf.int32)
-        file_content = tf.read_file(inputs_queue[0])
+        pnt_seq = tf.strings.to_number(inputs_queue[1], out_type=tf.dtypes.int32)
+        file_content = inputs_queue[0].map(self.read_image_from_dir)
         image_seq = tf.image.decode_png(file_content, channels=3)
 
         return image_seq, pnt_seq
@@ -48,6 +54,7 @@ class Learner(object):
         Returns:
             image: A preprocessed float32 tensor.
         """
+        image = tf.image.decode_jpeg(image)
         image = tf.image.resize(image, [self.config.img_height, self.config.img_width])
         image = tf.cast(image, dtype=tf.float32)
         image = tf.divide(image, 255.0)
@@ -57,20 +64,28 @@ class Learner(object):
         seed = random.randint(0, 2**31 - 1)
         # Load the list of training files into queues
         file_list, pnt_list = self.get_filenames_list(data_dir)
-        # Maybe convert to tensors before passing
-        inputs_queue = tf.train.slice_input_producer([file_list, pnt_list], seed=seed, shuffle=True)
-        image_seq, pnt_seq = self.read_from_disk(inputs_queue)
-        # Resize images to target size and preprocess them
 
-        image_seq = self.preprocess_image(image_seq)
-        # Form training batches
-        image_batch, pnt_batch = tf.train.batch([image_seq,
-             pnt_seq],
-             batch_size=self.config.batch_size,
-             num_threads=self.config.num_threads,
-             capacity=self.config.capacity_queue,
-             allow_smaller_final_batch=True)
-        return [image_batch, pnt_batch], len(file_list)
+        # Create a dataset from all the image paths, read and process them
+        path_ds = tf.data.Dataset.from_tensor_slices(file_list)
+        image_ds = path_ds.map(self.read_image_from_dir, num_parallel_calls=self.config.num_threads)
+
+        # Create a dataset from all the image labels
+        label_ds = tf.data.Dataset.from_tensor_slices(tf.cast(pnt_list, tf.int64))
+
+        # Combine the image and label datasets into a zipped dataset
+        inputs_queue = tf.data.Dataset.zip((image_ds, label_ds))
+        inputs_queue = inputs_queue.shuffle(tf.shape(file_list, out_type=tf.int64)[0], seed=seed)
+        inputs_queue = inputs_queue.batch(batch_size=self.config.batch_size, drop_remainder=False)
+
+        # # Form training batches
+        # image_batch, pnt_batch = tf.train.batch([image_seq,
+        #      pnt_seq],
+        #      batch_size=self.config.batch_size,
+        #      num_threads=self.config.num_threads,
+        #      capacity=self.config.capacity_queue,
+        #      allow_smaller_final_batch=True)
+        # return [image_batch, pnt_batch], len(file_list)
+        return inputs_queue, len(file_list)
 
     def get_filenames_list(self, directory):
         """ This function should return all the filenames of the
@@ -86,7 +101,7 @@ class Learner(object):
         return iterator.filenames, iterator.ground_truth
 
     def build_train_graph(self):
-        is_training_ph = tf.compat.v1.placeholder(tf.bool, shape=(), name="is_training")
+        is_training_ph = True
         with tf.name_scope("data_loading"):
 
             # In case of classification, this should be unchanged. Otherwise, adapt to load your inputs
@@ -94,10 +109,10 @@ class Learner(object):
             val_batch, n_samples_test = self.generate_batches(self.config.val_dir)
 
             current_batch = tf.cond(is_training_ph, lambda: train_batch, lambda: val_batch)
-            image_batch, label_batch = current_batch[0], current_batch[1]
+            # image_batch, label_batch = current_batch[0], current_batch[1]
 
         with tf.name_scope("CNN_prediction"):
-            logits = prediction_network(image_batch,
+            logits = prediction_network(current_batch,
                                         l2_reg_scale=self.config.l2_reg_scale,
                                         output_dim=self.config.output_dim)
 

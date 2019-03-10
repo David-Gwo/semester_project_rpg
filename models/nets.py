@@ -1,14 +1,13 @@
 import tensorflow as tf
-from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input
-from tensorflow.python.keras.layers import Conv2D, MaxPooling2D
-from tensorflow.python.keras.layers.merge import add
 from tensorflow.python.keras import regularizers
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D
+from tensorflow.python.keras.layers.merge import add
 
-#########################################
-# ADD HERE YOUR NETWORK                 #
-# BUILD IT WITH PURE TENSORFLOW OR KERAS#
-#########################################
+##########################################
+# ADD HERE YOUR NETWORK                  #
+# BUILD IT WITH PURE TENSORFLOW OR KERAS #
+##########################################
 
 # NOTE: IF USING KERAS, YOU MIGHT HAVE PROBLEMS WITH BATCH-NORMALIZATION
 
