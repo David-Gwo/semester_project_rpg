@@ -5,10 +5,8 @@ from itertools import count
 import math
 import random
 import tensorflow as tf
-from tensorflow.python.keras import datasets as k_ds
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import CategoricalCrossentropy
-from tensorflow.python.keras.utils import to_categorical
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.training.adam import AdamOptimizer
 from tensorflow.python.keras.optimizers import Adam
@@ -19,6 +17,7 @@ from tensorflow.python.keras.optimizers import Adam
 
 from .nets import mnist_cnn as prediction_network
 from data import DirectoryIterator
+from data.data_utils import get_mnist_datasets
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -32,6 +31,22 @@ class Learner(object):
         self.config = None
         self.classifier_model = None
         pass
+
+    def preprocess_image(self, image):
+        ##############################
+        # DO YOUR PREPROCESSING HERE #
+        ##############################
+        """ Preprocess an input image.
+        Args:
+            image: A uint8 tensor
+        Returns:
+            image: A preprocessed float32 tensor.
+        """
+        image = tf.image.decode_jpeg(image)
+        image = tf.image.resize(image, [self.config.img_height, self.config.img_width])
+        image = tf.cast(image, dtype=tf.float32)
+        image = tf.divide(image, 255.0)
+        return image
 
     def read_image_from_dir(self, image_dir):
         image = tf.io.read_file(image_dir)
@@ -50,21 +65,19 @@ class Learner(object):
 
         return image_seq, pnt_seq
 
-    def preprocess_image(self, image):
-        ##############################
-        # DO YOUR PREPROCESSING HERE #
-        ##############################
-        """ Preprocess an input image.
-        Args:
-            image: A uint8 tensor
-        Returns:
-            image: A preprocessed float32 tensor.
+    @staticmethod
+    def get_filenames_list(directory):
+        """ This function should return all the filenames of the
+            files you want to train on.
+            In case of classification, it should also return labels.
+
+            Args:
+                directory: dataset directory
+            Returns:
+                List of filenames, [List of associated labels]
         """
-        image = tf.image.decode_jpeg(image)
-        image = tf.image.resize(image, [self.config.img_height, self.config.img_width])
-        image = tf.cast(image, dtype=tf.float32)
-        image = tf.divide(image, 255.0)
-        return image
+        iterator = DirectoryIterator(directory, shuffle=False)
+        return iterator.filenames, iterator.ground_truth
 
     def generate_batches(self, data_dir):
         seed = random.randint(0, 2**31 - 1)
@@ -95,20 +108,6 @@ class Learner(object):
         # return [image_batch, pnt_batch], len(file_list)
         return inputs_queue, len(file_list)
 
-    @staticmethod
-    def get_filenames_list(directory):
-        """ This function should return all the filenames of the
-            files you want to train on.
-            In case of classification, it should also return labels.
-
-            Args:
-                directory: dataset directory
-            Returns:
-                List of filenames, [List of associated labels]
-        """
-        iterator = DirectoryIterator(directory, shuffle=False)
-        return iterator.filenames, iterator.ground_truth
-
     def build_and_compile_model(self):
         # model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
         #                            l2_reg_scale=self.config.l2_reg_scale,
@@ -131,64 +130,6 @@ class Learner(object):
             val_ds, n_samples_val = self.generate_batches(self.config.val_dir)
 
         return train_ds, val_ds, (n_samples_train, n_samples_val)
-
-    def build_train_graph(self):
-        is_training_ph = True
-        with tf.name_scope("data_loading"):
-
-            # In case of classification, this should be unchanged. Otherwise, adapt to load your inputs
-            train_batch, n_samples_train = self.generate_batches(self.config.train_dir)
-            val_batch, n_samples_test = self.generate_batches(self.config.val_dir)
-
-            current_batch = tf.cond(is_training_ph, lambda: train_batch, lambda: val_batch)
-
-        with tf.name_scope("CNN_prediction"):
-            image_batch, label_batch = next(iter(current_batch))
-
-            model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 3),
-                                       l2_reg_scale=self.config.l2_reg_scale,
-                                       output_dim=self.config.output_dim)
-
-        with tf.name_scope("compile_model"):
-            ####################################
-            # CHANGE HERE TO YOUR PROBLEM LOSS #
-            ####################################
-
-            model.compile(optimizer=AdamOptimizer(self.config.learning_rate, self.config.beta1),
-                          loss=SparseCategoricalCrossentropy(),
-                          metrics=['accuracy'])
-
-            # train_loss = .sparse_softmax_cross_entropy_with_logits(labels=label_batch, logits=logits)
-            # train_loss = tf.reduce_mean(train_loss)
-
-        with tf.name_scope("accuracy"):
-            pred_out = tf.cast(tf.argmax(logits, 1), tf.int32)
-            correct_prediction = tf.equal(label_batch, pred_out)
-            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-        with tf.name_scope("train_op"):
-            ########################################################
-            # LEAVE UNCHANGED (Adam optimizer is usually the best) #
-            ########################################################
-            reg_losses = tf.reduce_sum(tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.REGULARIZATION_LOSSES))
-            train_vars = [var for var in tf.compat.v1.trainable_variables()]
-            optimizer = AdamOptimizer(self.config.learning_rate, self.config.beta1)
-            self.grads_and_vars = optimizer.get_gradients(train_loss + reg_losses, train_vars)
-            self.train_op = optimizer.apply_gradients(self.grads_and_vars)
-            self.global_step = tf.Variable(0, name='global_step', trainable=False)
-            self.incr_global_step = tf.compat.v1.assign(self.global_step, self.global_step.value()+1)
-
-        ########################################################################
-        # ADD HERE ALL THE TENSORS YOU WANT TO RUN OR SUMMARIZE IN TENSORBOARD #
-        ########################################################################
-
-        self.logits = logits
-        self.labels = label_batch
-        self.accuracy = accuracy
-        self.is_training = is_training_ph
-        self.total_loss = train_loss
-        self.train_steps_per_epoch = int(math.ceil(n_samples_train/self.config.batch_size))
-        self.val_steps_per_epoch = int(math.ceil(n_samples_test/self.config.batch_size))
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -228,34 +169,6 @@ class Learner(object):
         else:
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
-    def get_mnist_datasets(self):
-
-        fashion_mnist = k_ds.fashion_mnist
-        (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
-        x_train, x_test = x_train / 255.0, x_test / 255.0
-
-        # Further break training data into train / validation sets
-        (x_train, x_valid) = x_train[5000:], x_train[:5000]
-        (y_train, y_valid) = y_train[5000:], y_train[:5000]
-
-        # Reshape input data from (28, 28) to (28, 28, 1)
-        w, h = self.config.img_width, self.config.img_height
-        x_train = x_train.reshape(x_train.shape[0], w, h, 1)
-        x_valid = x_valid.reshape(x_valid.shape[0], w, h, 1)
-        x_test = x_test.reshape(x_test.shape[0], w, h, 1)
-
-        # One-hot encode the labels
-        y_train = to_categorical(y_train, 10)
-        y_valid = to_categorical(y_valid, 10)
-        y_test = to_categorical(y_test, 10)
-
-        train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(self.config.batch_size).batch(self.config.batch_size).repeat()
-        validation_ds = tf.data.Dataset.from_tensor_slices((x_valid, y_valid)).shuffle(self.config.batch_size).batch(self.config.batch_size).repeat()
-        test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).shuffle(self.config.batch_size).batch(self.config.batch_size)
-        ds_lengths = (len(x_train), len(x_valid), len(x_test))
-
-        return train_ds, validation_ds, test_ds, ds_lengths
-
     def train(self, config):
         """High level train function.
         Args:
@@ -268,7 +181,8 @@ class Learner(object):
         self.config = config
         self.classifier_model = self.build_and_compile_model()
         # train_ds, validation_ds, ds_lengths = self.get_datasets()
-        train_ds, validation_ds, test_ds, ds_lengths = self.get_mnist_datasets()
+        train_ds, validation_ds, test_ds, ds_lengths = get_mnist_datasets(
+            self.config.img_height, self.config.img_width, self.config.batch_size)
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))

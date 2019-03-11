@@ -80,9 +80,9 @@ def read_euroc_dataset(euroc_dir):
                 ground_truth_data.append(gt)
 
     except IOError:
-        print "Dataset file not found"
+        print("Dataset file not found")
 
     except yaml.YAMLError as exc:
-        print exc
+        print(exc)
 
     return [imu_yaml_data, raw_imu_data, ground_truth_data]

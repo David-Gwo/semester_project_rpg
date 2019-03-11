@@ -4,7 +4,9 @@ import os
 import cv2
 
 from tensorflow.python.keras.preprocessing.image import Iterator
-
+from tensorflow.python.keras import datasets as k_ds
+from tensorflow.python.keras.utils import to_categorical
+from tensorflow.python.data import Dataset
 ############################################################################
 # EXAMPLE CLASS TO FETCH FILENAMES (AND OPTIONALLY LABELS) FROM DIRECTORIES#
 ############################################################################
@@ -150,3 +152,32 @@ def load_img(path, target_size=None):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     return img
+
+
+def get_mnist_datasets(img_h, img_w, batch_s):
+
+    fashion_mnist = k_ds.fashion_mnist
+    (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+    x_train, x_test = x_train / 255.0, x_test / 255.0
+
+    # Further break training data into train / validation sets
+    (x_train, x_valid) = x_train[5000:], x_train[:5000]
+    (y_train, y_valid) = y_train[5000:], y_train[:5000]
+
+    # Reshape input data from (28, 28) to (28, 28, 1)
+    w, h = img_w, img_h
+    x_train = x_train.reshape(x_train.shape[0], w, h, 1)
+    x_valid = x_valid.reshape(x_valid.shape[0], w, h, 1)
+    x_test = x_test.reshape(x_test.shape[0], w, h, 1)
+
+    # One-hot encode the labels
+    y_train = to_categorical(y_train, 10)
+    y_valid = to_categorical(y_valid, 10)
+    y_test = to_categorical(y_test, 10)
+
+    train_ds = Dataset.from_tensor_slices((x_train, y_train)).shuffle(batch_s).batch(batch_s).repeat()
+    validation_ds = Dataset.from_tensor_slices((x_valid, y_valid)).shuffle(batch_s).batch(batch_s).repeat()
+    test_ds = Dataset.from_tensor_slices((x_test, y_test)).shuffle(batch_s).batch(batch_s)
+    ds_lengths = (len(x_train), len(x_valid), len(x_test))
+
+    return train_ds, validation_ds, test_ds, ds_lengths
