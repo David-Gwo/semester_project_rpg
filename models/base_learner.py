@@ -6,18 +6,18 @@ import math
 import random
 import tensorflow as tf
 from tensorflow.python.keras import callbacks
-from tensorflow.python.keras.losses import CategoricalCrossentropy
+from tensorflow.python.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow.python.keras.utils.generic_utils import Progbar
-from tensorflow.python.training.adam import AdamOptimizer
 from tensorflow.python.keras.optimizers import Adam
 
 ###########################################################
 # IMPORT YOUR FAVORITE NETWORK HERE (in place of resnet8) #
 ###########################################################
 
-from .nets import mnist_cnn as prediction_network
+from .nets import vel_cnn as prediction_network
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
+from data.euroc_utils import load_euroc_dataset
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -118,7 +118,7 @@ class Learner(object):
         print(model.summary())
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                          loss=CategoricalCrossentropy(),
+                          loss=MeanSquaredError(),
                           metrics=['accuracy'])
         return model
 
@@ -130,6 +130,13 @@ class Learner(object):
             val_ds, n_samples_val = self.generate_batches(self.config.val_dir)
 
         return train_ds, val_ds, (n_samples_train, n_samples_val)
+
+    def get_dataset(self, dataset_name):
+
+        if dataset_name == 'mnist':
+            return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
+        if dataset_name == 'euroc':
+            return load_euroc_dataset()
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -179,10 +186,9 @@ class Learner(object):
         """
 
         self.config = config
-        self.classifier_model = self.build_and_compile_model()
-        # train_ds, validation_ds, ds_lengths = self.get_datasets()
-        train_ds, validation_ds, test_ds, ds_lengths = get_mnist_datasets(
-            self.config.img_height, self.config.img_width, self.config.batch_size)
+        # self.classifier_model = self.build_and_compile_model()
+
+        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))

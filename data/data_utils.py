@@ -38,9 +38,7 @@ class DirectoryIterator(Iterator):
        follow_links: Bool, whether to follow symbolic links or not
 
     """
-    def __init__(self, directory,
-            target_size=(224,224),
-            batch_size=32, shuffle=True, seed=None, follow_links=False):
+    def __init__(self, directory, target_size=(224, 224), batch_size=32, shuffle=True, seed=None, follow_links=False):
         self.directory = directory
         self.target_size = tuple(target_size)
         self.follow_links = follow_links
