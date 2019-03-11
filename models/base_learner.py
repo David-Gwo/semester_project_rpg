@@ -5,16 +5,19 @@ from itertools import count
 import math
 import random
 import tensorflow as tf
+from tensorflow.python.keras import datasets as k_ds
 from tensorflow.python.keras import callbacks
-from tensorflow.python.keras.losses import SparseCategoricalCrossentropy
+from tensorflow.python.keras.losses import CategoricalCrossentropy
+from tensorflow.python.keras.utils import to_categorical
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.training.adam import AdamOptimizer
+from tensorflow.python.keras.optimizers import Adam
 
 ###########################################################
 # IMPORT YOUR FAVORITE NETWORK HERE (in place of resnet8) #
 ###########################################################
 
-from .nets import resnet8_model as prediction_network
+from .nets import mnist_cnn as prediction_network
 from data import DirectoryIterator
 
 #############################################################################
@@ -107,13 +110,16 @@ class Learner(object):
         return iterator.filenames, iterator.ground_truth
 
     def build_and_compile_model(self):
-        model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
-                                   l2_reg_scale=self.config.l2_reg_scale,
-                                   output_dim=self.config.output_dim)
+        # model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
+        #                            l2_reg_scale=self.config.l2_reg_scale,
+        #                            output_dim=self.config.output_dim)
 
+        model = prediction_network()
+
+        print(model.summary())
         with tf.name_scope("compile_model"):
-            model.compile(optimizer=AdamOptimizer(self.config.learning_rate, self.config.beta1),
-                          loss=SparseCategoricalCrossentropy(),
+            model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
+                          loss=CategoricalCrossentropy(),
                           metrics=['accuracy'])
         return model
 
@@ -222,6 +228,34 @@ class Learner(object):
         else:
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
+    def get_mnist_datasets(self):
+
+        fashion_mnist = k_ds.fashion_mnist
+        (x_train, y_train), (x_test, y_test) = fashion_mnist.load_data()
+        x_train, x_test = x_train / 255.0, x_test / 255.0
+
+        # Further break training data into train / validation sets
+        (x_train, x_valid) = x_train[5000:], x_train[:5000]
+        (y_train, y_valid) = y_train[5000:], y_train[:5000]
+
+        # Reshape input data from (28, 28) to (28, 28, 1)
+        w, h = self.config.img_width, self.config.img_height
+        x_train = x_train.reshape(x_train.shape[0], w, h, 1)
+        x_valid = x_valid.reshape(x_valid.shape[0], w, h, 1)
+        x_test = x_test.reshape(x_test.shape[0], w, h, 1)
+
+        # One-hot encode the labels
+        y_train = to_categorical(y_train, 10)
+        y_valid = to_categorical(y_valid, 10)
+        y_test = to_categorical(y_test, 10)
+
+        train_ds = tf.data.Dataset.from_tensor_slices((x_train, y_train)).shuffle(self.config.batch_size).batch(self.config.batch_size).repeat()
+        validation_ds = tf.data.Dataset.from_tensor_slices((x_valid, y_valid)).shuffle(self.config.batch_size).batch(self.config.batch_size).repeat()
+        test_ds = tf.data.Dataset.from_tensor_slices((x_test, y_test)).shuffle(self.config.batch_size).batch(self.config.batch_size)
+        ds_lengths = (len(x_train), len(x_valid), len(x_test))
+
+        return train_ds, validation_ds, test_ds, ds_lengths
+
     def train(self, config):
         """High level train function.
         Args:
@@ -233,7 +267,8 @@ class Learner(object):
 
         self.config = config
         self.classifier_model = self.build_and_compile_model()
-        train_ds, validation_ds, ds_lengths = self.get_datasets()
+        # train_ds, validation_ds, ds_lengths = self.get_datasets()
+        train_ds, validation_ds, test_ds, ds_lengths = self.get_mnist_datasets()
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))
@@ -242,9 +277,10 @@ class Learner(object):
             # Interrupt training if `val_loss` stops improving for over 2 epochs
             callbacks.EarlyStopping(patience=2, monitor='val_loss'),
             # Write TensorBoard logs to `./logs` directory
-            callbacks.TensorBoard(log_dir=config.checkpoint_dir),
+            callbacks.TensorBoard(log_dir=config.checkpoint_dir + "/keras"),
             # Model checkpoint and saver
-            callbacks.ModelCheckpoint(filepath=config.checkpoint_dir, verbose=1)
+            callbacks.ModelCheckpoint(filepath=os.path.join(config.checkpoint_dir, "cnn_net{epoch:02d}.h5"),
+                                      save_weights_only=True, verbose=1)
         ]
 
         self.classifier_model.fit(

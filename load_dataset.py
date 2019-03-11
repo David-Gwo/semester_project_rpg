@@ -1,9 +1,8 @@
-import tensorflow as tf
 import numpy as np
-
+import tensorflow as tf
 from scipy.interpolate import interp1d
 
-from euroc_utils import read_euroc_dataset, GT
+from data.euroc_utils import read_euroc_dataset, GT
 
 
 def interpolate_ground_truth(raw_imu_data, ground_truth_data):

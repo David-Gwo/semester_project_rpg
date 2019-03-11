@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.keras import regularizers
+from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D
 from tensorflow.python.keras.layers.merge import add
@@ -101,6 +101,7 @@ def resnet8_model(input_shape, output_dim, l2_reg_scale, log=False):
        logits: Logits on output trajectories
     """
 
+    print(input_shape)
     with tf.name_scope("InputNode"):
         img_input = Input(shape=input_shape)
         x1 = Conv2D(32, (5, 5), strides=[2, 2], padding='same')(img_input)
@@ -162,5 +163,30 @@ def resnet8_model(input_shape, output_dim, l2_reg_scale, log=False):
     model = Model(inputs=[img_input], outputs=[logits])
     if log:
         print(model.summary())
+
+    return model
+
+
+def mnist_cnn():
+    model = Sequential()
+
+    # Must define the input shape in the first layer of the neural network
+    with tf.name_scope("Conv_Node_1"):
+        model.add(Conv2D(filters=64, kernel_size=2, padding='same', activation='relu', input_shape=(28, 28, 1)))
+        model.add(MaxPooling2D(pool_size=2))
+        model.add(Dropout(0.3))
+
+    with tf.name_scope("Conv_Node_2"):
+        model.add(Conv2D(filters=32, kernel_size=2, padding='same', activation='relu'))
+        model.add(MaxPooling2D(pool_size=2))
+        model.add(Dropout(0.3))
+
+    with tf.name_scope("Flatten_Node"):
+        model.add(Flatten())
+        model.add(Dense(256, activation='relu'))
+        model.add(Dropout(0.5))
+
+    with tf.name_scope("Logits_Node"):
+        model.add(Dense(10, activation='softmax'))
 
     return model
