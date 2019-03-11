@@ -1,7 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Conv1D, \
+    MaxPooling1D
 from tensorflow.python.keras.layers.merge import add
 
 ##########################################
@@ -188,5 +189,28 @@ def mnist_cnn():
 
     with tf.name_scope("Logits_Node"):
         model.add(Dense(10, activation='softmax'))
+
+    return model
+
+
+def vel_cnn():
+    model = Sequential()
+
+    with tf.name_scope("Conv1"):
+        model.add(Conv1D(filters=60, kernel_size=10, padding='valid', activation='relu', input_shape=(200, 6, 1)))
+
+    with tf.name_scope("Conv2"):
+        model.add(Conv1D(filters=120, kernel_size=10, padding='valid', activation='relu'))
+
+    with tf.name_scope("Conv3"):
+        model.add(Conv1D(filters=240, kernel_size=10, padding='valid', activation='relu'))
+        model.add(MaxPooling1D(pool_size=10, strides=6))
+
+    with tf.name_scope("Dense"):
+        model.add(Dense(400, activation='relu'))
+        model.add(Dense(40, activation='relu'))
+
+    with tf.name_scope("Output"):
+        model.add(Dense(1))
 
     return model
