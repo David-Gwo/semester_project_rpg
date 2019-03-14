@@ -2,6 +2,8 @@ import csv
 import yaml
 import numpy as np
 import tensorflow as tf
+import os
+import scipy.io
 from scipy.interpolate import interp1d
 
 
@@ -40,9 +42,9 @@ class GT:
 
 
 def read_euroc_dataset(euroc_dir):
-    imu_file = euroc_dir + 'imu0/data.csv'
-    imu_yaml_file = euroc_dir + 'imu0/sensor.yaml'
-    ground_truth_file = euroc_dir + 'state_groundtruth_estimate0/data.csv'
+    imu_file = euroc_dir + 'mav0/imu0/data.csv'
+    imu_yaml_file = euroc_dir + 'mav0/imu0/sensor.yaml'
+    ground_truth_file = euroc_dir + 'mav0/state_groundtruth_estimate0/data.csv'
 
     imu_yaml_data = dict()
     raw_imu_data = []
@@ -94,18 +96,18 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     raw_imu_data = np.array(raw_imu_data)
 
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
-    gt_timestsamps = np.array([gt_meas.timestamp for gt_meas in ground_truth_data])
+    gt_timestamps = np.array([gt_meas.timestamp for gt_meas in ground_truth_data])
     gt_velocity = np.array([gt_meas.vel for gt_meas in ground_truth_data])
 
     # Only keep imu data that is within the ground truth time span
-    raw_imu_data = raw_imu_data[(imu_timestamps > gt_timestsamps[0]) * (imu_timestamps < gt_timestsamps[-1])]
+    raw_imu_data = raw_imu_data[(imu_timestamps > gt_timestamps[0]) * (imu_timestamps < gt_timestamps[-1])]
 
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
 
     # Interpolate Ground truth velocities to match IMU time acquisitions
-    v_x_interp = interp1d(gt_timestsamps, gt_velocity[:, 0])
-    v_y_interp = interp1d(gt_timestsamps, gt_velocity[:, 1])
-    v_z_interp = interp1d(gt_timestsamps, gt_velocity[:, 2])
+    v_x_interp = interp1d(gt_timestamps, gt_velocity[:, 0])
+    v_y_interp = interp1d(gt_timestamps, gt_velocity[:, 1])
+    v_z_interp = interp1d(gt_timestamps, gt_velocity[:, 2])
 
     # Initialize array of interpolated Ground Truth velocities
     v_interp = [GT() for _ in range(len(imu_timestamps))]
@@ -117,23 +119,23 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, v_interp]
 
 
-def generate_cnn_train_data(imu_len, raw_imu, gt_v, batch_s):
+def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, batch_s, euroc_data_file_dir):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
     :param raw_imu: 1D array of IMU objects with all the IMU measurements
     :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
     :param batch_s: size of mini-batch
+    :param euroc_data_file_dir: directory where to store the processed euroc dataset
     :return:
     """
 
     # Initialize data tensors #
     # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((len(raw_imu), imu_len, 6))
+    imu_img_tensor = np.zeros((len(raw_imu), imu_len, 1, 6))
     # Initialize y data. Will be the absolute ground truth value of the speed of the drone
     gt_v_tensor = np.zeros(len(raw_imu))
 
-    # for i, _ in enumerate(raw_imu[0:len(raw_imu)-imu_x_len]):
     for i in range(len(raw_imu) - imu_len):
         imu_img = np.zeros((imu_len, 6))
 
@@ -146,8 +148,29 @@ def generate_cnn_train_data(imu_len, raw_imu, gt_v, batch_s):
 
         # TODO: Should the elapsed time be included in the data?
 
-        imu_img_tensor[i, :, :] = imu_img
+        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 1)
         gt_v_tensor[i] = np.linalg.norm(gt_v[i])
+
+    if os.path.exists(euroc_data_file_dir):
+        os.remove(euroc_data_file_dir)
+    os.mknod(euroc_data_file_dir)
+
+    scipy.io.savemat(euroc_data_file_dir, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
+
+
+def generate_cnn_dataset(filename, batch_s):
+    """
+    Read the processed euroc dataset from the saved file. Generate the tf-compatible datasets
+
+    :param filename: directory of the processed euroc dataset matfile
+    :param batch_s: (mini)-batch size of datasets
+    :return:
+    """
+
+    matdata = scipy.io.loadmat(filename)
+
+    gt_v_tensor = matdata['y'][0]
+    imu_img_tensor = matdata['imu']
 
     full_ds_len = len(gt_v_tensor)
     val_ds_len = np.ceil(full_ds_len * 0.1)
@@ -160,16 +183,23 @@ def generate_cnn_train_data(imu_len, raw_imu, gt_v, batch_s):
     val_ds.batch(batch_s).repeat()
     train_ds.batch(batch_s).repeat()
 
-    return [train_ds, val_ds, (train_ds_len, val_ds_len)]
 
+def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_data_file, processed_ds_available):
+    """
 
-def load_euroc_dataset():
-    euroc_dir = './data/EuRoC_dataset/mav0/'
-    batch_size = 10
-    imu_seq_len = 200  # Number of IMU measurements in the x vectors. Is a function of the sampling frequency of the IMU
+    :param euroc_dir: root directory of the EuRoC dataset
+    :param batch_size: mini-batch size
+    :param imu_seq_len: Number of IMU measurements in the x vectors. Is a function of the sampling frequency of the IMU
+    :param euroc_data_file: Name of the file where to store the processed euroc dataset
+    :param processed_ds_available: Whether there is already a processed dataset file available to load from
+    :return:
+    """
 
-    [imu_yaml_data, raw_imu_data, ground_truth_data] = read_euroc_dataset(euroc_dir)
+    if not processed_ds_available:
+        imu_yaml_data, raw_imu_data, ground_truth_data = read_euroc_dataset(euroc_dir)
 
-    [raw_imu_data, gt_v_interp] = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+        raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-    return generate_cnn_train_data(imu_seq_len, raw_imu_data, gt_v_interp, batch_size)
+        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, batch_size, euroc_dir + euroc_data_file)
+
+    generate_cnn_dataset(euroc_dir + euroc_data_file, batch_size)

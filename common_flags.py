@@ -9,11 +9,9 @@ FLAGS = gflags.FLAGS
 
 
 # Train parameters
-# gflags.DEFINE_integer('img_width', 160, 'Target Image Width')
-# gflags.DEFINE_integer('img_height', 120, 'Target Image Height')
 gflags.DEFINE_integer('img_width', 28, 'Target Image Width')
 gflags.DEFINE_integer('img_height', 28, 'Target Image Height')
-gflags.DEFINE_integer('batch_size', 64, 'Batch size in training and evaluation')
+gflags.DEFINE_integer('batch_size', 10, 'Batch size in training and evaluation')
 gflags.DEFINE_float("learning_rate", 0.001, "Learning rate for adam optimizer")
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_float("l2_reg_scale", 1e-4, "Scale for regularization losses")
@@ -34,6 +32,9 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
 gflags.DEFINE_string('train_dir', "./data/sample_data/training", 'Folder containing training experiments')
 gflags.DEFINE_string('val_dir', "./data/sample_data/testing", 'Folder containing validation experiments')
 gflags.DEFINE_string('checkpoint_dir', "./tests/test_0/cp.ckpt", "Directory name to save checkpoints and logs.")
+gflags.DEFINE_string('euroc_dir', './data/EuRoC_dataset/', 'Directory of the EuRoC dataset')
+gflags.DEFINE_boolean('processed_dataset', True, 'Whether there is a processed dataset file available to load from')
+gflags.DEFINE_string('euroc_data_filename', 'imu_dataset.mat', 'Name of the preprocessed EuRoC dataset file')
 
 # Log parameters
 gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
@@ -43,7 +44,5 @@ gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epo
 # Testing parameters
 gflags.DEFINE_string('test_dir', "", 'Folder containing testing experiments')
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")
-# gflags.DEFINE_integer('test_img_width', 160, 'Test Image Width')
-# gflags.DEFINE_integer('test_img_height', 120, 'Test Image Height')
 gflags.DEFINE_integer('test_img_width', 28, 'Test Image Width')
 gflags.DEFINE_integer('test_img_height', 28, 'Test Image Height')

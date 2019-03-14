@@ -197,14 +197,14 @@ def vel_cnn():
     model = Sequential()
 
     with tf.name_scope("Conv1"):
-        model.add(Conv1D(filters=60, kernel_size=10, padding='valid', activation='relu', input_shape=(200, 6, 1)))
+        model.add(Conv2D(filters=60, kernel_size=(10, 1), padding='valid', activation='relu', input_shape=(200, 1, 6)))
 
     with tf.name_scope("Conv2"):
-        model.add(Conv1D(filters=120, kernel_size=10, padding='valid', activation='relu'))
+        model.add(Conv2D(filters=120, kernel_size=(10, 1), padding='valid', activation='relu'))
 
     with tf.name_scope("Conv3"):
-        model.add(Conv1D(filters=240, kernel_size=10, padding='valid', activation='relu'))
-        model.add(MaxPooling1D(pool_size=10, strides=6))
+        model.add(Conv2D(filters=240, kernel_size=(10, 1), padding='valid', activation='relu'))
+        model.add(MaxPooling2D(pool_size=(10, 1), strides=20))
 
     with tf.name_scope("Dense"):
         model.add(Dense(400, activation='relu'))

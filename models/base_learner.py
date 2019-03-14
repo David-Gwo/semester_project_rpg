@@ -9,11 +9,6 @@ from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import CategoricalCrossentropy, MeanSquaredError
 from tensorflow.python.keras.utils.generic_utils import Progbar
 from tensorflow.python.keras.optimizers import Adam
-
-###########################################################
-# IMPORT YOUR FAVORITE NETWORK HERE (in place of resnet8) #
-###########################################################
-
 from .nets import vel_cnn as prediction_network
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
@@ -136,7 +131,9 @@ class Learner(object):
         if dataset_name == 'mnist':
             return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
         if dataset_name == 'euroc':
-            return load_euroc_dataset()
+            imu_seq_len = 200
+            return load_euroc_dataset(self.config.euroc_dir, self.config.batch_size, imu_seq_len,
+                                      self.config.euroc_data_filename, self.config.processed_dataset)
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -186,7 +183,7 @@ class Learner(object):
         """
 
         self.config = config
-        # self.classifier_model = self.build_and_compile_model()
+        self.classifier_model = self.build_and_compile_model()
 
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
@@ -199,7 +196,7 @@ class Learner(object):
             # Write TensorBoard logs to `./logs` directory
             callbacks.TensorBoard(log_dir=config.checkpoint_dir + "/keras"),
             # Model checkpoint and saver
-            callbacks.ModelCheckpoint(filepath=os.path.join(config.checkpoint_dir, "cnn_net{epoch:02d}.h5"),
+            callbacks.ModelCheckpoint(filepath=os.path.join(config.checkpoint_dir, "cnn_vel_net{epoch:02d}.h5"),
                                       save_weights_only=True, verbose=1)
         ]
 
