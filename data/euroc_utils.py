@@ -119,13 +119,12 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, v_interp]
 
 
-def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, batch_s, euroc_data_file_dir):
+def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_data_file_dir):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
     :param raw_imu: 1D array of IMU objects with all the IMU measurements
     :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
-    :param batch_s: size of mini-batch
     :param euroc_data_file_dir: directory where to store the processed euroc dataset
     :return:
     """
@@ -162,26 +161,33 @@ def generate_cnn_dataset(filename, batch_s):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible datasets
 
-    :param filename: directory of the processed euroc dataset matfile
+    :param filename: directory of the processed euroc dataset mat file
     :param batch_s: (mini)-batch size of datasets
     :return:
     """
 
-    matdata = scipy.io.loadmat(filename)
+    seed = 8901
 
-    gt_v_tensor = matdata['y'][0]
-    imu_img_tensor = matdata['imu']
+    mat_data = scipy.io.loadmat(filename)
+
+    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
+    imu_img_tensor = mat_data['imu']
 
     full_ds_len = len(gt_v_tensor)
     val_ds_len = np.ceil(full_ds_len * 0.1)
     train_ds_len = full_ds_len - val_ds_len
 
-    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s)
+    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
+
     val_ds = full_train_ds.take(val_ds_len)
     train_ds = full_train_ds.skip(val_ds_len)
 
-    val_ds.batch(batch_s).repeat()
-    train_ds.batch(batch_s).repeat()
+    val_ds = val_ds.batch(batch_s, drop_remainder=True).repeat()
+    train_ds = train_ds.batch(batch_s, drop_remainder=True).repeat()
+
+    test_ds = tf.data.Dataset.from_tensor_slices([])
+
+    return train_ds, val_ds, test_ds, (train_ds_len, val_ds_len, 0)
 
 
 def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_data_file, processed_ds_available):
@@ -200,6 +206,6 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_data_file, proc
 
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, batch_size, euroc_dir + euroc_data_file)
+        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir + euroc_data_file)
 
-    generate_cnn_dataset(euroc_dir + euroc_data_file, batch_size)
+    return generate_cnn_dataset(euroc_dir + euroc_data_file, batch_size)

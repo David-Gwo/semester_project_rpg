@@ -19,6 +19,7 @@ from data import DirectoryIterator
 
 from common_flags import FLAGS
 
+
 def _main():
     learner = Learner()
     learner.setup_inference(FLAGS)

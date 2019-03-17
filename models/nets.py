@@ -1,8 +1,7 @@
 import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Conv1D, \
-    MaxPooling1D
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Reshape
 from tensorflow.python.keras.layers.merge import add
 
 ##########################################
@@ -196,13 +195,13 @@ def mnist_cnn():
 def vel_cnn():
     model = Sequential()
 
-    with tf.name_scope("Conv1"):
+    with tf.name_scope("Convolution1"):
         model.add(Conv2D(filters=60, kernel_size=(10, 1), padding='valid', activation='relu', input_shape=(200, 1, 6)))
 
-    with tf.name_scope("Conv2"):
+    with tf.name_scope("Convolution12"):
         model.add(Conv2D(filters=120, kernel_size=(10, 1), padding='valid', activation='relu'))
 
-    with tf.name_scope("Conv3"):
+    with tf.name_scope("Convolution13"):
         model.add(Conv2D(filters=240, kernel_size=(10, 1), padding='valid', activation='relu'))
         model.add(MaxPooling2D(pool_size=(10, 1), strides=20))
 

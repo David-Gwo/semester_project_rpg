@@ -6,9 +6,9 @@ import math
 import random
 import tensorflow as tf
 from tensorflow.python.keras import callbacks
-from tensorflow.python.keras.losses import CategoricalCrossentropy, MeanSquaredError
-from tensorflow.python.keras.utils.generic_utils import Progbar
+from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam
+from tensorflow.python.summary import summary as tf_summary
 from .nets import vel_cnn as prediction_network
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
@@ -87,20 +87,12 @@ class Learner(object):
         # Create a dataset from all the image labels
         label_ds = tf.data.Dataset.from_tensor_slices(tf.cast(pnt_list, tf.int64))
 
-        # Combine the image and label datasets into a zipped dataset
+        # Combine the image and label datasets into a zipped dataset. Shuffle -> Batch -> Prefetch
         inputs_queue = tf.data.Dataset.zip((image_ds, label_ds))
         inputs_queue = inputs_queue.shuffle(tf.shape(file_list, out_type=tf.int64)[0], seed=seed).repeat()
         inputs_queue = inputs_queue.batch(batch_size=self.config.batch_size, drop_remainder=False)
         inputs_queue = inputs_queue.prefetch(buffer_size=self.config.batch_size)
 
-        # # Form training batches
-        # image_batch, pnt_batch = tf.train.batch([image_seq,
-        #      pnt_seq],
-        #      batch_size=self.config.batch_size,
-        #      num_threads=self.config.num_threads,
-        #      capacity=self.config.capacity_queue,
-        #      allow_smaller_final_batch=True)
-        # return [image_batch, pnt_batch], len(file_list)
         return inputs_queue, len(file_list)
 
     def build_and_compile_model(self):
@@ -114,13 +106,12 @@ class Learner(object):
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
                           loss=MeanSquaredError(),
-                          metrics=['accuracy'])
+                          metrics=['mse'])
         return model
 
     def get_datasets(self):
         with tf.name_scope("data_loading"):
 
-            # In case of classification, this should be unchanged. Otherwise, adapt to load your inputs
             train_ds, n_samples_train = self.generate_batches(self.config.train_dir)
             val_ds, n_samples_val = self.generate_batches(self.config.val_dir)
 
@@ -141,29 +132,29 @@ class Learner(object):
         #######################################################
         # ADD HERE THE VARIABLES YOU WANT TO SEE IN THE BOARD #
         #######################################################
-        tf.compat.v1.summary.scalar("train_loss", self.total_loss, collections=["step_sum"])
-        tf.compat.v1.summary.scalar("accuracy", self.accuracy, collections=["step_sum"])
-        tf.compat.v1.summary.histogram("logits_distribution", self.logits, collections=["step_sum"])
-        tf.compat.v1.summary.histogram("predicted_out_distributions", tf.argmax(self.logits, 1), collections=["step_sum"])
-        tf.compat.v1.summary.histogram("ground_truth_distribution", self.labels, collections=["step_sum"])
+        tf_summary.scalar("train_loss", self.total_loss, collections=["step_sum"])
+        tf_summary.scalar("accuracy", self.accuracy, collections=["step_sum"])
+        tf_summary.histogram("logits_distribution", self.logits, collections=["step_sum"])
+        tf_summary.histogram("predicted_out_distributions", tf.argmax(self.logits, 1), collections=["step_sum"])
+        tf_summary.histogram("ground_truth_distribution", self.labels, collections=["step_sum"])
 
         ###################################################
         # LEAVE UNCHANGED (gradients and tensors summary) #
         ###################################################
         for var in tf.compat.v1.trainable_variables():
-            tf.compat.v1.summary.histogram(var.op.name + "/values", var, collections=["step_sum"])
+            tf_summary.histogram(var.op.name + "/values", var, collections=["step_sum"])
         for grad, var in self.grads_and_vars:
-            tf.compat.v1.summary.histogram(var.op.name + "/gradients", grad, collections=["step_sum"])
-        self.step_sum = tf.compat.v1.summary.merge(tf.compat.v1.get_collection('step_sum'))
+            tf_summary.histogram(var.op.name + "/gradients", grad, collections=["step_sum"])
+        self.step_sum = tf.summary.merge(tf.compat.v1.get_collection('step_sum'))
 
         ####################
         # VALIDATION ERROR #
         ####################
         self.validation_loss = tf.compat.v1.placeholder(tf.float32, [])
         self.validation_accuracy = tf.compat.v1.placeholder(tf.float32, [])
-        tf.compat.v1.summary.scalar("Validation_Loss", self.validation_loss, collections=["validation_summary"])
-        tf.compat.v1.summary.scalar("Validation_Accuracy", self.validation_accuracy, collections=["validation_summary"])
-        self.val_sum = tf.compat.v1.summary.merge(tf.compat.v1.get_collection('validation_summary'))
+        tf_summary.scalar("Validation_Loss", self.validation_loss, collections=["validation_summary"])
+        tf_summary.scalar("Validation_Accuracy", self.validation_accuracy, collections=["validation_summary"])
+        self.val_sum = tf_summary.merge(tf.compat.v1.get_collection('validation_summary'))
 
     def save(self, sess, checkpoint_dir, step):
         model_name = 'model'
@@ -185,7 +176,7 @@ class Learner(object):
         self.config = config
         self.classifier_model = self.build_and_compile_model()
 
-        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
+        train_ds, validation_ds, test_ds, ds_lengths = self.get_dataset('euroc')
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))
@@ -194,12 +185,12 @@ class Learner(object):
             # Interrupt training if `val_loss` stops improving for over 2 epochs
             callbacks.EarlyStopping(patience=2, monitor='val_loss'),
             # Write TensorBoard logs to `./logs` directory
-            callbacks.TensorBoard(log_dir=config.checkpoint_dir + "/keras"),
+            callbacks.TensorBoard(log_dir=config.checkpoint_dir + "/keras", histogram_freq=5),
             # Model checkpoint and saver
             callbacks.ModelCheckpoint(filepath=os.path.join(config.checkpoint_dir, "cnn_vel_net{epoch:02d}.h5"),
                                       save_weights_only=True, verbose=1)
         ]
-
+        
         self.classifier_model.fit(
             train_ds,
             verbose=1,
