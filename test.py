@@ -4,8 +4,11 @@ import gflags
 import math
 import tensorflow as tf
 import json
+import matplotlib.pyplot as plt
 
 from models.base_learner import Learner
+from data.euroc_utils import generate_cnn_testing_dataset
+from models.nets import vel_cnn
 #######################################################
 # IMPORT HERE A SCRIPT TO TEST YOUR NETWORK.          #
 # HAVE A LOOK AT `compute_loss' FOR AN EXAMPLE        #
@@ -21,15 +24,20 @@ from common_flags import FLAGS
 
 
 def _main():
-    learner = Learner()
+
+    learner = Learner(FLAGS)
+    learner.recover_model_from_checkpoint()
+    learner.evaluate_model()
+
+    """
     learner.setup_inference(FLAGS)
 
     saver = tf.train.Saver([var for var in tf.trainable_variables()])
 
     test_generator = DirectoryIterator(FLAGS.test_dir,
-                          shuffle=False,
-                          target_size=(FLAGS.img_height, FLAGS.img_width),
-                          batch_size = FLAGS.batch_size)
+                                       shuffle=False,
+                                       target_size=(FLAGS.img_height, FLAGS.img_width),
+                                       batch_size=FLAGS.batch_size)
 
     steps = int(math.ceil(test_generator.samples / FLAGS.batch_size))
 
@@ -46,7 +54,6 @@ def _main():
 
         results = compute_loss(sess, learner, test_generator, steps, verbose=1)
 
-
     ####################################################
     # LOG YOUR TESTING METRICS (stdout and json file)  #
     ####################################################
@@ -61,15 +68,19 @@ def _main():
     with open(out_filename, "w") as f:
         json.dump(results, f)
         print("Written evaluation file {}".format(out_filename))
+        
+    """
+
 
 def main(argv):
     # Utility main to load flags
     try:
-      argv = FLAGS(argv)  # parse flags
+        argv = FLAGS(argv)  # parse flags
     except gflags.FlagsError:
-      print ('Usage: %s ARGS\\n%s' % (sys.argv[0], FLAGS))
-      sys.exit(1)
+        print('Usage: %s ARGS\\n%s' % (sys.argv[0], FLAGS))
+        sys.exit(1)
     _main()
+
 
 if __name__ == "__main__":
     main(sys.argv)

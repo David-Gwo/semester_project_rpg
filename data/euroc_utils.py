@@ -178,20 +178,18 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
 
 
-def generate_cnn_dataset(euroc_dir, euroc_train, euroc_test, batch_s):
+def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
     """
-    Read the processed euroc dataset from the saved file. Generate the tf-compatible datasets
+    Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
     :param euroc_dir: root directory of the euroc data
     :param euroc_train: Name of the preprocessed euroc training dataset
-    :param euroc_test: Name of the preprocessed euroc testing dataset
     :param batch_s: (mini)-batch size of datasets
-    :return:
+    :return: the tf-compatible training and validation datasets, and their respective lengths
     """
 
     seed = 8901
 
     train_filename = euroc_dir + euroc_train
-    test_filename = euroc_dir + euroc_test
 
     mat_data = scipy.io.loadmat(train_filename)
 
@@ -204,10 +202,36 @@ def generate_cnn_dataset(euroc_dir, euroc_train, euroc_test, batch_s):
 
     full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
 
-    val_ds = full_train_ds.take(val_ds_len)
-    train_ds = full_train_ds.skip(val_ds_len)
+    val_ds = full_train_ds.take(val_ds_len).batch(batch_s)
+    train_ds = full_train_ds.skip(val_ds_len).batch(batch_s).repeat()
 
     return train_ds, val_ds, (train_ds_len, val_ds_len)
+
+
+def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s):
+    """
+    Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
+    :param euroc_dir: root directory of the euroc data
+    :param euroc_test:
+    :param batch_s: (mini)-batch size of datasets
+    :return: the tf-compatible testing dataset, and its length
+    """
+
+    seed = 1234
+
+    test_filename = euroc_dir + euroc_test
+
+    mat_data = scipy.io.loadmat(test_filename)
+
+    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
+    imu_img_tensor = mat_data['imu']
+
+    ds_len = len(gt_v_tensor)
+
+    test_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
+    test_ds = test_ds.batch(batch_s)
+
+    return test_ds, ds_len
 
 
 def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_test, processed_ds_available):
@@ -229,4 +253,4 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test)
 
-    return generate_cnn_dataset(euroc_dir, euroc_train, euroc_test, batch_size)
+    return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size)

@@ -1,18 +1,20 @@
 import os
+import re
 import sys
 import time
 from itertools import count
 import math
 import random
 import tensorflow as tf
+from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam
-from tensorflow.python.summary import summary as tf_summary
 from .nets import vel_cnn as prediction_network
+from utils import plot_regression_predictions
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
-from data.euroc_utils import load_euroc_dataset
+from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -22,9 +24,10 @@ sys.path.append("../")
 
 
 class Learner(object):
-    def __init__(self):
-        self.config = None
-        self.classifier_model = None
+    def __init__(self, config):
+        self.config = config
+        self.regressor_model = None
+        self.model_name = None
         pass
 
     def preprocess_image(self, image):
@@ -165,7 +168,7 @@ class Learner(object):
         else:
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
-    def train(self, config):
+    def train(self):
         """High level train function.
         Args:
             config: Configuration dictionary
@@ -174,8 +177,8 @@ class Learner(object):
         TODO: Add progbar from keras
         """
 
-        self.config = config
-        self.classifier_model = self.build_and_compile_model()
+        self.regressor_model = self.build_and_compile_model()
+        self.model_name = self.config.model_name
 
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
@@ -186,13 +189,14 @@ class Learner(object):
             # Interrupt training if `val_loss` stops improving for over 2 epochs
             callbacks.EarlyStopping(patience=2, monitor='val_loss'),
             # Write TensorBoard logs to `./logs` directory
-            callbacks.TensorBoard(log_dir=config.checkpoint_dir + "/keras", histogram_freq=5),
+            callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + "/keras", histogram_freq=5),
             # Model checkpoint and saver
-            callbacks.ModelCheckpoint(filepath=os.path.join(config.checkpoint_dir, "cnn_vel_net{epoch:02d}.h5"),
-                                      save_weights_only=True, verbose=1)
+            callbacks.ModelCheckpoint(
+                filepath=os.path.join(self.config.checkpoint_dir, self.model_name + "{epoch:02d}.h5"),
+                save_weights_only=True, verbose=1)
         ]
         
-        self.classifier_model.fit(
+        self.regressor_model.fit(
             train_ds,
             verbose=1,
             epochs=self.config.max_epochs,
@@ -263,6 +267,29 @@ class Learner(object):
         #                 print("Training completed successfully")
         #                 print("-------------------------------")
         #                 break
+
+    def recover_model_from_checkpoint(self):
+        """
+        Loads the weights of the default model from the checkpoint files
+        """
+
+        recovery_path = self.config.checkpoint_dir
+        regex = self.config.model_name + r"[0-9]*.h5"
+        files = [f for f in os.listdir(recovery_path) if re.match(regex, f)]
+        files.sort(key=str.lower)
+        latest_model = files[-1]
+
+        self.regressor_model = self.build_and_compile_model()
+        self.regressor_model.load_weights(recovery_path + '/' + latest_model)
+
+    def evaluate_model(self):
+
+        test_ds, test_ds_len = generate_cnn_testing_dataset(self.config.euroc_dir, self.config.euroc_data_filename_test,
+                                                            self.config.batch_size)
+
+        predictions = self.regressor_model.predict(test_ds, verbose=1)
+
+        plot_regression_predictions(test_ds, predictions)
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy

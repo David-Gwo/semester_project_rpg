@@ -31,8 +31,8 @@ def _main():
     if not os.path.exists(FLAGS.checkpoint_dir):
         os.makedirs(FLAGS.checkpoint_dir)
 
-    trl = Learner()
-    trl.train(FLAGS)
+    trl = Learner(FLAGS)
+    trl.train()
 
 
 def main(argv):

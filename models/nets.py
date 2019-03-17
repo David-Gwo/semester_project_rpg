@@ -203,7 +203,7 @@ def vel_cnn():
 
     with tf.name_scope("Convolution3"):
         model.add(Conv2D(filters=240, kernel_size=(10, 1), padding='valid', activation='relu'))
-        model.add(MaxPooling2D(pool_size=(10, 1), strides=20))
+        model.add(MaxPooling2D(pool_size=(10, 1), strides=(20, 1), data_format="channels_last"))
 
     with tf.name_scope("Dense"):
         model.add(Dense(400, activation='relu'))

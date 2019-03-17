@@ -1,5 +1,6 @@
 import numpy as np
-from keras.utils.generic_utils import Progbar
+from tensorflow.python.keras.utils.generic_utils import Progbar
+import matplotlib.pyplot as plt
 
 def compute_loss(sess, learner_object, generator, steps,
                       verbose=0):
@@ -57,3 +58,12 @@ def compute_loss(sess, learner_object, generator, steps,
     outputs['loss'] = float(np.mean(all_losses))
     outputs['accuracy'] = float(np.mean(all_accuracies))
     return outputs
+
+
+def plot_regression_predictions(test_ds, pred_y):
+
+    y = [y_ds for (_, y_ds) in test_ds]
+
+    plt.plot(y)
+    plt.plot(pred_y, 'r')
+    plt.show()

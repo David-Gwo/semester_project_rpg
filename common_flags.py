@@ -17,6 +17,7 @@ gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_float("l2_reg_scale", 1e-4, "Scale for regularization losses")
 gflags.DEFINE_integer('output_dim', 10, "Number of outputs")
 gflags.DEFINE_integer("max_epochs", 6, "Maximum number of training epochs")
+gflags.DEFINE_string("model_name", "cnn_vel_net", "Name for the deep model")
 
 
 ###############################################################
@@ -33,7 +34,7 @@ gflags.DEFINE_string('train_dir', "./data/sample_data/training", 'Folder contain
 gflags.DEFINE_string('val_dir', "./data/sample_data/testing", 'Folder containing validation experiments')
 gflags.DEFINE_string('checkpoint_dir', "./tests/test_0/cp.ckpt", "Directory name to save checkpoints and logs.")
 gflags.DEFINE_string('euroc_dir', './data/EuRoC_dataset/', 'Directory of the EuRoC dataset')
-gflags.DEFINE_boolean('processed_dataset', False, 'Whether there is a processed dataset file available to load from')
+gflags.DEFINE_boolean('processed_dataset', True, 'Whether there is a processed dataset file available to load from')
 gflags.DEFINE_string('euroc_data_filename_train', 'imu_dataset_train.mat', 'Preprocessed EuRoC dataset training file')
 gflags.DEFINE_string('euroc_data_filename_test', 'imu_dataset_test.mat', 'Preprocessed EuRoC dataset testing file')
 
