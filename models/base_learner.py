@@ -124,7 +124,8 @@ class Learner(object):
         if dataset_name == 'euroc':
             imu_seq_len = 200
             return load_euroc_dataset(self.config.euroc_dir, self.config.batch_size, imu_seq_len,
-                                      self.config.euroc_data_filename, self.config.processed_dataset)
+                                      self.config.euroc_data_filename_train, self.config.euroc_data_filename_test,
+                                      self.config.processed_dataset)
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -176,7 +177,7 @@ class Learner(object):
         self.config = config
         self.classifier_model = self.build_and_compile_model()
 
-        train_ds, validation_ds, test_ds, ds_lengths = self.get_dataset('euroc')
+        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))

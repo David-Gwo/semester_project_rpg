@@ -198,10 +198,10 @@ def vel_cnn():
     with tf.name_scope("Convolution1"):
         model.add(Conv2D(filters=60, kernel_size=(10, 1), padding='valid', activation='relu', input_shape=(200, 1, 6)))
 
-    with tf.name_scope("Convolution12"):
+    with tf.name_scope("Convolution2"):
         model.add(Conv2D(filters=120, kernel_size=(10, 1), padding='valid', activation='relu'))
 
-    with tf.name_scope("Convolution13"):
+    with tf.name_scope("Convolution3"):
         model.add(Conv2D(filters=240, kernel_size=(10, 1), padding='valid', activation='relu'))
         model.add(MaxPooling2D(pool_size=(10, 1), strides=20))
 

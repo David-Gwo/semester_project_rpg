@@ -33,8 +33,9 @@ gflags.DEFINE_string('train_dir', "./data/sample_data/training", 'Folder contain
 gflags.DEFINE_string('val_dir', "./data/sample_data/testing", 'Folder containing validation experiments')
 gflags.DEFINE_string('checkpoint_dir', "./tests/test_0/cp.ckpt", "Directory name to save checkpoints and logs.")
 gflags.DEFINE_string('euroc_dir', './data/EuRoC_dataset/', 'Directory of the EuRoC dataset')
-gflags.DEFINE_boolean('processed_dataset', True, 'Whether there is a processed dataset file available to load from')
-gflags.DEFINE_string('euroc_data_filename', 'imu_dataset.mat', 'Name of the preprocessed EuRoC dataset file')
+gflags.DEFINE_boolean('processed_dataset', False, 'Whether there is a processed dataset file available to load from')
+gflags.DEFINE_string('euroc_data_filename_train', 'imu_dataset_train.mat', 'Preprocessed EuRoC dataset training file')
+gflags.DEFINE_string('euroc_data_filename_test', 'imu_dataset_test.mat', 'Preprocessed EuRoC dataset testing file')
 
 # Log parameters
 gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')

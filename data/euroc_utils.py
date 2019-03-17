@@ -119,14 +119,15 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, v_interp]
 
 
-def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_data_file_dir):
+def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
     :param raw_imu: 1D array of IMU objects with all the IMU measurements
     :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
-    :param euroc_data_file_dir: directory where to store the processed euroc dataset
-    :return:
+    :param euroc_dir: root directory of the euroc data
+    :param euroc_train: Name of the preprocessed euroc training dataset
+    :param euroc_test: Name of the preprocessed euroc testing dataset
     """
 
     # Initialize data tensors #
@@ -150,25 +151,49 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_data_file_dir):
         imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 1)
         gt_v_tensor[i] = np.linalg.norm(gt_v[i])
 
-    if os.path.exists(euroc_data_file_dir):
-        os.remove(euroc_data_file_dir)
-    os.mknod(euroc_data_file_dir)
+    euroc_training_ds = euroc_dir + euroc_train
+    euroc_testing_ds = euroc_dir + euroc_test
 
-    scipy.io.savemat(euroc_data_file_dir, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
+    if os.path.exists(euroc_training_ds):
+        os.remove(euroc_training_ds)
+    os.mknod(euroc_training_ds)
+
+    if os.path.exists(euroc_testing_ds):
+        os.remove(euroc_testing_ds)
+    os.mknod(euroc_testing_ds)
+
+    total_ds_len = int(len(gt_v_tensor))
+    test_ds_len = int(np.ceil(total_ds_len * 0.1))
+
+    # Choose some entries to separate for the test set
+    test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
+
+    test_set_x = imu_img_tensor[test_indexes, :, :, :]
+    test_set_y = gt_v_tensor[test_indexes]
+
+    imu_img_tensor = np.delete(imu_img_tensor, test_indexes, 0)
+    gt_v_tensor = np.delete(gt_v_tensor, test_indexes)
+
+    scipy.io.savemat(euroc_training_ds, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
+    scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
 
 
-def generate_cnn_dataset(filename, batch_s):
+def generate_cnn_dataset(euroc_dir, euroc_train, euroc_test, batch_s):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible datasets
-
-    :param filename: directory of the processed euroc dataset mat file
+    :param euroc_dir: root directory of the euroc data
+    :param euroc_train: Name of the preprocessed euroc training dataset
+    :param euroc_test: Name of the preprocessed euroc testing dataset
     :param batch_s: (mini)-batch size of datasets
     :return:
     """
 
     seed = 8901
 
-    mat_data = scipy.io.loadmat(filename)
+    train_filename = euroc_dir + euroc_train
+    test_filename = euroc_dir + euroc_test
+
+    mat_data = scipy.io.loadmat(train_filename)
 
     gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
     imu_img_tensor = mat_data['imu']
@@ -182,21 +207,17 @@ def generate_cnn_dataset(filename, batch_s):
     val_ds = full_train_ds.take(val_ds_len)
     train_ds = full_train_ds.skip(val_ds_len)
 
-    val_ds = val_ds.batch(batch_s, drop_remainder=True).repeat()
-    train_ds = train_ds.batch(batch_s, drop_remainder=True).repeat()
-
-    test_ds = tf.data.Dataset.from_tensor_slices([])
-
-    return train_ds, val_ds, test_ds, (train_ds_len, val_ds_len, 0)
+    return train_ds, val_ds, (train_ds_len, val_ds_len)
 
 
-def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_data_file, processed_ds_available):
+def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_test, processed_ds_available):
     """
 
     :param euroc_dir: root directory of the EuRoC dataset
     :param batch_size: mini-batch size
     :param imu_seq_len: Number of IMU measurements in the x vectors. Is a function of the sampling frequency of the IMU
-    :param euroc_data_file: Name of the file where to store the processed euroc dataset
+    :param euroc_train: Name of the file where to store the preprocessed euroc training dataset
+    :param euroc_test: Name of the file where to store the preprocessed euroc testing dataset
     :param processed_ds_available: Whether there is already a processed dataset file available to load from
     :return:
     """
@@ -206,6 +227,6 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_data_file, proc
 
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir + euroc_data_file)
+        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test)
 
-    return generate_cnn_dataset(euroc_dir + euroc_data_file, batch_size)
+    return generate_cnn_dataset(euroc_dir, euroc_train, euroc_test, batch_size)

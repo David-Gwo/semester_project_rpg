@@ -176,6 +176,6 @@ def get_mnist_datasets(img_h, img_w, batch_s):
     train_ds = Dataset.from_tensor_slices((x_train, y_train)).shuffle(batch_s).batch(batch_s).repeat()
     validation_ds = Dataset.from_tensor_slices((x_valid, y_valid)).shuffle(batch_s).batch(batch_s).repeat()
     test_ds = Dataset.from_tensor_slices((x_test, y_test)).shuffle(batch_s).batch(batch_s)
-    ds_lengths = (len(x_train), len(x_valid), len(x_test))
+    ds_lengths = (len(x_train), len(x_valid))
 
-    return train_ds, validation_ds, test_ds, ds_lengths
+    return train_ds, validation_ds, ds_lengths
