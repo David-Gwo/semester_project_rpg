@@ -60,11 +60,17 @@ def compute_loss(sess, learner_object, generator, steps,
     return outputs
 
 
-def plot_regression_predictions(test_ds, pred_y):
+def plot_regression_predictions(test_ds, pred_y, i, epoch):
 
     y = [np.squeeze(y_ds) for (_, y_ds) in test_ds]
     y_flat = [item for sublist in y for item in sublist]
 
-    plt.plot(np.squeeze(y_flat))
-    plt.plot(np.squeeze(pred_y), 'r')
-    plt.show()
+    fig = plt.figure()
+    ax = fig.add_subplot(111)
+    ax.plot(np.squeeze(y_flat))
+    ax.plot(np.squeeze(pred_y), 'r')
+    if i is not None:
+        fig.savefig('figures/fig{0}_{1}.png'.format(epoch, i))
+        plt.close(fig)
+    else:
+        plt.show()

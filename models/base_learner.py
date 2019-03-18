@@ -5,6 +5,7 @@ import time
 from itertools import count
 import math
 import random
+import numpy as np
 import tensorflow as tf
 from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
@@ -12,6 +13,7 @@ from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam, SGD
 from .nets import vel_cnn as prediction_network
 from utils import plot_regression_predictions
+from models.custom_callback_fx import AdditionalValidationSets
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
 from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
@@ -102,18 +104,46 @@ class Learner(object):
     def l2_loss(y_true, y_pred):
         return tf.math.subtract(tf.cast(y_true, tf.float32), y_pred) ** 2
 
+    def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
+
+        optimizer = tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1)
+
+        for i, (x, y) in enumerate(training_ds):
+
+            if i % 10 == 0:
+                tf.print("Batch {0} of {1}".format(i, ds_lengths[1]))
+
+            if i % 5000 == 0:
+                self.evaluate_model(validation_ds, ds_lengths[1], i, epoch)
+
+            with tf.GradientTape() as tape:
+                # Forward pass
+                logit = self.regressor_model(tf.cast(x, tf.float32))
+
+                # External loss calculation
+                loss = self.l2_loss(y, logit)
+
+                # Manual loss combination:
+                loss += sum(self.regressor_model.losses)
+
+            # Get gradients
+            gradient = tape.gradient(loss, self.regressor_model.trainable_weights)
+
+            # Update weights of layer
+            optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
+
     def build_and_compile_model(self):
         # model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
         #                            l2_reg_scale=self.config.l2_reg_scale,
         #                            output_dim=self.config.output_dim)
 
-        model = prediction_network()
+        model = prediction_network(self.config.l2_reg_scale)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
                           loss=self.l2_loss,
-                          metrics=['mae', 'mse'])
+                          metrics=['mae'])
         return model
 
     def get_datasets(self):
@@ -181,63 +211,59 @@ class Learner(object):
         TODO: Add progbar from keras
         """
 
-        self.regressor_model = self.build_and_compile_model()
         self.model_name = self.config.model_name
+
+        if self.config.resume_train:
+            print("Resume training from previous checkpoint")
+            try:
+                self.recover_model_from_checkpoint()
+            except FileNotFoundError:
+                self.regressor_model = self.build_and_compile_model()
+        else:
+            self.regressor_model = self.build_and_compile_model()
 
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
+        val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 4)/self.config.batch_size).astype(np.int)
+        val_ds = {}
+
+        for i, split in enumerate(val_ds_splits):
+            val_ds[i] = validation_ds.take(split)
+            validation_ds = validation_ds.skip(split)
+
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
-        val_steps_per_epoch = int(math.ceil(ds_lengths[1]/self.config.batch_size))
+        val_steps_per_epoch = int(math.ceil(val_ds_splits[0]))
 
         keras_callbacks = [
             # Interrupt training if `val_loss` stops improving for over 2 epochs
-            callbacks.EarlyStopping(patience=2, monitor='mse'),
+            callbacks.EarlyStopping(patience=2, monitor='val_loss'),
             # Write TensorBoard logs to `./logs` directory
             callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + "/keras", histogram_freq=5),
             # Model checkpoint and saver
             callbacks.ModelCheckpoint(
                 filepath=os.path.join(self.config.checkpoint_dir, self.model_name + "{epoch:02d}.h5"),
-                save_weights_only=True, verbose=1)
+                save_weights_only=True, verbose=1),
+            AdditionalValidationSets(val_ds)
+
         ]
+
+        for epoch in range(self.config.max_epochs):
+            self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
 
         # self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
 
-        # optimizer = tf.keras.optimizers.Adam(self.config.learning_rate)
-        #
-        # for i, (x, y) in enumerate(validation_ds):
-        #
-        #     if i % 10 == 0:
-        #         tf.print("Batch {0} of {1}".format(i, ds_lengths[1]))
-        #
-        #     if i % 50 == 0:
-        #         self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
-        #
-        #     with tf.GradientTape() as tape:
-        #         # Forward pass
-        #         logit = self.regressor_model(tf.cast(x, tf.float32))
-        #
-        #         # External loss calculation
-        #         loss = self.l2_loss(y, logit)
-        #
-        #         # Manual loss combination:
-        #         loss += sum(self.regressor_model.losses)
-        #
-        #     # Get gradients
-        #     gradient = tape.gradient(loss, self.regressor_model.trainable_weights)
-        #
-        #     # Update weights of layer
-        #     optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
+        # self.regressor_model.fit(
+        #     train_ds,
+        #     verbose=1,
+        #     epochs=self.config.max_epochs,
+        #     steps_per_epoch=val_steps_per_epoch,
+        #     validation_data=val_ds[0],
+        #     validation_steps=val_steps_per_epoch,
+        #     callbacks=keras_callbacks)
 
-        self.regressor_model.fit(
-            train_ds,
-            verbose=1,
-            epochs=self.config.max_epochs,
-            steps_per_epoch=train_steps_per_epoch,
-            validation_data=validation_ds,
-            validation_steps=val_steps_per_epoch,
-            callbacks=keras_callbacks)
-
-        self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
+        print(self.regressor_model.evaluate(val_ds[0], verbose=1))
+        self.evaluate_model(val_ds[0], val_ds_splits[0])
+        self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
         # TODO: implement resume training?
 
@@ -311,14 +337,17 @@ class Learner(object):
         regex = self.config.model_name + r"[0-9]*.h5"
         files = [f for f in os.listdir(recovery_path) if re.match(regex, f)]
         files.sort(key=str.lower)
+        if files == []:
+            raise FileNotFoundError()
+
         latest_model = files[-1]
 
         self.regressor_model = self.build_and_compile_model()
 
-        tf.print("Loading weights from %s", latest_model)
+        tf.print("Loading weights from %s", recovery_path + '/' + latest_model)
         self.regressor_model.load_weights(recovery_path + '/' + latest_model)
 
-    def evaluate_model(self, testing_ds=None, steps=None):
+    def evaluate_model(self, testing_ds=None, steps=None, i=None, epoch=None):
 
         if testing_ds is None:
             test_ds, test_ds_len = generate_cnn_testing_dataset(self.config.euroc_dir,
@@ -329,7 +358,7 @@ class Learner(object):
 
         predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
 
-        plot_regression_predictions(test_ds, predictions)
+        plot_regression_predictions(test_ds, predictions, i, epoch)
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy

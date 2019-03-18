@@ -105,7 +105,7 @@ def resnet8_model(input_shape, output_dim, l2_reg_scale, log=False):
     print(input_shape)
     with tf.name_scope("InputNode"):
         img_input = Input(shape=input_shape)
-        x1 = Conv2D(32, (5, 5), strides=[2, 2], padding='same')(img_input)
+        x1 = Conv2D(32, (5, 5), strides=[2, 2], padding='same', )(img_input)
         x1 = MaxPooling2D(pool_size=(3, 3), strides=[2, 2])(x1)
 
     # First residual block
@@ -193,26 +193,29 @@ def mnist_cnn():
     return model
 
 
-def vel_cnn():
+def vel_cnn(l2_reg_scale):
     model = Sequential()
 
     with tf.name_scope("Convolution1"):
-        model.add(Conv2D(filters=10, kernel_size=(20, 6), use_bias=False, padding='same', activation='relu', input_shape=(200, 6, 1)))
+        model.add(Conv2D(filters=20, kernel_size=(5, 6), padding='same', activation='relu',
+                         kernel_regularizer=regularizers.l2(l2_reg_scale), input_shape=(200, 6, 1)))
 
     with tf.name_scope("Convolution2"):
-        model.add(Conv2D(filters=20, kernel_size=(20, 6), use_bias=False, padding='same', activation='relu'))
+        model.add(Conv2D(filters=40, kernel_size=(10, 6), padding='valid', activation='relu',
+                         kernel_regularizer=regularizers.l2(l2_reg_scale)))
 
     with tf.name_scope("Convolution3"):
-        model.add(Conv2D(filters=40, kernel_size=(20, 6), use_bias=False, padding='valid', activation='relu'))
-        # model.add(MaxPooling2D(pool_size=(10, 1), strides=(20, 1)))
+        model.add(Conv2D(filters=80, kernel_size=(20, 1), padding='valid', activation='relu',
+                         kernel_regularizer=regularizers.l2(l2_reg_scale)))
+        model.add(MaxPooling2D(pool_size=(5, 1), strides=(10, 1)))
         model.add(Flatten())
 
-    with tf.name_scope("Dense"):
+    with tf.name_scope("Dense1"):
         model.add(Dense(100, activation='relu'))
         model.add(Dropout(0.5))
+    with tf.name_scope("Dense2"):
         model.add(Dense(50, activation='relu'))
         model.add(Dropout(0.5))
-        model.add(Dense(10, activation='relu'))
 
     with tf.name_scope("Output"):
         model.add(Dense(1))

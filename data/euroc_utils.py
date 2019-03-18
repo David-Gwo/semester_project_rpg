@@ -5,6 +5,7 @@ import tensorflow as tf
 import os
 import scipy.io
 from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 
 
 class IMU:
@@ -197,13 +198,19 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
     imu_img_tensor = mat_data['imu']
 
     full_ds_len = len(gt_v_tensor)
-    val_ds_len = np.ceil(full_ds_len * 0.1)
+    val_ds_len = np.ceil(full_ds_len * 0.3)
     train_ds_len = full_ds_len - val_ds_len
 
-    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
+    val_ds_indexes = np.random.choice(range(full_ds_len), int(val_ds_len), replace=False)
+    val_ds_imu_vec = imu_img_tensor[val_ds_indexes]
+    val_ds_v_vec = gt_v_tensor[val_ds_indexes]
 
-    val_ds = full_train_ds.take(val_ds_len).batch(batch_s)
-    train_ds = full_train_ds.skip(val_ds_len).batch(batch_s).repeat()
+    imu_img_tensor = np.delete(imu_img_tensor, val_ds_indexes, axis=0)
+    gt_v_tensor = np.delete(gt_v_tensor, val_ds_indexes)
+
+    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
+    val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec)).batch(batch_s)
+    train_ds = full_train_ds.batch(batch_s).repeat()
 
     return train_ds, val_ds, (train_ds_len, val_ds_len)
 
@@ -253,4 +260,24 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test)
 
+    visualize_dataset(euroc_dir, euroc_train)
     return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size)
+
+
+def visualize_dataset(euroc_dir, euroc_train):
+    train_filename = euroc_dir + euroc_train
+
+    mat_data = scipy.io.loadmat(train_filename)
+
+    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
+    imu_img_tensor = mat_data['imu']
+
+    y = np.squeeze(gt_v_tensor)
+    x = imu_img_tensor[:, 0, :, 0]
+
+    plt.figure()
+    plt.plot(y)
+    plt.plot(x)
+    plt.show()
+
+
