@@ -1,7 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Reshape
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Reshape, \
+    MaxPooling1D
 from tensorflow.python.keras.layers.merge import add
 
 ##########################################
@@ -196,18 +197,22 @@ def vel_cnn():
     model = Sequential()
 
     with tf.name_scope("Convolution1"):
-        model.add(Conv2D(filters=60, kernel_size=(10, 1), padding='valid', activation='relu', input_shape=(200, 1, 6)))
+        model.add(Conv2D(filters=10, kernel_size=(20, 6), use_bias=False, padding='same', activation='relu', input_shape=(200, 6, 1)))
 
     with tf.name_scope("Convolution2"):
-        model.add(Conv2D(filters=120, kernel_size=(10, 1), padding='valid', activation='relu'))
+        model.add(Conv2D(filters=20, kernel_size=(20, 6), use_bias=False, padding='same', activation='relu'))
 
     with tf.name_scope("Convolution3"):
-        model.add(Conv2D(filters=240, kernel_size=(10, 1), padding='valid', activation='relu'))
-        model.add(MaxPooling2D(pool_size=(10, 1), strides=(20, 1), data_format="channels_last"))
+        model.add(Conv2D(filters=40, kernel_size=(20, 6), use_bias=False, padding='valid', activation='relu'))
+        # model.add(MaxPooling2D(pool_size=(10, 1), strides=(20, 1)))
+        model.add(Flatten())
 
     with tf.name_scope("Dense"):
-        model.add(Dense(400, activation='relu'))
-        model.add(Dense(40, activation='relu'))
+        model.add(Dense(100, activation='relu'))
+        model.add(Dropout(0.5))
+        model.add(Dense(50, activation='relu'))
+        model.add(Dropout(0.5))
+        model.add(Dense(10, activation='relu'))
 
     with tf.name_scope("Output"):
         model.add(Dense(1))

@@ -132,7 +132,7 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
 
     # Initialize data tensors #
     # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((len(raw_imu), imu_len, 1, 6))
+    imu_img_tensor = np.zeros((len(raw_imu), imu_len, 6, 1))
     # Initialize y data. Will be the absolute ground truth value of the speed of the drone
     gt_v_tensor = np.zeros(len(raw_imu))
 
@@ -148,7 +148,7 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
 
         # TODO: Should the elapsed time be included in the data?
 
-        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 1)
+        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
         gt_v_tensor[i] = np.linalg.norm(gt_v[i])
 
     euroc_training_ds = euroc_dir + euroc_train

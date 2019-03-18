@@ -62,8 +62,9 @@ def compute_loss(sess, learner_object, generator, steps,
 
 def plot_regression_predictions(test_ds, pred_y):
 
-    y = [y_ds for (_, y_ds) in test_ds]
+    y = [np.squeeze(y_ds) for (_, y_ds) in test_ds]
+    y_flat = [item for sublist in y for item in sublist]
 
-    plt.plot(y)
-    plt.plot(pred_y, 'r')
+    plt.plot(np.squeeze(y_flat))
+    plt.plot(np.squeeze(pred_y), 'r')
     plt.show()

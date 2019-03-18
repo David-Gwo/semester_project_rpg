@@ -9,7 +9,7 @@ import tensorflow as tf
 from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import MeanSquaredError
-from tensorflow.python.keras.optimizers import Adam
+from tensorflow.python.keras.optimizers import Adam, SGD
 from .nets import vel_cnn as prediction_network
 from utils import plot_regression_predictions
 from data import DirectoryIterator
@@ -98,6 +98,10 @@ class Learner(object):
 
         return inputs_queue, len(file_list)
 
+    @staticmethod
+    def l2_loss(y_true, y_pred):
+        return tf.math.subtract(tf.cast(y_true, tf.float32), y_pred) ** 2
+
     def build_and_compile_model(self):
         # model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
         #                            l2_reg_scale=self.config.l2_reg_scale,
@@ -108,8 +112,8 @@ class Learner(object):
         print(model.summary())
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                          loss=MeanSquaredError(),
-                          metrics=['mse'])
+                          loss=self.l2_loss,
+                          metrics=['mae', 'mse'])
         return model
 
     def get_datasets(self):
@@ -187,7 +191,7 @@ class Learner(object):
 
         keras_callbacks = [
             # Interrupt training if `val_loss` stops improving for over 2 epochs
-            callbacks.EarlyStopping(patience=2, monitor='val_loss'),
+            callbacks.EarlyStopping(patience=2, monitor='mse'),
             # Write TensorBoard logs to `./logs` directory
             callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + "/keras", histogram_freq=5),
             # Model checkpoint and saver
@@ -195,7 +199,35 @@ class Learner(object):
                 filepath=os.path.join(self.config.checkpoint_dir, self.model_name + "{epoch:02d}.h5"),
                 save_weights_only=True, verbose=1)
         ]
-        
+
+        # self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
+
+        # optimizer = tf.keras.optimizers.Adam(self.config.learning_rate)
+        #
+        # for i, (x, y) in enumerate(validation_ds):
+        #
+        #     if i % 10 == 0:
+        #         tf.print("Batch {0} of {1}".format(i, ds_lengths[1]))
+        #
+        #     if i % 50 == 0:
+        #         self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
+        #
+        #     with tf.GradientTape() as tape:
+        #         # Forward pass
+        #         logit = self.regressor_model(tf.cast(x, tf.float32))
+        #
+        #         # External loss calculation
+        #         loss = self.l2_loss(y, logit)
+        #
+        #         # Manual loss combination:
+        #         loss += sum(self.regressor_model.losses)
+        #
+        #     # Get gradients
+        #     gradient = tape.gradient(loss, self.regressor_model.trainable_weights)
+        #
+        #     # Update weights of layer
+        #     optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
+
         self.regressor_model.fit(
             train_ds,
             verbose=1,
@@ -204,6 +236,8 @@ class Learner(object):
             validation_data=validation_ds,
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
+
+        self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
 
         # TODO: implement resume training?
 
@@ -280,14 +314,20 @@ class Learner(object):
         latest_model = files[-1]
 
         self.regressor_model = self.build_and_compile_model()
+
+        tf.print("Loading weights from %s", latest_model)
         self.regressor_model.load_weights(recovery_path + '/' + latest_model)
 
-    def evaluate_model(self):
+    def evaluate_model(self, testing_ds=None, steps=None):
 
-        test_ds, test_ds_len = generate_cnn_testing_dataset(self.config.euroc_dir, self.config.euroc_data_filename_test,
-                                                            self.config.batch_size)
+        if testing_ds is None:
+            test_ds, test_ds_len = generate_cnn_testing_dataset(self.config.euroc_dir,
+                                                                self.config.euroc_data_filename_train,
+                                                                self.config.batch_size)
+        else:
+            test_ds = testing_ds.take(steps)
 
-        predictions = self.regressor_model.predict(test_ds, verbose=1)
+        predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
 
         plot_regression_predictions(test_ds, predictions)
 
