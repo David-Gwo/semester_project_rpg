@@ -1,8 +1,8 @@
 import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, Reshape, \
-    MaxPooling1D
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, \
+    BatchNormalization
 from tensorflow.python.keras.layers.merge import add
 
 ##########################################
@@ -196,28 +196,15 @@ def mnist_cnn():
 def vel_cnn(l2_reg_scale):
     model = Sequential()
 
-    with tf.name_scope("Convolution1"):
-        model.add(Conv2D(filters=20, kernel_size=(5, 6), padding='same', activation='relu',
-                         kernel_regularizer=regularizers.l2(l2_reg_scale), input_shape=(200, 6, 1)))
-
-    with tf.name_scope("Convolution2"):
-        model.add(Conv2D(filters=40, kernel_size=(10, 6), padding='valid', activation='relu',
-                         kernel_regularizer=regularizers.l2(l2_reg_scale)))
-
-    with tf.name_scope("Convolution3"):
-        model.add(Conv2D(filters=80, kernel_size=(20, 1), padding='valid', activation='relu',
-                         kernel_regularizer=regularizers.l2(l2_reg_scale)))
-        model.add(MaxPooling2D(pool_size=(5, 1), strides=(10, 1)))
-        model.add(Flatten())
-
-    with tf.name_scope("Dense1"):
-        model.add(Dense(100, activation='relu'))
-        model.add(Dropout(0.5))
-    with tf.name_scope("Dense2"):
-        model.add(Dense(50, activation='relu'))
-        model.add(Dropout(0.5))
-
-    with tf.name_scope("Output"):
-        model.add(Dense(1))
+    model.add(Conv2D(filters=60, kernel_size=(3, 6), padding='same', activation='relu', input_shape=(200, 6, 1),
+                     name="convolution_layer_1"))
+    model.add(Conv2D(filters=120, kernel_size=(3, 6), padding='same', activation='relu', name="convolution_layer_2"))
+    model.add(Conv2D(filters=240, kernel_size=(3, 1), padding='valid', activation='relu', name="convolution_layer_3"))
+    model.add(MaxPooling2D(pool_size=(10, 1), strides=(6, 1), name="pooling_layer"))
+    model.add(Flatten(name="flattening_layer"))
+    model.add(Dense(400, activation='relu', name="dense_layer_1"))
+    model.add(Dense(100, activation='relu', name="dense_layer_2"))
+    model.add(Dense(1, name="output_layer"))
 
     return model
+

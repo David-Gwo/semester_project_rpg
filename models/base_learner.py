@@ -102,7 +102,7 @@ class Learner(object):
 
     @staticmethod
     def l2_loss(y_true, y_pred):
-        return tf.math.subtract(tf.cast(y_true, tf.float32), y_pred) ** 2
+        return tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
 
     def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
 
@@ -110,10 +110,7 @@ class Learner(object):
 
         for i, (x, y) in enumerate(training_ds):
 
-            if i % 10 == 0:
-                tf.print("Batch {0} of {1}".format(i, ds_lengths[1]))
-
-            if i % 5000 == 0:
+            if i % 100 == 0:
                 self.evaluate_model(validation_ds, ds_lengths[1], i, epoch)
 
             with tf.GradientTape() as tape:
@@ -125,6 +122,10 @@ class Learner(object):
 
                 # Manual loss combination:
                 loss += sum(self.regressor_model.losses)
+
+            if i % 10 == 0:
+                tf.print("Batch {0} of {1}".format(i, ds_lengths[0]))
+                tf.print("Training loss of batch {0}/{2} is: {1}".format(i, loss, ds_lengths[0]))
 
             # Get gradients
             gradient = tape.gradient(loss, self.regressor_model.trainable_weights)
@@ -143,7 +144,7 @@ class Learner(object):
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
                           loss=self.l2_loss,
-                          metrics=['mae'])
+                          metrics=['mse'])
         return model
 
     def get_datasets(self):
@@ -224,7 +225,7 @@ class Learner(object):
 
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
-        val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 4)/self.config.batch_size).astype(np.int)
+        val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
 
         for i, split in enumerate(val_ds_splits):
@@ -242,26 +243,26 @@ class Learner(object):
             # Model checkpoint and saver
             callbacks.ModelCheckpoint(
                 filepath=os.path.join(self.config.checkpoint_dir, self.model_name + "{epoch:02d}.h5"),
-                save_weights_only=True, verbose=1),
+                save_weights_only=True, verbose=1, period=10),
+            callbacks.ModelCheckpoint(self.model_name + "_best.h5", save_best_only=True, monitor='val_loss',
+                                      mode='min', verbose=1),
             AdditionalValidationSets(val_ds)
-
         ]
 
-        for epoch in range(self.config.max_epochs):
-            self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
+        # for epoch in range(self.config.max_epochs):
+        #     self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
 
-        # self.evaluate_model(validation_ds, ds_lengths[1]/self.config.batch_size)
+        self.evaluate_model(val_ds[0], val_ds_splits[0])
 
-        # self.regressor_model.fit(
-        #     train_ds,
-        #     verbose=1,
-        #     epochs=self.config.max_epochs,
-        #     steps_per_epoch=val_steps_per_epoch,
-        #     validation_data=val_ds[0],
-        #     validation_steps=val_steps_per_epoch,
-        #     callbacks=keras_callbacks)
+        history = self.regressor_model.fit(
+            val_ds[0].repeat(),
+            verbose=2,
+            epochs=self.config.max_epochs,
+            steps_per_epoch=val_steps_per_epoch,
+            validation_data=val_ds[0],
+            validation_steps=val_steps_per_epoch,
+            callbacks=keras_callbacks)
 
-        print(self.regressor_model.evaluate(val_ds[0], verbose=1))
         self.evaluate_model(val_ds[0], val_ds_splits[0])
         self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
@@ -350,9 +351,10 @@ class Learner(object):
     def evaluate_model(self, testing_ds=None, steps=None, i=None, epoch=None):
 
         if testing_ds is None:
-            test_ds, test_ds_len = generate_cnn_testing_dataset(self.config.euroc_dir,
-                                                                self.config.euroc_data_filename_train,
-                                                                self.config.batch_size)
+            test_ds, steps = generate_cnn_testing_dataset(self.config.euroc_dir,
+                                                          self.config.euroc_data_filename_train,
+                                                          self.config.batch_size)
+            steps = steps / self.config.batch_size
         else:
             test_ds = testing_ds.take(steps)
 

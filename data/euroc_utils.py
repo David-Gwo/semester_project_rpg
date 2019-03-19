@@ -6,6 +6,8 @@ import os
 import scipy.io
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.externals import joblib
 
 
 class IMU:
@@ -131,6 +133,16 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     :param euroc_test: Name of the preprocessed euroc testing dataset
     """
 
+    vec = np.array([(imu_s.gyro, imu_s.acc) for imu_s in raw_imu])
+
+    scale_g = MinMaxScaler()
+    scale_g.fit(vec[:, 0, :].reshape(-1, 1))
+    scale_a = MinMaxScaler()
+    scale_a.fit(vec[:, 1, :].reshape(-1, 1))
+
+    vec[:, 0, :] = scale_g.transform(vec[:, 0, :])
+    vec[:, 1, :] = scale_a.transform(vec[:, 1, :])
+
     # Initialize data tensors #
     # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
     imu_img_tensor = np.zeros((len(raw_imu), imu_len, 6, 1))
@@ -142,10 +154,9 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
 
         # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
         if i < imu_len:
-            imu_img[imu_len - i - 1:imu_len, :] = \
-                np.array([list(imu_s.gyro) + list(imu_s.acc) for imu_s in raw_imu[0:i+1]])
+            imu_img[imu_len - i - 1:imu_len, :] = vec[0:i+1, :, :].reshape(i+1, 6)
         else:
-            imu_img = np.array([list(imu_s.gyro) + list(imu_s.acc) for imu_s in raw_imu[i:i + imu_len]])
+            imu_img = vec[i:i + imu_len, :, :].reshape(imu_len, 6)
 
         # TODO: Should the elapsed time be included in the data?
 
@@ -163,6 +174,10 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
         os.remove(euroc_testing_ds)
     os.mknod(euroc_testing_ds)
 
+    # Delete noisy part of data set
+    imu_img_tensor = imu_img_tensor[0:3000, :, :, :]
+    gt_v_tensor = gt_v_tensor[0:3000]
+
     total_ds_len = int(len(gt_v_tensor))
     test_ds_len = int(np.ceil(total_ds_len * 0.1))
 
@@ -177,6 +192,9 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
 
     scipy.io.savemat(euroc_training_ds, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
     scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
+
+    joblib.dump(scale_g, euroc_dir + "scaler_gyro.save")
+    joblib.dump(scale_a, euroc_dir + "scaler_acc.save")
 
 
 def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
@@ -198,7 +216,7 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
     imu_img_tensor = mat_data['imu']
 
     full_ds_len = len(gt_v_tensor)
-    val_ds_len = np.ceil(full_ds_len * 0.3)
+    val_ds_len = np.ceil(full_ds_len * 0.1)
     train_ds_len = full_ds_len - val_ds_len
 
     val_ds_indexes = np.random.choice(range(full_ds_len), int(val_ds_len), replace=False)
@@ -276,8 +294,12 @@ def visualize_dataset(euroc_dir, euroc_train):
     x = imu_img_tensor[:, 0, :, 0]
 
     plt.figure()
+    plt.subplot(3, 1, 1)
+    plt.plot(x[:, 0:3])
+    plt.subplot(3, 1, 2)
+    plt.plot(x[:, 3:6])
+    plt.subplot(3, 1, 3)
     plt.plot(y)
-    plt.plot(x)
     plt.show()
 
 

@@ -1,4 +1,6 @@
 *.pyc
 .idea/*
-data/EuRoC_dataset/*
+data/EuRoC_dataset*
+figures/*
 tests/*
+*.h5
