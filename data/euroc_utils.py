@@ -283,6 +283,8 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
 
 def add_scalers_to_training_dir(root, destiny):
 
+    if not os.path.exists(destiny):
+        os.mkdir(destiny)
     if not os.path.exists(destiny + SCALER_DIR_FILE):
         os.mknod(destiny + SCALER_DIR_FILE)
 
@@ -311,8 +313,7 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test,
-                                   trained_model_dir)
+        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test)
 
     visualize_dataset(euroc_dir, euroc_train)
 

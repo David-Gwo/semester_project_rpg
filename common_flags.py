@@ -16,7 +16,7 @@ gflags.DEFINE_integer('output_dim', 1, "Number of outputs")
 
 gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer")  # 0.0000001
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
-gflags.DEFINE_integer("max_epochs", 40, "Maximum number of training epochs")
+gflags.DEFINE_integer("max_epochs", 5, "Maximum number of training epochs")
 
 gflags.DEFINE_string("model_name", "cnn_vel_net", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
@@ -32,18 +32,18 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
                       'number speeds up computation but requires more RAM')
 
 # Reading parameters
-gflags.DEFINE_string('train_dir', './data/EuRoC_dataset_1/', 'Directory of the training dataset')
+gflags.DEFINE_string('train_dir', './data/EuRoC_dataset_0/', 'Directory of the training dataset')
 gflags.DEFINE_boolean('processed_train_ds', True, 'Whether there is a processed dataset file available to load from')
 gflags.DEFINE_string('euroc_data_filename_train', 'imu_dataset_train.mat', 'Preprocessed EuRoC dataset training file')
 
 # Log parameters
-gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
-gflags.DEFINE_integer("resume_train_model_number", 1, "Which model number to resume training")
+gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
+gflags.DEFINE_integer("resume_train_model_number", 3, "Which model number to resume training")
 gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
-gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epochs")
+gflags.DEFINE_integer("save_freq", 2, "Save the latest model every save_freq epochs")
 
 # Testing parameters
-gflags.DEFINE_string('test_dir', './data/EuRoC_dataset_1    /', 'Directory of the training dataset')
+gflags.DEFINE_string('test_dir', './data/EuRoC_dataset_1/', 'Directory of the training dataset')
 gflags.DEFINE_string('euroc_data_filename_test', 'imu_dataset_test.mat', 'Preprocessed EuRoC dataset testing file')
 gflags.DEFINE_integer("test_model_number", 1, "Which model number to test")
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")

@@ -13,10 +13,10 @@ from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam, SGD
 from .nets import vel_cnn as prediction_network
 from utils import plot_regression_predictions
-from models.custom_callback_fx import AdditionalValidationSets
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
 from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
+from models.custom_callback_fx import CustomModelCheckpoint
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -81,27 +81,6 @@ class Learner(object):
         iterator = DirectoryIterator(directory, shuffle=False)
         return iterator.filenames, iterator.ground_truth
 
-    def generate_batches(self, data_dir):
-        seed = random.randint(0, 2**31 - 1)
-
-        # Load the list of training files into queues
-        file_list, pnt_list = self.get_filenames_list(data_dir)
-
-        # Create a dataset from all the image paths, read and process them
-        path_ds = tf.data.Dataset.from_tensor_slices(file_list)
-        image_ds = path_ds.map(self.read_image_from_dir, num_parallel_calls=self.config.num_threads)
-
-        # Create a dataset from all the image labels
-        label_ds = tf.data.Dataset.from_tensor_slices(tf.cast(pnt_list, tf.int64))
-
-        # Combine the image and label datasets into a zipped dataset. Shuffle -> Batch -> Prefetch
-        inputs_queue = tf.data.Dataset.zip((image_ds, label_ds))
-        inputs_queue = inputs_queue.shuffle(tf.shape(file_list, out_type=tf.int64)[0], seed=seed).repeat()
-        inputs_queue = inputs_queue.batch(batch_size=self.config.batch_size, drop_remainder=False)
-        inputs_queue = inputs_queue.prefetch(buffer_size=self.config.batch_size)
-
-        return inputs_queue, len(file_list)
-
     @staticmethod
     def l2_loss(y_true, y_pred):
         return tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
@@ -148,14 +127,6 @@ class Learner(object):
                           loss=self.l2_loss,
                           metrics=['mse'])
         self.regressor_model = model
-
-    def get_datasets(self):
-        with tf.name_scope("data_loading"):
-
-            train_ds, n_samples_train = self.generate_batches(self.config.train_dir)
-            val_ds, n_samples_val = self.generate_batches(self.config.val_dir)
-
-        return train_ds, val_ds, (n_samples_train, n_samples_val)
 
     def get_dataset(self, dataset_name):
 
@@ -246,10 +217,11 @@ class Learner(object):
         keras_callbacks = [
             callbacks.EarlyStopping(patience=5, monitor='val_loss'),
             callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + model_number + "/keras", histogram_freq=5),
-            callbacks.ModelCheckpoint(
+            CustomModelCheckpoint(
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
-                save_weights_only=True, verbose=1, period=self.config.save_freq),
+                save_weights_only=True, verbose=1, period=self.config.save_freq,
+                extra_epoch_number=self.last_epoch_number),
         ]
 
         # for epoch in range(self.config.max_epochs):
@@ -257,10 +229,10 @@ class Learner(object):
 
         # Train!
         history = self.regressor_model.fit(
-            train_ds,
+            val_ds[0].repeat(),
             verbose=2,
             epochs=self.config.max_epochs,
-            steps_per_epoch=train_steps_per_epoch,
+            steps_per_epoch=val_steps_per_epoch,
             validation_data=val_ds[0],
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
@@ -278,7 +250,7 @@ class Learner(object):
         model_number_dir = self.config.model_name + "_" + str(model_number)
         recovered_model = self.config.checkpoint_dir + model_number_dir
 
-        regex = self.config.model_name + r"[0-9]*.h5"
+        regex = self.config.model_name + r"_[0-9]*.h5"
         files = [f for f in os.listdir(recovered_model) if re.match(regex, f)]
         files.sort(key=str.lower)
         if not files:
@@ -290,7 +262,7 @@ class Learner(object):
         self.regressor_model.load_weights(recovered_model + '/' + latest_model)
 
         # Get last epoch of training of the model
-        self.last_epoch_number = int(latest_model.split(self.config.model_name)[1].split('.h5')[0])
+        self.last_epoch_number = int(latest_model.split(self.config.model_name)[1].split('.')[0].split('_')[1])
 
         return model_number_dir
 
