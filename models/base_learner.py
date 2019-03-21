@@ -206,14 +206,9 @@ class Learner(object):
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
     def train(self):
-        """High level train function.
-        Args:
-            config: Configuration dictionary
-        Returns:
-            None
-        TODO: Add progbar from keras
-        """
+        self.build_and_compile_model()
 
+        # Identify last version of trained model
         regex = self.config.model_name + r"_[0-9]*"
         files = [f for f in os.listdir(self.config.checkpoint_dir) if re.match(regex, f)]
         files.sort(key=str.lower)
@@ -222,8 +217,7 @@ class Learner(object):
         else:
             model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
 
-        self.build_and_compile_model()
-
+        # Resume training vs new training decision
         if self.config.resume_train:
             print("Resume training from previous checkpoint")
             try:
@@ -236,6 +230,7 @@ class Learner(object):
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
+        # Get training and validation datasets
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
@@ -249,11 +244,8 @@ class Learner(object):
         val_steps_per_epoch = int(math.ceil(val_ds_splits[0]))
 
         keras_callbacks = [
-            # Interrupt training if `val_loss` stops improving for over 2 epochs
             callbacks.EarlyStopping(patience=5, monitor='val_loss'),
-            # Write TensorBoard logs to `./logs` directory
             callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + model_number + "/keras", histogram_freq=5),
-            # Model checkpoint and saver
             callbacks.ModelCheckpoint(
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
@@ -263,8 +255,7 @@ class Learner(object):
         # for epoch in range(self.config.max_epochs):
         #     self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
 
-        self.evaluate_model(val_ds[0], val_ds_splits[0])
-
+        # Train!
         history = self.regressor_model.fit(
             train_ds,
             verbose=2,
@@ -274,6 +265,7 @@ class Learner(object):
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
 
+        # Evaluate model in validation set and entire training set
         self.evaluate_model(val_ds[0], val_ds_splits[0])
         self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
@@ -297,6 +289,7 @@ class Learner(object):
         tf.print("Loading weights from ", recovered_model + '/' + latest_model)
         self.regressor_model.load_weights(recovered_model + '/' + latest_model)
 
+        # Get last epoch of training of the model
         self.last_epoch_number = int(latest_model.split(self.config.model_name)[1].split('.h5')[0])
 
         return model_number_dir
