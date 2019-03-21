@@ -30,6 +30,8 @@ class Learner(object):
         self.config = config
         self.regressor_model = None
         self.model_name = None
+        self.last_epoch_number = 0
+        self.trained_model_dir = ""
         pass
 
     def preprocess_image(self, image):
@@ -145,7 +147,7 @@ class Learner(object):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
                           loss=self.l2_loss,
                           metrics=['mse'])
-        return model
+        self.regressor_model = model
 
     def get_datasets(self):
         with tf.name_scope("data_loading"):
@@ -161,9 +163,9 @@ class Learner(object):
             return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
         if dataset_name == 'euroc':
             imu_seq_len = 200
-            return load_euroc_dataset(self.config.euroc_dir, self.config.batch_size, imu_seq_len,
+            return load_euroc_dataset(self.config.train_dir, self.config.batch_size, imu_seq_len,
                                       self.config.euroc_data_filename_train, self.config.euroc_data_filename_test,
-                                      self.config.processed_dataset)
+                                      self.config.processed_train_ds, self.trained_model_dir)
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -212,16 +214,26 @@ class Learner(object):
         TODO: Add progbar from keras
         """
 
-        self.model_name = self.config.model_name
+        regex = self.config.model_name + r"_[0-9]*"
+        files = [f for f in os.listdir(self.config.checkpoint_dir) if re.match(regex, f)]
+        files.sort(key=str.lower)
+        if not files:
+            model_number = self.config.model_name + "_0"
+        else:
+            model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
+
+        self.build_and_compile_model()
 
         if self.config.resume_train:
             print("Resume training from previous checkpoint")
             try:
-                self.recover_model_from_checkpoint()
+                model_number = self.recover_model_from_checkpoint(self.config.resume_train_model_number)
             except FileNotFoundError:
-                self.regressor_model = self.build_and_compile_model()
+                print("Model not found. Creating new model")
         else:
-            self.regressor_model = self.build_and_compile_model()
+            self.build_and_compile_model()
+
+        self.trained_model_dir = self.config.checkpoint_dir + model_number
 
         train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
@@ -237,16 +249,14 @@ class Learner(object):
 
         keras_callbacks = [
             # Interrupt training if `val_loss` stops improving for over 2 epochs
-            callbacks.EarlyStopping(patience=2, monitor='val_loss'),
+            callbacks.EarlyStopping(patience=5, monitor='val_loss'),
             # Write TensorBoard logs to `./logs` directory
-            callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + "/keras", histogram_freq=5),
+            callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + model_number + "/keras", histogram_freq=5),
             # Model checkpoint and saver
             callbacks.ModelCheckpoint(
-                filepath=os.path.join(self.config.checkpoint_dir, self.model_name + "{epoch:02d}.h5"),
-                save_weights_only=True, verbose=1, period=10),
-            callbacks.ModelCheckpoint(self.model_name + "_best.h5", save_best_only=True, monitor='val_loss',
-                                      mode='min', verbose=1),
-            AdditionalValidationSets(val_ds)
+                filepath=os.path.join(
+                    self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
+                save_weights_only=True, verbose=1, period=self.config.save_freq),
         ]
 
         # for epoch in range(self.config.max_epochs):
@@ -255,10 +265,10 @@ class Learner(object):
         self.evaluate_model(val_ds[0], val_ds_splits[0])
 
         history = self.regressor_model.fit(
-            val_ds[0].repeat(),
+            train_ds,
             verbose=2,
             epochs=self.config.max_epochs,
-            steps_per_epoch=val_steps_per_epoch,
+            steps_per_epoch=train_steps_per_epoch,
             validation_data=val_ds[0],
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
@@ -266,94 +276,37 @@ class Learner(object):
         self.evaluate_model(val_ds[0], val_ds_splits[0])
         self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
-        # TODO: implement resume training?
-
-        # self.build_train_graph()
-        # self.collect_summaries()
-        # self.min_val_loss = math.inf  # Initialize to max value
-        # with tf.name_scope("parameter_count"):
-        #     parameter_count = tf.reduce_sum([tf.reduce_prod(tf.shape(v)) for v in tf.compat.v1.trainable_variables()])
-        # self.saver = tf.compat.v1.train.Saver([var for var in tf.compat.v1.trainable_variables()] + [self.global_step], max_to_keep=5)
-        # sv = tf.train.Supervisor(logdir=config.checkpoint_dir, save_summaries_secs=0, saver=None)
-        # with sv.managed_session() as sess:
-        #     print("Number of trainable params: {}".format(sess.run(parameter_count)))
-        #     if config.resume_train:
-        #         print("Resume training from previous checkpoint")
-        #         checkpoint = tf.train.latest_checkpoint(config.checkpoint_dir)
-        #         self.saver.restore(sess, checkpoint)
-        #
-        #     progbar = Progbar(target=self.train_steps_per_epoch)
-        #     for step in count(start=1):
-        #         if sv.should_stop():
-        #             break
-        #         start_time = time.time()
-        #         fetches = { "train" : self.train_op,
-        #                       "global_step" : self.global_step,
-        #                       "incr_global_step": self.incr_global_step
-        #                      }
-        #         if step % config.summary_freq == 0:
-        #             #########################################################
-        #             # ADD HERE THE TENSORS YOU WANT TO EVALUATE (maybe loss)#
-        #             #########################################################
-        #             fetches["loss"] = self.total_loss
-        #             fetches["accuracy"] = self.accuracy
-        #             fetches["summary"] = self.step_sum
-        #
-        #         # Runs the series of operations
-        #         ######################################################
-        #         # REMOVE THE LEARNING PHASE IF NOT USING KERAS MODELS#
-        #         ######################################################
-        #         results = sess.run(fetches,
-        #                            feed_dict={ self.is_training : True })
-        #         progbar.update(step % self.train_steps_per_epoch)
-        #
-        #         gs = results["global_step"]
-        #         if step % config.summary_freq == 0:
-        #             sv.summary_writer.add_summary(results["summary"], gs)
-        #             train_epoch = math.ceil( gs /self.train_steps_per_epoch)
-        #             train_step = gs - (train_epoch - 1) * self.train_steps_per_epoch
-        #             print("Epoch: [%2d] [%5d/%5d] time: %4.4f/it loss: %.3f "
-        #                   " accuracy: %.3f" \
-        #                % (train_epoch, train_step, self.train_steps_per_epoch, \
-        #                         time.time() - start_time, results["loss"], \
-        #                   results["accuracy"]))
-        #
-        #         if step % self.train_steps_per_epoch == 0:
-        #             # This differ from the last when resuming training
-        #             train_epoch = int(gs / self.train_steps_per_epoch)
-        #             progbar = Progbar(target=self.train_steps_per_epoch)
-        #             self.epoch_end_callback(sess, sv, train_epoch)
-        #             if (train_epoch == self.config.max_epochs):
-        #                 print("-------------------------------")
-        #                 print("Training completed successfully")
-        #                 print("-------------------------------")
-        #                 break
-
-    def recover_model_from_checkpoint(self):
+    def recover_model_from_checkpoint(self, model_number):
         """
         Loads the weights of the default model from the checkpoint files
         """
 
-        recovery_path = self.config.checkpoint_dir
+        # Directory from where to load the saved weights of the model
+        model_number_dir = self.config.model_name + "_" + str(model_number)
+        recovered_model = self.config.checkpoint_dir + model_number_dir
+
         regex = self.config.model_name + r"[0-9]*.h5"
-        files = [f for f in os.listdir(recovery_path) if re.match(regex, f)]
+        files = [f for f in os.listdir(recovered_model) if re.match(regex, f)]
         files.sort(key=str.lower)
-        if files == []:
+        if not files:
             raise FileNotFoundError()
 
         latest_model = files[-1]
 
-        self.regressor_model = self.build_and_compile_model()
+        tf.print("Loading weights from ", recovered_model + '/' + latest_model)
+        self.regressor_model.load_weights(recovered_model + '/' + latest_model)
 
-        tf.print("Loading weights from %s", recovery_path + '/' + latest_model)
-        self.regressor_model.load_weights(recovery_path + '/' + latest_model)
+        self.last_epoch_number = int(latest_model.split(self.config.model_name)[1].split('.h5')[0])
 
-    def evaluate_model(self, testing_ds=None, steps=None, i=None, epoch=None):
+        return model_number_dir
+
+    def evaluate_model(self, testing_ds=None, steps=None, i=None, epoch=None, model_number_dir=None):
 
         if testing_ds is None:
-            test_ds, steps = generate_cnn_testing_dataset(self.config.euroc_dir,
+            test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
                                                           self.config.euroc_data_filename_train,
-                                                          self.config.batch_size)
+                                                          self.config.batch_size,
+                                                          self.config.checkpoint_dir + model_number_dir)
             steps = steps / self.config.batch_size
         else:
             test_ds = testing_ds.take(steps)

@@ -3,4 +3,5 @@
 data/EuRoC_dataset*
 figures/*
 tests/*
+results/*
 *.h5

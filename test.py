@@ -26,8 +26,9 @@ from common_flags import FLAGS
 def _main():
 
     learner = Learner(FLAGS)
-    learner.recover_model_from_checkpoint()
-    learner.evaluate_model()
+    learner.build_and_compile_model()
+    model_number_dir = learner.recover_model_from_checkpoint(FLAGS.test_model_number)
+    learner.evaluate_model(model_number_dir=model_number_dir)
 
     """
     learner.setup_inference(FLAGS)
