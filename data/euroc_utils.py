@@ -44,6 +44,11 @@ class GT:
         self.acc = data[14:17]
 
 
+SCALER_GYRO_FILE = "scaler_gyro.save"
+SCALER_ACC_FILE = "scaler_acc.save"
+SCALER_DIR_FILE = '/scaler_files_dir.txt'
+
+
 def read_euroc_dataset(euroc_dir):
     imu_file = euroc_dir + 'mav0/imu0/data.csv'
     imu_yaml_file = euroc_dir + 'mav0/imu0/sensor.yaml'
@@ -122,7 +127,7 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, v_interp]
 
 
-def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test, trained_model_dir):
+def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
@@ -131,7 +136,6 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     :param euroc_dir: root directory of the euroc data
     :param euroc_train: Name of the preprocessed euroc training dataset
     :param euroc_test: Name of the preprocessed euroc testing dataset
-    :param trained_model_dir: Name of the directory where trained model will be stored
     """
 
     vec = np.array([(imu_s.gyro, imu_s.acc) for imu_s in raw_imu])
@@ -191,22 +195,17 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     scipy.io.savemat(euroc_training_ds, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
     scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
 
-    joblib.dump(scale_g, euroc_dir + "scaler_gyro.save")
-    joblib.dump(scale_a, euroc_dir + "scaler_acc.save")
-
-    if not os.path.exists(trained_model_dir):
-        os.mkdir(trained_model_dir)
-
-    joblib.dump(scale_g, trained_model_dir + "/scaler_gyro.save")
-    joblib.dump(scale_a, trained_model_dir + "/scaler_acc.save")
+    joblib.dump(scale_g, euroc_dir + SCALER_GYRO_FILE)
+    joblib.dump(scale_a, euroc_dir + SCALER_ACC_FILE)
 
 
-def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
+def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model_dir):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
     :param euroc_dir: root directory of the euroc data
     :param euroc_train: Name of the preprocessed euroc training dataset
     :param batch_s: (mini)-batch size of datasets
+    :param trained_model_dir: Name of the directory where trained model will be stored
     :return: the tf-compatible training and validation datasets, and their respective lengths
     """
 
@@ -219,8 +218,11 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
     gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
     imu_img_tensor = mat_data['imu']
 
-    scale_g = joblib.load(euroc_dir + "scaler_gyro.save")
-    scale_a = joblib.load(euroc_dir + "scaler_acc.save")
+    file = open(trained_model_dir + SCALER_DIR_FILE, "r")
+    scaler_dir = file.read()
+
+    scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
+    scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
 
     for i in range(3):
         imu_img_tensor[:, :, i, 0] = scale_g.transform(imu_img_tensor[:, :, i, 0])
@@ -244,12 +246,13 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s):
     return train_ds, val_ds, (train_ds_len, val_ds_len)
 
 
-def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, model_number_dir):
+def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_dir):
     """
     Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
     :param euroc_dir: root directory of the euroc data
     :param euroc_test:
     :param batch_s: (mini)-batch size of datasets
+    :param trained_model_dir: Name of the directory where trained model is stored
     :return: the tf-compatible testing dataset, and its length
     """
 
@@ -260,8 +263,11 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, model_number_di
     gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
     imu_img_tensor = mat_data['imu']
 
-    scale_g = joblib.load(euroc_dir + "scaler_gyro.save")
-    scale_a = joblib.load(euroc_dir + "scaler_acc.save")
+    file = open(trained_model_dir + SCALER_DIR_FILE, "r")
+    scaler_dir = file.read()
+
+    scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
+    scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
 
     for i in range(3):
         imu_img_tensor[:, :, i, 0] = scale_g.transform(imu_img_tensor[:, :, i, 0])
@@ -273,6 +279,17 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, model_number_di
     test_ds = test_ds.batch(batch_s)
 
     return test_ds, ds_len
+
+
+def add_scalers_to_training_dir(root, destiny):
+
+    if not os.path.exists(destiny + SCALER_DIR_FILE):
+        os.mknod(destiny + SCALER_DIR_FILE)
+
+        file = open(destiny + SCALER_DIR_FILE, 'w')
+
+        file.write(root)
+        file.close()
 
 
 def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_test, processed_ds_available,
@@ -298,7 +315,10 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
                                    trained_model_dir)
 
     visualize_dataset(euroc_dir, euroc_train)
-    return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size)
+
+    add_scalers_to_training_dir(euroc_dir, trained_model_dir)
+
+    return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size, trained_model_dir)
 
 
 def visualize_dataset(euroc_dir, euroc_train):

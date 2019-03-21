@@ -232,6 +232,7 @@ class Learner(object):
                 print("Model not found. Creating new model")
         else:
             self.build_and_compile_model()
+            os.mkdir(self.config.checkpoint_dir + model_number)
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
