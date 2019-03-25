@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, \
-    BatchNormalization
+    BatchNormalization, Bidirectional, LSTM
 from tensorflow.python.keras.layers.merge import add
 
 ##########################################
@@ -207,4 +207,10 @@ def vel_cnn(l2_reg_scale):
     model.add(Dense(1, name="output_layer"))
 
     return model
+
+
+def vel_lstm():
+    model = Sequential()
+
+    model.add(Bidirectional(LSTM()))
 

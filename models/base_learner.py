@@ -183,21 +183,22 @@ class Learner(object):
         regex = self.config.model_name + r"_[0-9]*"
         files = [f for f in os.listdir(self.config.checkpoint_dir) if re.match(regex, f)]
         files.sort(key=str.lower)
+        model_number = None
+
         if not files:
             model_number = self.config.model_name + "_0"
         else:
-            model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
-
-        # Resume training vs new training decision
-        if self.config.resume_train:
-            print("Resume training from previous checkpoint")
-            try:
-                model_number = self.recover_model_from_checkpoint(self.config.resume_train_model_number)
-            except FileNotFoundError:
-                print("Model not found. Creating new model")
-        else:
-            self.build_and_compile_model()
-            os.mkdir(self.config.checkpoint_dir + model_number)
+            # Resume training vs new training decision
+            if self.config.resume_train:
+                print("Resume training from previous checkpoint")
+                try:
+                    model_number = self.recover_model_from_checkpoint(self.config.resume_train_model_number)
+                except FileNotFoundError:
+                    print("Model not found. Creating new model")
+            else:
+                self.build_and_compile_model()
+                model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
+                os.mkdir(self.config.checkpoint_dir + model_number)
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
@@ -229,10 +230,10 @@ class Learner(object):
 
         # Train!
         history = self.regressor_model.fit(
-            val_ds[0].repeat(),
+            train_ds,
             verbose=2,
             epochs=self.config.max_epochs,
-            steps_per_epoch=val_steps_per_epoch,
+            steps_per_epoch=train_steps_per_epoch,
             validation_data=val_ds[0],
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
@@ -270,7 +271,7 @@ class Learner(object):
 
         if testing_ds is None:
             test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
-                                                          self.config.euroc_data_filename_train,
+                                                          self.config.euroc_data_filename_test,
                                                           self.config.batch_size,
                                                           self.config.checkpoint_dir + model_number_dir)
             steps = steps / self.config.batch_size
