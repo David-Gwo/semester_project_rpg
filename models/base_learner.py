@@ -177,6 +177,9 @@ class Learner(object):
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
     def train(self):
+        # Get training and validation datasets
+        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
+
         self.build_and_compile_model()
 
         # Identify last version of trained model
@@ -201,9 +204,6 @@ class Learner(object):
                 os.mkdir(self.config.checkpoint_dir + model_number)
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
-
-        # Get training and validation datasets
-        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -279,6 +279,7 @@ class Learner(object):
             test_ds = testing_ds.take(steps)
 
         predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
+        # print(self.regressor_model.evaluate(test_ds))
 
         plot_regression_predictions(test_ds, predictions, i, epoch)
 

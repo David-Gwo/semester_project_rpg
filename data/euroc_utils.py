@@ -5,6 +5,7 @@ import tensorflow as tf
 import os
 import scipy.io
 from scipy.interpolate import interp1d
+from scipy import signal
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
@@ -47,6 +48,15 @@ class GT:
 SCALER_GYRO_FILE = "scaler_gyro.save"
 SCALER_ACC_FILE = "scaler_acc.save"
 SCALER_DIR_FILE = '/scaler_files_dir.txt'
+
+
+def load_mat_data(directory):
+    mat_data = scipy.io.loadmat(directory)
+
+    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
+    imu_img_tensor = mat_data['imu']
+
+    return imu_img_tensor, gt_v_tensor
 
 
 def read_euroc_dataset(euroc_dir):
@@ -101,6 +111,12 @@ def read_euroc_dataset(euroc_dir):
 
 
 def interpolate_ground_truth(raw_imu_data, ground_truth_data):
+    """
+    Interpolates the data of the ground truth so that it matches the timestamps of the raw imu data
+    :param raw_imu_data: IMU data
+    :param ground_truth_data: ground truth velocity data
+    :return: the original imu data, and the interpolated velocity data
+    """
     raw_imu_data = np.array(raw_imu_data)
 
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
@@ -127,23 +143,91 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, v_interp]
 
 
+def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
+    """
+    Pre-process euroc dataset (apply low-pass filter and minmax scaling)
+
+    :param raw_imu_data: 1D array of IMU objects with IMU measurements
+    :param gt_v_interp: list of 3D arrays with the decomposed velocity ground truth measurements
+    :param euroc_dir: root directory of the euroc data
+    :return: the filtered dataset
+    """
+
+    imu_vec = np.array([(imu_s.gyro, imu_s.acc) for imu_s in raw_imu_data])
+    filt_imu_vec = np.copy(imu_vec)
+
+    fs = 200.0  # Sample frequency (Hz)
+    f0 = 10.0  # Frequency to be removed from signal (Hz)
+    w0 = f0 / (fs / 2)  # Normalized Frequency
+
+    # Design butterworth filter
+    b_bw, a_bw = signal.butter(10, w0, output='ba')
+
+    plt.figure()
+    f, t, stft = signal.stft(imu_vec[:, 1, 1], 200)
+    plt.subplot(2, 1, 1)
+    plt.pcolormesh(t, f, np.abs(stft))
+    plt.title('STFT Magnitude')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [sec]')
+
+    filt_imu_vec[:, 1, :] = signal.lfilter(b_bw, a_bw, filt_imu_vec[:, 1, :], axis=0)
+
+    f, t, stft = signal.stft(filt_imu_vec[:, 1, 1], 200)
+
+    plt.subplot(2, 1, 2)
+    plt.pcolormesh(t, f, np.abs(stft))
+    plt.title('STFT Magnitude')
+    plt.ylabel('Frequency [Hz]')
+    plt.xlabel('Time [sec]')
+
+    y = np.squeeze(gt_v_interp)
+    x1 = imu_vec.reshape((-1, 6))
+    x2 = filt_imu_vec.reshape((-1, 6))
+
+    plt.figure()
+    plt.subplot(3, 2, 1)
+    plt.plot(x1[:, 0:3])
+    plt.title('Gyro')
+    plt.subplot(3, 2, 3)
+    plt.plot(x1[:, 3:6])
+    plt.title('Acc')
+    plt.subplot(3, 2, 5)
+    plt.plot(np.linalg.norm(y, axis=1))
+    plt.title('Ground-truth speed')
+
+    plt.subplot(3, 2, 2)
+    plt.plot(x2[:, 0:3])
+    plt.title('Gyro')
+    plt.subplot(3, 2, 4)
+    plt.plot(x2[:, 3:6])
+    plt.title('Acc')
+    plt.subplot(3, 2, 6)
+    plt.plot(np.linalg.norm(y, axis=1))
+    plt.title('Ground-truth speed')
+    plt.show()
+
+    scale_g = MinMaxScaler()
+    scale_g.fit(filt_imu_vec[:, 0, :].reshape(-1, 1))
+    scale_a = MinMaxScaler()
+    scale_a.fit(filt_imu_vec[:, 1, :].reshape(-1, 1))
+
+    joblib.dump(scale_g, euroc_dir + SCALER_GYRO_FILE)
+    joblib.dump(scale_a, euroc_dir + SCALER_ACC_FILE)
+
+    return filt_imu_vec, gt_v_interp
+
+
 def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
-    :param raw_imu: 1D array of IMU objects with all the IMU measurements
+    :param raw_imu: 3D array of IMU measurements (n_samples x 2 <gyro, acc> x 3 <x, y, z>)
     :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
     :param euroc_dir: root directory of the euroc data
     :param euroc_train: Name of the preprocessed euroc training dataset
     :param euroc_test: Name of the preprocessed euroc testing dataset
     """
-
-    vec = np.array([(imu_s.gyro, imu_s.acc) for imu_s in raw_imu])
-
-    scale_g = MinMaxScaler()
-    scale_g.fit(vec[:, 0, :].reshape(-1, 1))
-    scale_a = MinMaxScaler()
-    scale_a.fit(vec[:, 1, :].reshape(-1, 1))
 
     # Initialize data tensors #
     # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
@@ -156,9 +240,9 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
 
         # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
         if i < imu_len:
-            imu_img[imu_len - i - 1:imu_len, :] = vec[0:i+1, :, :].reshape(i+1, 6)
+            imu_img[imu_len - i - 1:imu_len, :] = raw_imu[0:i+1, :, :].reshape(i+1, 6)
         else:
-            imu_img = vec[i:i + imu_len, :, :].reshape(imu_len, 6)
+            imu_img = raw_imu[i:i + imu_len, :, :].reshape(imu_len, 6)
 
         # TODO: Should the elapsed time be included in the data?
 
@@ -177,8 +261,8 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     os.mknod(euroc_testing_ds)
 
     # Delete noisy part of data set
-    imu_img_tensor = imu_img_tensor[0:3000, :, :, :]
-    gt_v_tensor = gt_v_tensor[0:3000]
+    # imu_img_tensor = imu_img_tensor[0:3000, :, :, :]
+    # gt_v_tensor = gt_v_tensor[0:3000]
 
     total_ds_len = int(len(gt_v_tensor))
     test_ds_len = int(np.ceil(total_ds_len * 0.1))
@@ -195,9 +279,6 @@ def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, e
     scipy.io.savemat(euroc_training_ds, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
     scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
 
-    joblib.dump(scale_g, euroc_dir + SCALER_GYRO_FILE)
-    joblib.dump(scale_a, euroc_dir + SCALER_ACC_FILE)
-
 
 def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model_dir):
     """
@@ -213,10 +294,7 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model
 
     train_filename = euroc_dir + euroc_train
 
-    mat_data = scipy.io.loadmat(train_filename)
-
-    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
-    imu_img_tensor = mat_data['imu']
+    imu_img_tensor, gt_v_tensor = load_mat_data(train_filename)
 
     file = open(trained_model_dir + SCALER_DIR_FILE, "r")
     scaler_dir = file.read()
@@ -258,10 +336,7 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
 
     test_filename = euroc_dir + euroc_test
 
-    mat_data = scipy.io.loadmat(test_filename)
-
-    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
-    imu_img_tensor = mat_data['imu']
+    imu_img_tensor, gt_v_tensor = load_mat_data(test_filename)
 
     file = open(trained_model_dir + SCALER_DIR_FILE, "r")
     scaler_dir = file.read()
@@ -282,6 +357,13 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
 
 
 def add_scalers_to_training_dir(root, destiny):
+    """
+    Adds a txt file at the training directory with the location of the scaler functions used to transform the data that
+    created the model for the first time
+
+    :param root: Directory of scaler objects
+    :param destiny: Training directory
+    """
 
     if not os.path.exists(destiny):
         os.mkdir(destiny)
@@ -297,6 +379,7 @@ def add_scalers_to_training_dir(root, destiny):
 def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_test, processed_ds_available,
                        trained_model_dir):
     """
+    Read, interpolate, pre-process and generate euroc dataset for speed regression in tensorflow.
 
     :param euroc_dir: root directory of the EuRoC dataset
     :param batch_size: mini-batch size
@@ -313,33 +396,10 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-        generate_euroc_imu_dataset(imu_seq_len, raw_imu_data, gt_v_interp, euroc_dir, euroc_train, euroc_test)
+        processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, euroc_dir)
 
-    visualize_dataset(euroc_dir, euroc_train)
+        generate_euroc_imu_dataset(imu_seq_len, processed_imu, processed_v, euroc_dir, euroc_train, euroc_test)
 
     add_scalers_to_training_dir(euroc_dir, trained_model_dir)
 
     return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size, trained_model_dir)
-
-
-def visualize_dataset(euroc_dir, euroc_train):
-    train_filename = euroc_dir + euroc_train
-
-    mat_data = scipy.io.loadmat(train_filename)
-
-    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
-    imu_img_tensor = mat_data['imu']
-
-    y = np.squeeze(gt_v_tensor)
-    x = imu_img_tensor[:, 0, :, 0]
-
-    plt.figure()
-    plt.subplot(3, 1, 1)
-    plt.plot(x[:, 0:3])
-    plt.subplot(3, 1, 2)
-    plt.plot(x[:, 3:6])
-    plt.subplot(3, 1, 3)
-    plt.plot(y)
-    plt.show()
-
-
