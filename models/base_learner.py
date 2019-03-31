@@ -12,7 +12,7 @@ from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam, SGD
 from .nets import vel_cnn as prediction_network
-from utils import plot_regression_predictions
+from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
 from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
@@ -30,6 +30,7 @@ class Learner(object):
         self.config = config
         self.regressor_model = None
         self.model_name = None
+        self.model_version_number = None
         self.last_epoch_number = 0
         self.trained_model_dir = ""
         pass
@@ -92,7 +93,8 @@ class Learner(object):
         for i, (x, y) in enumerate(training_ds):
 
             if i % 100 == 0:
-                self.evaluate_model(validation_ds, ds_lengths[1], i, epoch)
+                self.last_epoch_number = epoch
+                self.evaluate_model(validation_ds, ds_lengths[1], save_figures=True)
 
             with tf.GradientTape() as tape:
                 # Forward pass
@@ -177,15 +179,10 @@ class Learner(object):
             self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
 
     def train(self):
-        # Get training and validation datasets
-        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
-
         self.build_and_compile_model()
 
         # Identify last version of trained model
-        regex = self.config.model_name + r"_[0-9]*"
-        files = [f for f in os.listdir(self.config.checkpoint_dir) if re.match(regex, f)]
-        files.sort(key=str.lower)
+        files = get_checkpoint_file_list(self.config.checkpoint_dir, self.config.model_name)
         model_number = None
 
         if not files:
@@ -195,15 +192,18 @@ class Learner(object):
             if self.config.resume_train:
                 print("Resume training from previous checkpoint")
                 try:
-                    model_number = self.recover_model_from_checkpoint(self.config.resume_train_model_number)
+                    self.recover_model_from_checkpoint()
+                    model_number = self.model_version_number
                 except FileNotFoundError:
                     print("Model not found. Creating new model")
             else:
-                self.build_and_compile_model()
                 model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
                 os.mkdir(self.config.checkpoint_dir + model_number)
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
+
+        # Get training and validation datasets
+        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -222,7 +222,7 @@ class Learner(object):
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
                 save_weights_only=True, verbose=1, period=self.config.save_freq,
-                extra_epoch_number=self.last_epoch_number),
+                extra_epoch_number=self.last_epoch_number + 1),
         ]
 
         # for epoch in range(self.config.max_epochs):
@@ -242,46 +242,59 @@ class Learner(object):
         self.evaluate_model(val_ds[0], val_ds_splits[0])
         self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
-    def recover_model_from_checkpoint(self, model_number):
+    def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):
         """
         Loads the weights of the default model from the checkpoint files
         """
 
-        # Directory from where to load the saved weights of the model
-        model_number_dir = self.config.model_name + "_" + str(model_number)
-        recovered_model = self.config.checkpoint_dir + model_number_dir
+        if mode == "train":
+            model_number = self.config.resume_train_model_number
+        else:
+            model_number = self.config.test_model_number
 
-        regex = self.config.model_name + r"_[0-9]*.h5"
-        files = [f for f in os.listdir(recovered_model) if re.match(regex, f)]
-        files.sort(key=str.lower)
+        # Directory from where to load the saved weights of the model
+        self.model_version_number = self.config.model_name + "_" + str(model_number)
+        recovered_model_dir = self.config.checkpoint_dir + self.model_version_number
+
+        files = get_checkpoint_file_list(recovered_model_dir, self.config.model_name)
         if not files:
             raise FileNotFoundError()
 
-        latest_model = files[-1]
+        model_version_used = files[model_used_pos]
 
-        tf.print("Loading weights from ", recovered_model + '/' + latest_model)
-        self.regressor_model.load_weights(recovered_model + '/' + latest_model)
+        tf.print("Loading weights from ", recovered_model_dir + '/' + model_version_used)
+        self.regressor_model.load_weights(recovered_model_dir + '/' + model_version_used)
 
         # Get last epoch of training of the model
-        self.last_epoch_number = int(latest_model.split(self.config.model_name)[1].split('.')[0].split('_')[1])
+        self.last_epoch_number = int(model_version_used.split(self.config.model_name)[1].split('.')[0].split('_')[1])
 
-        return model_number_dir
+        if model_version_used == files[-1]:
+            return -1
+        else:
+            return model_used_pos+1
 
-    def evaluate_model(self, testing_ds=None, steps=None, i=None, epoch=None, model_number_dir=None):
+    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0):
 
+        dataset = self.config.euroc_data_filename_test
+        if self.config.generate_training_progression:
+            dataset = self.config.euroc_data_filename_train
+
+        # dataset = self.config.euroc_data_filename_train
         if testing_ds is None:
             test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
-                                                          self.config.euroc_data_filename_test,
+                                                          dataset,
                                                           self.config.batch_size,
-                                                          self.config.checkpoint_dir + model_number_dir)
+                                                          self.config.checkpoint_dir + self.model_version_number)
             steps = steps / self.config.batch_size
         else:
             test_ds = testing_ds.take(steps)
 
         predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
-        # print(self.regressor_model.evaluate(test_ds))
 
-        plot_regression_predictions(test_ds, predictions, i, epoch)
+        if save_figures:
+            plot_regression_predictions(test_ds, predictions, self.last_epoch_number, fig_n)
+        else:
+            plot_regression_predictions(test_ds, predictions)
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy

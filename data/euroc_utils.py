@@ -164,16 +164,26 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     b_bw, a_bw = signal.butter(10, w0, output='ba')
 
     plt.figure()
-    f, t, stft = signal.stft(imu_vec[:, 1, 1], 200)
+    f, t, stft = signal.stft(imu_vec[:, 0, 1], 200)
     plt.subplot(2, 1, 1)
     plt.pcolormesh(t, f, np.abs(stft))
     plt.title('STFT Magnitude')
     plt.ylabel('Frequency [Hz]')
     plt.xlabel('Time [sec]')
 
-    filt_imu_vec[:, 1, :] = signal.lfilter(b_bw, a_bw, filt_imu_vec[:, 1, :], axis=0)
+    filt_imu_vec[:, 0, :] = signal.lfilter(b_bw, a_bw, imu_vec[:, 0, :], axis=0)
+    filt_imu_vec[:, 1, :] = signal.lfilter(b_bw, a_bw, imu_vec[:, 1, :], axis=0)
+    filt_gt_v_interp = signal.lfilter(b_bw, a_bw, gt_v_interp, axis=0)
 
-    f, t, stft = signal.stft(filt_imu_vec[:, 1, 1], 200)
+    # Add more flat region so avoid model from learning average value
+    flat_region = filt_imu_vec[6000:7000, :, :]
+    flat_region_v = filt_gt_v_interp[6000:7000, :]
+    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
+    flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
+    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
+    filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
+
+    f, t, stft = signal.stft(filt_imu_vec[:, 0, 1], 200)
 
     plt.subplot(2, 1, 2)
     plt.pcolormesh(t, f, np.abs(stft))
@@ -181,7 +191,8 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     plt.ylabel('Frequency [Hz]')
     plt.xlabel('Time [sec]')
 
-    y = np.squeeze(gt_v_interp)
+    y1 = np.squeeze(gt_v_interp)
+    y2 = np.squeeze(filt_gt_v_interp)
     x1 = imu_vec.reshape((-1, 6))
     x2 = filt_imu_vec.reshape((-1, 6))
 
@@ -193,18 +204,18 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     plt.plot(x1[:, 3:6])
     plt.title('Acc')
     plt.subplot(3, 2, 5)
-    plt.plot(np.linalg.norm(y, axis=1))
+    plt.plot(np.linalg.norm(y1, axis=1))
     plt.title('Ground-truth speed')
 
     plt.subplot(3, 2, 2)
     plt.plot(x2[:, 0:3])
-    plt.title('Gyro')
+    plt.title('Filt Gyro')
     plt.subplot(3, 2, 4)
     plt.plot(x2[:, 3:6])
-    plt.title('Acc')
+    plt.title('Filt Acc')
     plt.subplot(3, 2, 6)
-    plt.plot(np.linalg.norm(y, axis=1))
-    plt.title('Ground-truth speed')
+    plt.plot(np.linalg.norm(y2, axis=1))
+    plt.title('Filt Ground-truth speed')
     plt.show()
 
     scale_g = MinMaxScaler()
@@ -215,7 +226,7 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     joblib.dump(scale_g, euroc_dir + SCALER_GYRO_FILE)
     joblib.dump(scale_a, euroc_dir + SCALER_ACC_FILE)
 
-    return filt_imu_vec, gt_v_interp
+    return filt_imu_vec, filt_gt_v_interp
 
 
 def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test):

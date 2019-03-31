@@ -1,23 +1,11 @@
-import os
 import sys
 import gflags
 import math
 import tensorflow as tf
 import json
-import matplotlib.pyplot as plt
-
+from utils import get_checkpoint_file_list
 from models.base_learner import Learner
-from data.euroc_utils import generate_cnn_testing_dataset
-from models.nets import vel_cnn
-#######################################################
-# IMPORT HERE A SCRIPT TO TEST YOUR NETWORK.          #
-# HAVE A LOOK AT `compute_loss' FOR AN EXAMPLE        #
-#######################################################
 from utils import compute_loss
-#############################################################################
-# IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
-# OF YOUR DATASET. HAVE A LOOK AT `DirectoryIterator' FOR AN EXAMPLE        #
-#############################################################################
 from data import DirectoryIterator
 
 from common_flags import FLAGS
@@ -27,8 +15,14 @@ def _main():
 
     learner = Learner(FLAGS)
     learner.build_and_compile_model()
-    model_number_dir = learner.recover_model_from_checkpoint(FLAGS.test_model_number)
-    learner.evaluate_model(model_number_dir=model_number_dir)
+    if FLAGS.generate_training_progression:
+        model_pos = 0
+        while model_pos != -1:
+            model_pos = learner.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
+            learner.evaluate_model(save_figures=True)
+    else:
+        learner.recover_model_from_checkpoint(mode="test")
+        learner.evaluate_model()
 
     """
     learner.setup_inference(FLAGS)
