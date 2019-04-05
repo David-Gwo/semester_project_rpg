@@ -2,6 +2,7 @@ import numpy as np
 import re
 import os
 import cv2
+import errno
 
 from tensorflow.python.keras.preprocessing.image import Iterator
 from tensorflow.python.keras import datasets as k_ds
@@ -88,7 +89,6 @@ class DirectoryIterator(Iterator):
             ground_truth = np.loadtxt(labels_filename, usecols=0)
         except:
             raise IOError("Labels file was not found found")
-
 
         # Now fetch all images in the image subdir
         image_dir_path = os.path.join(dir_subpath, "images")
@@ -179,3 +179,14 @@ def get_mnist_datasets(img_h, img_w, batch_s):
     ds_lengths = (len(x_train), len(x_valid))
 
     return train_ds, validation_ds, ds_lengths
+
+
+def safe_mkdir_recursive(dir):
+    if not os.path.exists(dir):
+        try:
+            os.makedirs(dir)
+        except OSError as exc:
+            if exc.errno == errno.EEXIST and os.path.isdir(dir):
+                pass
+            else:
+                raise
