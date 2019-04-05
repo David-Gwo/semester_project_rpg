@@ -176,12 +176,12 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     filt_gt_v_interp = signal.lfilter(b_bw, a_bw, gt_v_interp, axis=0)
 
     # Add more flat region so avoid model from learning average value
-    flat_region = filt_imu_vec[6000:7000, :, :]
-    flat_region_v = filt_gt_v_interp[6000:7000, :]
-    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
-    flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
-    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
-    filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
+    # flat_region = filt_imu_vec[6000:7000, :, :]
+    # flat_region_v = filt_gt_v_interp[6000:7000, :]
+    # flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
+    # flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
+    # filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
+    # filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
 
     f, t, stft = signal.stft(filt_imu_vec[:, 0, 1], 200)
 
