@@ -279,7 +279,7 @@ class Learner(object):
         if self.config.generate_training_progression:
             dataset = self.config.euroc_data_filename_train
 
-        # dataset = self.config.euroc_data_filename_train
+        dataset = self.config.euroc_data_filename_train
         if testing_ds is None:
             test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
                                                           dataset,

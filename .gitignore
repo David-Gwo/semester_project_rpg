@@ -1,6 +1,9 @@
 *.pyc
-.idea/*
+*.idea/*
 data/EuRoC_dataset*
+data/blackbird_dataset*
+catkin_ws/devel*
+catkin_ws/build*
 figures/*
 tests/*
 results/*
