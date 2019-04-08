@@ -9,14 +9,14 @@ usage()
 export ROS_ROOT=/opt/ros/kinetic/ros
 export PATH=$ROS_ROOT/bin:$PATH
 export PYTHONPATH=$ROS_ROOT/core/roslib/src:$PYTHONPATH
-export ROS_PACKAGE_PATH=../catkin_ws:/opt/ros/kinetic/stacks
+export ROS_PACKAGE_PATH=catkin_ws:/opt/ros/kinetic/stacks
 
 while [ "$1" != "" ]; do
     case $1 in
         -h | --help )           usage
                                 exit
                                 ;;
-        * )                     . ../catkin_ws/devel/setup.sh & python ../catkin_ws/src/bag2csv/main.py "$@"
+        * )                     . catkin_ws/devel/setup.sh & python catkin_ws/src/bag2csv/main.py "$@"
                                 exit 1
     esac
 done

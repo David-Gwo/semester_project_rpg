@@ -9,10 +9,6 @@ import sys
 
 from common_flags import FLAGS
 
-#####################################
-# THIS FILE SHOULD REMAIN UNCHANGED #
-#####################################
-
 
 def _main():
     # Set random seed for training

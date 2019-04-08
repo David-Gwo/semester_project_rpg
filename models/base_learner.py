@@ -11,12 +11,12 @@ from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.losses import MeanSquaredError
 from tensorflow.python.keras.optimizers import Adam, SGD
-from .nets import vel_cnn as prediction_network
+from .nets import one_step_vel_net as prediction_network
 from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
-from data.data_utils import get_mnist_datasets
+from data.data_utils import get_mnist_datasets, safe_mkdir_recursive
 from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
-from data.blackbird_utils import load_blackbird_dataset
+from data.blackbird_utils import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
 
 #############################################################################
@@ -122,7 +122,7 @@ class Learner(object):
         #                            l2_reg_scale=self.config.l2_reg_scale,
         #                            output_dim=self.config.output_dim)
 
-        model = prediction_network(self.config.l2_reg_scale)
+        model = prediction_network(2)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
@@ -131,7 +131,9 @@ class Learner(object):
                           metrics=['mse'])
         self.regressor_model = model
 
-    def get_dataset(self, dataset_name):
+    def get_dataset(self):
+
+        dataset_name = self.config.train_ds
 
         if dataset_name == 'mnist':
             return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
@@ -200,8 +202,9 @@ class Learner(object):
                     self.recover_model_from_checkpoint()
                     model_number = self.model_version_number
                 except FileNotFoundError:
-                    model_number = self.config.model_name + "_0"
                     print("Model not found. Creating new model")
+                    model_number = self.model_version_number
+                    safe_mkdir_recursive(self.config.checkpoint_dir + model_number)
             else:
                 model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
                 os.mkdir(self.config.checkpoint_dir + model_number)
@@ -209,7 +212,7 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
         # Get training and validation datasets
-        train_ds, validation_ds, ds_lengths = self.get_dataset('blackbird')
+        train_ds, validation_ds, ds_lengths = self.get_dataset()
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -285,9 +288,16 @@ class Learner(object):
         if self.config.generate_training_progression:
             dataset = self.config.prepared_train_data_file
 
-        dataset = self.config.prepared_train_data_file
+        # dataset = self.config.prepared_train_data_file
         if testing_ds is None:
-            test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
+            # TODO: make more elegant
+            if self.config.test_ds == 'blackbird':
+                bb_manager = BlackbirdDSManager()
+                test_dir = bb_manager.ds_local_dir
+            else:
+                test_dir = self.config.test_dir
+
+            test_ds, steps = generate_cnn_testing_dataset(test_dir,
                                                           dataset,
                                                           self.config.batch_size,
                                                           self.config.checkpoint_dir + self.model_version_number)
@@ -326,79 +336,3 @@ class Learner(object):
             self.min_val_loss = val_loss
         if epoch_num % self.config.save_freq == 0:
             self.save(sess, self.config.checkpoint_dir, epoch_num)
-
-    def build_test_graph(self):
-        """This graph will be used for testing. In particular, it will
-           compute the loss on a testing set, or some other utilities.
-           Here, data will be passed though placeholders and not via
-           input queues.
-        """
-        ##################################################################
-        # UNCHANGED FOR CLASSIFICATION. ADAPT THE INPUT TO OTHER PROBLEMS#
-        ##################################################################
-        image_height, image_width = self.config.test_img_height, \
-                                    self.config.test_img_width
-        input_uint8 = tf.placeholder(tf.uint8, [None, image_height,
-                                    image_width, 3], name='raw_input')
-        input_mc = self.preprocess_image(input_uint8)
-
-        gt_labels = tf.placeholder(tf.uint8, [None], name='gt_labels')
-        input_labels = tf.cast(gt_labels, tf.int32)
-
-        ################################################
-        # DONT CHANGE NAMESCOPE (NECESSARY FOR LOADING)#
-        ################################################
-        with tf.name_scope("CNN_prediction"):
-            logits = prediction_network(input_mc,
-                    l2_reg_scale=self.config.l2_reg_scale, is_training=False,
-                    output_dim=self.config.output_dim)
-
-        ###########################################
-        # ADAPT TO YOUR LOSSES OR TESTING METRICS #
-        ###########################################
-
-        with tf.name_scope("compute_loss"):
-            loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
-                labels=input_labels, logits= logits)
-            loss = tf.reduce_mean(loss)
-
-        with tf.name_scope("accuracy"):
-            pred_out = tf.cast(tf.argmax(logits, 1), tf.int32)
-            correct_prediction = tf.equal(input_labels, pred_out)
-            accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-        ################################################################
-        # PUT HERE THE PLACEHOLDERS YOU NEED TO USE, AND OPERATIONS YOU#
-        # WANT TO EVALUATE                                             #
-        ################################################################
-        self.inputs = input_uint8
-        self.gt_labels = gt_labels
-        self.total_loss = loss
-        self.predictions = pred_out
-        self.accuracy = accuracy
-
-    def setup_inference(self, config):
-        """Sets up the inference graph.
-        Args:
-            config: config dictionary.
-        """
-        self.config = config
-        self.build_test_graph()
-
-    def inference(self, inputs, sess):
-        """Outputs a dictionary with the results of the required operations.
-        Args:
-            inputs: Dictionary with variable to be feed to placeholders
-            sess: current session
-        Returns:
-            results: dictionary with output of testing operations.
-        """
-        ################################################################
-        # CHANGE INPUTS TO THE PLACEHOLDER YOU NEED, AND OUTPUTS TO THE#
-        # RESULTS OF YOUR OPERATIONS                                   #
-        ################################################################
-        results = {}
-        results['loss'], results['accuracy'] = sess.run([self.total_loss,
-                self.accuracy], feed_dict= {self.inputs: inputs['images'],
-                                            self.gt_labels: inputs['labels']})
-        return results

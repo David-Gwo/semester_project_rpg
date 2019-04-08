@@ -193,7 +193,7 @@ def mnist_cnn():
     return model
 
 
-def vel_cnn(l2_reg_scale):
+def vel_cnn():
     model = Sequential()
 
     model.add(Conv2D(filters=60, kernel_size=(3, 6), padding='same', activation='relu', input_shape=(200, 6, 1),
@@ -209,8 +209,18 @@ def vel_cnn(l2_reg_scale):
     return model
 
 
-def vel_lstm():
+def one_step_vel_net(imu_len):
     model = Sequential()
 
-    model.add(Bidirectional(LSTM()))
+    model.add(Flatten(input_shape=(imu_len, 7, 1)))
+    model.add(Dense(50, activation='relu'))
+    model.add(Dense(50))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Dense(10))
+    model.add(BatchNormalization())
+    model.add(Activation('relu'))
+    model.add(Dense(1))
+
+    return model
 

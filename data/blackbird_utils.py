@@ -65,7 +65,7 @@ class BlackbirdDSManager:
         self.gt_file_name = "poses.csv"
         self.data_file_name = "data.bag"
         self.csv_imu_file_name = "data/_slash_blackbird_slash_imu.csv"
-        self.bag2csv_script = "convert_bag_to_csv.sh"
+        self.bag2csv_script = "./data/convert_bag_to_csv.sh"
 
         try:
             _ = FLAGS(args)  # parse flags
@@ -123,12 +123,14 @@ class BlackbirdDSManager:
         pose_file_dir = "{0}{1}".format(save_dir, self.gt_file_name)
         data_file_dir = "{0}{1}".format(save_dir, self.data_file_name)
 
+        max_speed = self.encode_max_speed(self.ds_flags.max_speed)
+
         # root url of github repo
         root = "{0}/{1}/".format(self.ds_flags.blackbird_url, self.ds_version)
-        data_file = "{0}_{1}.bag".format(self.ds_flags.trajectory_name, self.ds_flags.max_speed)
-        poses_file = "{0}_{1}_poses.csv".format(self.ds_flags.trajectory_name, self.ds_flags.max_speed)
+        data_file = "{0}_{1}.bag".format(self.ds_flags.trajectory_name, max_speed)
+        poses_file = "{0}_{1}_poses.csv".format(self.ds_flags.trajectory_name, max_speed)
 
-        url = "{0}/{1}".format(root, poses_file)
+        url = "{0}{1}".format(root, poses_file)
 
         if not os.path.exists(pose_file_dir):
             get_file_from_url(pose_file_dir, url)
@@ -206,6 +208,11 @@ def load_blackbird_dataset(batch_size, imu_seq_len, train_file_name, test_file_n
         save_dir = bbds.download_blackbird_data()
         raw_imu_data, ground_truth_data = bbds.read_blackbird_data(save_dir)
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+
+        # Cut away last few samples (outlier)
+        raw_imu_data = raw_imu_data[0:int(np.ceil(0.95*len(raw_imu_data)))]
+        gt_v_interp = gt_v_interp[0:int(np.ceil(0.95*len(gt_v_interp)))]
+
         processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, save_dir)
         generate_speed_integration_dataset(
             imu_seq_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name, test_file_name)
