@@ -18,7 +18,7 @@ gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer"
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 6, "Maximum number of training epochs")
 
-gflags.DEFINE_string("model_name", "cnn_vel_net", "Name for the deep model")
+gflags.DEFINE_string("model_name", "one_step_net", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
 
 

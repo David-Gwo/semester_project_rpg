@@ -7,7 +7,8 @@ import os
 import numpy as np
 import quaternion as q
 
-from data.euroc_utils import IMU, GT, interpolate_ground_truth, pre_process_data
+from data.euroc_utils import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
+    generate_tf_imu_train_ds
 from data.data_utils import safe_mkdir_recursive, get_file_from_url
 from data.data_utils import generate_imu_speed_integration_dataset, save_processed_dataset_files
 from data.blackbird_flags import FLAGS
@@ -50,13 +51,13 @@ class BBGT(GT):
 
 class BlackbirdDSManager:
     def __init__(self, *args):
-        
+
         self.ds_flags = FLAGS
 
         # Accepted Blackbird parameters
         self.valid_yaw_types = ["yawConstant", "yawForward"]
         self.valid_trajectory_names = \
-            ["3dFigure8", "ampersand", "bentDice", "cameraCalibration", "clover", "dice", "figure8", "halfMoon", 
+            ["3dFigure8", "ampersand", "bentDice", "cameraCalibration", "clover", "dice", "figure8", "halfMoon",
              "mouse", "oval", "patrick", "picasso", "sid", "sphinx", "star", "thrice", "tiltedThrice", "winter"]
         self.valid_max_speeds = [0.5, 1, 2, 3, 4, 5, 6, 7]
 
@@ -65,7 +66,7 @@ class BlackbirdDSManager:
         self.data_file_name = "data.bag"
         self.csv_imu_file_name = "data/_slash_blackbird_slash_imu.csv"
         self.bag2csv_script = "convert_bag_to_csv.sh"
-        
+
         try:
             _ = FLAGS(args)  # parse flags
         except gflags.FlagsError:
@@ -73,7 +74,7 @@ class BlackbirdDSManager:
             sys.exit(1)
 
         self.ds_version = self.get_dataset_version()
-        self.ds_local_dir = "{0}/{1}".format(self.ds_flags.blackbird_local_dir, self.ds_version)
+        self.ds_local_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
 
     @staticmethod
     def encode_max_speed(max_speed):
@@ -108,91 +109,91 @@ class BlackbirdDSManager:
         assert yaw_type in self.valid_yaw_types
         assert trajectory_name in self.valid_trajectory_names
         assert max_speed in self.valid_max_speeds
-    
+
         max_speed = self.encode_max_speed(max_speed)
-    
+
         dataset_version = "{0}/{1}/{2}".format(trajectory_name, yaw_type, max_speed)
-    
+
         return dataset_version
 
     def download_blackbird_data(self):
-    
-        save_dir = "{0}/{1}".format(self.ds_flags.blackbird_local_dir, self.ds_version)
+
+        save_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
         safe_mkdir_recursive(save_dir)
-        pose_file_dir = "{0}/{1}".format(save_dir, self.gt_file_name)
-        data_file_dir = "{0}/{1}".format(save_dir, self.data_file_name)
-    
+        pose_file_dir = "{0}{1}".format(save_dir, self.gt_file_name)
+        data_file_dir = "{0}{1}".format(save_dir, self.data_file_name)
+
         # root url of github repo
         root = "{0}/{1}/".format(self.ds_flags.blackbird_url, self.ds_version)
         data_file = "{0}_{1}.bag".format(self.ds_flags.trajectory_name, self.ds_flags.max_speed)
         poses_file = "{0}_{1}_poses.csv".format(self.ds_flags.trajectory_name, self.ds_flags.max_speed)
-    
+
         url = "{0}/{1}".format(root, poses_file)
-    
+
         if not os.path.exists(pose_file_dir):
             get_file_from_url(pose_file_dir, url)
         else:
             print("Ground truth data file already available")
-    
+
         url = "{0}/{1}".format(root, data_file)
         if not os.path.exists(data_file_dir):
             get_file_from_url(data_file_dir, url)
             self.convert_to_csv(data_file_dir)
-    
+
         else:
             print("Sensor file already available")
-    
+
         return save_dir
 
     def read_blackbird_data(self, save_dir):
-        data_file_dir = "{0}/{1}".format(save_dir, self.csv_imu_file_name)
-        gt_file_dir = "{0}/{1}".format(save_dir, self.gt_file_name)
-    
+        data_file_dir = "{0}{1}".format(save_dir, self.csv_imu_file_name)
+        gt_file_dir = "{0}{1}".format(save_dir, self.gt_file_name)
+
         raw_imu_data = []
         ground_truth_data = []
-    
+
         with open(data_file_dir, 'rt') as csv_file:
             header_line = 1
             csv_reader = csv.reader(csv_file, delimiter=',')
-    
+
             for row in csv_reader:
                 if header_line:
                     header_line = 0
                     continue
-    
+
                 imu = BBIMU()
                 imu.read(row)
                 raw_imu_data.append(imu)
-    
+
         with open(gt_file_dir, 'rt') as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')
             header_line = 1
-    
+
             gt_old = BBGT()
-    
+
             for row in csv_reader:
-    
+
                 gt = BBGT()
                 gt.read(row)
                 ground_truth_data.append(gt)
-    
+
                 if header_line:
                     header_line = 0
                     gt_old = gt
                     continue
-    
+
                 gt.integrate(gt_old)
-    
+
                 gt_old = gt
-    
+
         return [raw_imu_data, ground_truth_data]
 
 
 def generate_speed_integration_dataset(imu_len, raw_imu, gt_v, ds_dir, train_file_name, test_file_name):
 
     imu_img_tensor, gt_v_tensor = generate_imu_speed_integration_dataset(raw_imu, gt_v, imu_len)
-    euroc_training_ds = "{0}/{1}".format(ds_dir, train_file_name)
-    euroc_testing_ds = "{0}/{1}".format(ds_dir, test_file_name)
+    euroc_training_ds = "{0}{1}".format(ds_dir, train_file_name)
+    euroc_testing_ds = "{0}{1}".format(ds_dir, test_file_name)
     save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
 
 
@@ -205,7 +206,9 @@ def load_blackbird_dataset(batch_size, imu_seq_len, train_file_name, test_file_n
         save_dir = bbds.download_blackbird_data()
         raw_imu_data, ground_truth_data = bbds.read_blackbird_data(save_dir)
         raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
-        processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, save_dir + '/')
+        processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, save_dir)
         generate_speed_integration_dataset(
             imu_seq_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name, test_file_name)
 
+    add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
+    return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir)

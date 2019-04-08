@@ -238,7 +238,7 @@ def generate_speed_regression_ds(imu_len, raw_imu, gt_v, ds_dir, train_file_name
     save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
 
 
-def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model_dir):
+def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
 
@@ -316,7 +316,7 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
     return test_ds, ds_len
 
 
-def add_scalers_to_training_dir(root, destiny):
+def add_scaler_ref_to_training_dir(root, destiny):
     """
     Adds a txt file at the training directory with the location of the scaler functions used to transform the data that
     created the model for the first time
@@ -360,6 +360,6 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         generate_speed_regression_ds(imu_seq_len, processed_imu, processed_v, euroc_dir, euroc_train, euroc_test)
 
-    add_scalers_to_training_dir(euroc_dir, trained_model_dir)
+    add_scaler_ref_to_training_dir(euroc_dir, trained_model_dir)
 
-    return generate_cnn_training_dataset(euroc_dir, euroc_train, batch_size, trained_model_dir)
+    return generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_size, trained_model_dir)

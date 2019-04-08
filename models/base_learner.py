@@ -189,7 +189,6 @@ class Learner(object):
 
         # Identify last version of trained model
         files = get_checkpoint_file_list(self.config.checkpoint_dir, self.config.model_name)
-        model_number = None
 
         if not files:
             model_number = self.config.model_name + "_0"
@@ -201,6 +200,7 @@ class Learner(object):
                     self.recover_model_from_checkpoint()
                     model_number = self.model_version_number
                 except FileNotFoundError:
+                    model_number = self.config.model_name + "_0"
                     print("Model not found. Creating new model")
             else:
                 model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
