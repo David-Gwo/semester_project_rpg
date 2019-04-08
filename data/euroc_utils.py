@@ -3,12 +3,12 @@ import yaml
 import numpy as np
 import tensorflow as tf
 import os
-import scipy.io
 from scipy.interpolate import interp1d
 from scipy import signal
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
+from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data
 
 
 class IMU:
@@ -48,15 +48,6 @@ class GT:
 SCALER_GYRO_FILE = "scaler_gyro.save"
 SCALER_ACC_FILE = "scaler_acc.save"
 SCALER_DIR_FILE = '/scaler_files_dir.txt'
-
-
-def load_mat_data(directory):
-    mat_data = scipy.io.loadmat(directory)
-
-    gt_v_tensor = np.expand_dims(mat_data['y'][0], 1)
-    imu_img_tensor = mat_data['imu']
-
-    return imu_img_tensor, gt_v_tensor
 
 
 def read_euroc_dataset(euroc_dir):
@@ -113,6 +104,7 @@ def read_euroc_dataset(euroc_dir):
 def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     """
     Interpolates the data of the ground truth so that it matches the timestamps of the raw imu data
+
     :param raw_imu_data: IMU data
     :param ground_truth_data: ground truth velocity data
     :return: the original imu data, and the interpolated velocity data
@@ -229,71 +221,27 @@ def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
     return filt_imu_vec, filt_gt_v_interp
 
 
-def generate_euroc_imu_dataset(imu_len, raw_imu, gt_v, euroc_dir, euroc_train, euroc_test):
+def generate_speed_regression_ds(imu_len, raw_imu, gt_v, ds_dir, train_file_name, test_file_name):
     """
 
     :param imu_len: number of IMU acquisitions in the input (length)
     :param raw_imu: 3D array of IMU measurements (n_samples x 2 <gyro, acc> x 3 <x, y, z>)
     :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
-    :param euroc_dir: root directory of the euroc data
-    :param euroc_train: Name of the preprocessed euroc training dataset
-    :param euroc_test: Name of the preprocessed euroc testing dataset
+    :param ds_dir: root directory of the dataset
+    :param train_file_name: Name of the preprocessed training dataset
+    :param test_file_name: Name of the preprocessed testing dataset
     """
 
-    # Initialize data tensors #
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((len(raw_imu), imu_len, 6, 1))
-    # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.zeros(len(raw_imu))
-
-    for i in range(len(raw_imu) - imu_len):
-        imu_img = np.zeros((imu_len, 6))
-
-        # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
-        if i < imu_len:
-            imu_img[imu_len - i - 1:imu_len, :] = raw_imu[0:i+1, :, :].reshape(i+1, 6)
-        else:
-            imu_img = raw_imu[i:i + imu_len, :, :].reshape(imu_len, 6)
-
-        # TODO: Should the elapsed time be included in the data?
-
-        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
-        gt_v_tensor[i] = np.linalg.norm(gt_v[i])
-
-    euroc_training_ds = euroc_dir + euroc_train
-    euroc_testing_ds = euroc_dir + euroc_test
-
-    if os.path.exists(euroc_training_ds):
-        os.remove(euroc_training_ds)
-    os.mknod(euroc_training_ds)
-
-    if os.path.exists(euroc_testing_ds):
-        os.remove(euroc_testing_ds)
-    os.mknod(euroc_testing_ds)
-
-    # Delete noisy part of data set
-    # imu_img_tensor = imu_img_tensor[0:3000, :, :, :]
-    # gt_v_tensor = gt_v_tensor[0:3000]
-
-    total_ds_len = int(len(gt_v_tensor))
-    test_ds_len = int(np.ceil(total_ds_len * 0.1))
-
-    # Choose some entries to separate for the test set
-    test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
-
-    test_set_x = imu_img_tensor[test_indexes, :, :, :]
-    test_set_y = gt_v_tensor[test_indexes]
-
-    imu_img_tensor = np.delete(imu_img_tensor, test_indexes, 0)
-    gt_v_tensor = np.delete(gt_v_tensor, test_indexes)
-
-    scipy.io.savemat(euroc_training_ds, mdict={'imu': imu_img_tensor, 'y': gt_v_tensor}, oned_as='row')
-    scipy.io.savemat(euroc_testing_ds, mdict={'imu': test_set_x, 'y': test_set_y}, oned_as='row')
+    imu_img_tensor, gt_v_tensor = generate_imu_img_dataset(raw_imu, gt_v, imu_len)
+    euroc_training_ds = ds_dir + train_file_name
+    euroc_testing_ds = ds_dir + test_file_name
+    save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
 
 
 def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model_dir):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
+
     :param euroc_dir: root directory of the euroc data
     :param euroc_train: Name of the preprocessed euroc training dataset
     :param batch_s: (mini)-batch size of datasets
@@ -338,6 +286,7 @@ def generate_cnn_training_dataset(euroc_dir, euroc_train, batch_s, trained_model
 def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_dir):
     """
     Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
+
     :param euroc_dir: root directory of the euroc data
     :param euroc_test:
     :param batch_s: (mini)-batch size of datasets
@@ -409,7 +358,7 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, euroc_dir)
 
-        generate_euroc_imu_dataset(imu_seq_len, processed_imu, processed_v, euroc_dir, euroc_train, euroc_test)
+        generate_speed_regression_ds(imu_seq_len, processed_imu, processed_v, euroc_dir, euroc_train, euroc_test)
 
     add_scalers_to_training_dir(euroc_dir, trained_model_dir)
 

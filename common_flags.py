@@ -33,8 +33,8 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
 
 # Reading parameters
 gflags.DEFINE_string('train_dir', './data/EuRoC_dataset_2/', 'Directory of the training dataset')
-gflags.DEFINE_boolean('processed_train_ds', False, 'Whether there is a processed dataset file available to load from')
-gflags.DEFINE_string('euroc_data_filename_train', 'imu_dataset_train.mat', 'Preprocessed EuRoC dataset training file')
+gflags.DEFINE_boolean('prepared_file_available', False, 'Whether there is a processed dataset file available to load from')
+gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-processed dataset training file')
 
 # Log parameters
 gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
@@ -44,7 +44,7 @@ gflags.DEFINE_integer("save_freq", 2, "Save the latest model every save_freq epo
 
 # Testing parameters
 gflags.DEFINE_string('test_dir', './data/EuRoC_dataset_2/', 'Directory of the training dataset')
-gflags.DEFINE_string('euroc_data_filename_test', 'imu_dataset_test.mat', 'Preprocessed EuRoC dataset testing file')
+gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
 gflags.DEFINE_integer("test_model_number", 5, "Which model number to test")
 gflags.DEFINE_string("generate_training_progression", False, "Whether or not to generate training progression images")
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")

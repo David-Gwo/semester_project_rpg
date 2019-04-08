@@ -16,6 +16,7 @@ from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
 from data.data_utils import get_mnist_datasets
 from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
+from data.blackbird_utils import load_blackbird_dataset
 from models.custom_callback_fx import CustomModelCheckpoint
 
 #############################################################################
@@ -137,8 +138,13 @@ class Learner(object):
         if dataset_name == 'euroc':
             imu_seq_len = 200
             return load_euroc_dataset(self.config.train_dir, self.config.batch_size, imu_seq_len,
-                                      self.config.euroc_data_filename_train, self.config.euroc_data_filename_test,
-                                      self.config.processed_train_ds, self.trained_model_dir)
+                                      self.config.prepared_train_data_file, self.config.prepared_test_data_file,
+                                      self.config.prepared_file_available, self.trained_model_dir)
+        if dataset_name == 'blackbird':
+            imu_seq_len = 2
+            return load_blackbird_dataset(self.config.batch_size, imu_seq_len, self.config.prepared_train_data_file,
+                                          self.config.prepared_test_data_file, self.config.prepared_file_available,
+                                          self.trained_model_dir)
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -203,7 +209,7 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
         # Get training and validation datasets
-        train_ds, validation_ds, ds_lengths = self.get_dataset('euroc')
+        train_ds, validation_ds, ds_lengths = self.get_dataset('blackbird')
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -275,11 +281,11 @@ class Learner(object):
 
     def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0):
 
-        dataset = self.config.euroc_data_filename_test
+        dataset = self.config.prepared_test_data_file
         if self.config.generate_training_progression:
-            dataset = self.config.euroc_data_filename_train
+            dataset = self.config.prepared_train_data_file
 
-        dataset = self.config.euroc_data_filename_train
+        dataset = self.config.prepared_train_data_file
         if testing_ds is None:
             test_ds, steps = generate_cnn_testing_dataset(self.config.test_dir,
                                                           dataset,
