@@ -265,15 +265,17 @@ def generate_imu_speed_integration_dataset(imu_vec, gt_vec, imu_len):
     :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
     """
 
+    seq_len = len(imu_vec)
+
     # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((len(imu_vec) - 1, imu_len, 7, 1))
+    imu_img_tensor = np.zeros((seq_len - 1, imu_len, 7, 1))
     # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.zeros(len(imu_vec) - 1)
+    gt_v_tensor = np.zeros(seq_len - 1)
 
     gt_vec = np.expand_dims(np.linalg.norm(gt_vec, axis=1), axis=1)
     imu_vec = np.append(imu_vec, np.zeros((imu_len - 1, 2, 3)), axis=0)
 
-    for i in range(len(imu_vec) - imu_len - 1):
+    for i in range(seq_len - imu_len - 1):
         imu_img = np.append(imu_vec[i:i + imu_len, :, :].reshape(imu_len, 6), gt_vec[i:i + imu_len], axis=1)
 
         imu_img_tensor[i] = np.expand_dims(imu_img, 2)

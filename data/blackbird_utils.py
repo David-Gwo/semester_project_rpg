@@ -199,7 +199,7 @@ def generate_speed_integration_dataset(imu_len, raw_imu, gt_v, ds_dir, train_fil
     save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
 
 
-def load_blackbird_dataset(batch_size, imu_seq_len, train_file_name, test_file_name, processed_ds_available,
+def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_name, processed_ds_available,
                            trained_model_dir):
 
     bbds = BlackbirdDSManager()
@@ -214,8 +214,8 @@ def load_blackbird_dataset(batch_size, imu_seq_len, train_file_name, test_file_n
         gt_v_interp = gt_v_interp[0:int(np.ceil(0.95*len(gt_v_interp)))]
 
         processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, save_dir)
-        generate_speed_integration_dataset(
-            imu_seq_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name, test_file_name)
+        generate_speed_integration_dataset(imu_w_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name,
+                                           test_file_name)
 
     add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
     return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir)

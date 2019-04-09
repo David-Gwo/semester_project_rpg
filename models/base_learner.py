@@ -122,7 +122,7 @@ class Learner(object):
         #                            l2_reg_scale=self.config.l2_reg_scale,
         #                            output_dim=self.config.output_dim)
 
-        model = prediction_network(2)
+        model = prediction_network(self.config.window_length)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
@@ -138,15 +138,13 @@ class Learner(object):
         if dataset_name == 'mnist':
             return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
         if dataset_name == 'euroc':
-            imu_seq_len = 200
-            return load_euroc_dataset(self.config.train_dir, self.config.batch_size, imu_seq_len,
+            return load_euroc_dataset(self.config.train_dir, self.config.batch_size, self.config.window_length,
                                       self.config.prepared_train_data_file, self.config.prepared_test_data_file,
                                       self.config.prepared_file_available, self.trained_model_dir)
         if dataset_name == 'blackbird':
-            imu_seq_len = 2
-            return load_blackbird_dataset(self.config.batch_size, imu_seq_len, self.config.prepared_train_data_file,
-                                          self.config.prepared_test_data_file, self.config.prepared_file_available,
-                                          self.trained_model_dir)
+            return load_blackbird_dataset(self.config.batch_size, self.config.window_length,
+                                          self.config.prepared_train_data_file, self.config.prepared_test_data_file,
+                                          self.config.prepared_file_available, self.trained_model_dir)
 
     def collect_summaries(self):
         """Collects all summaries to be shown in the tensorboard"""
@@ -225,7 +223,7 @@ class Learner(object):
         val_steps_per_epoch = int(math.ceil(val_ds_splits[0]))
 
         keras_callbacks = [
-            callbacks.EarlyStopping(patience=5, monitor='val_loss'),
+            callbacks.EarlyStopping(patience=20, monitor='val_loss'),
             callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + model_number + "/keras", histogram_freq=5),
             CustomModelCheckpoint(
                 filepath=os.path.join(
@@ -288,7 +286,7 @@ class Learner(object):
         if self.config.generate_training_progression:
             dataset = self.config.prepared_train_data_file
 
-        # dataset = self.config.prepared_train_data_file
+        dataset = self.config.prepared_train_data_file
         if testing_ds is None:
             # TODO: make more elegant
             if self.config.test_ds == 'blackbird':

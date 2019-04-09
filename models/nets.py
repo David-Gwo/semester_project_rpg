@@ -1,9 +1,11 @@
 import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, MaxPooling2D, \
-    BatchNormalization, Bidirectional, LSTM
+from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, Conv1D, MaxPooling2D, \
+    BatchNormalization, Bidirectional, LSTM, Concatenate, Reshape
 from tensorflow.python.keras.layers.merge import add
+
+from models.custom_layers import ForkLayer
 
 ##########################################
 # ADD HERE YOUR NETWORK                  #
@@ -210,17 +212,48 @@ def vel_cnn():
 
 
 def one_step_vel_net(imu_len):
-    model = Sequential()
 
-    model.add(Flatten(input_shape=(imu_len, 7, 1)))
-    model.add(Dense(50, activation='relu'))
-    model.add(Dense(50))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(Dense(10))
-    model.add(BatchNormalization())
-    model.add(Activation('relu'))
-    model.add(Dense(1))
+    conv_kernel_width = min([imu_len, 3])
+    pool_width = min([imu_len, 10])
+    pool_strides = min([imu_len, 6])
+
+    net_in = Input((imu_len, 7, 1), name="input_layer")
+    imu_stack, v_vec = ForkLayer()(net_in)
+
+    imu_conv_1 = Conv2D(filters=15, kernel_size=(conv_kernel_width, 1), padding='valid', activation='relu',
+                        name='imu_conv_layer_1')(imu_stack)
+    imu_conv_2 = Conv2D(filters=30, kernel_size=(conv_kernel_width, 1), padding='valid', activation='relu',
+                        name='imu_conv_layer_2')(imu_conv_1)
+    imu_conv_3 = Conv2D(filters=60, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='valid',
+                        activation='tanh', name='imu_conv_layer_3')(imu_conv_2)
+
+    v_conv_1 = Conv1D(filters=15, kernel_size=conv_kernel_width, padding='valid', activation='relu',
+                      name='vel_conv_layer_1')(v_vec)
+    v_conv_2 = Conv1D(filters=30, kernel_size=conv_kernel_width, padding='valid', activation='relu',
+                      name='vel_conv_layer_2')(v_conv_1)
+    v_conv_3 = Conv1D(filters=60, kernel_size=conv_kernel_width, padding='valid', activation='tanh',
+                      name='vel_conv_layer_3')(v_conv_2)
+
+    flatten_imu = Flatten(name='imu_flattening_layer')(imu_conv_3)
+    flatten_vel = Flatten(name='vel_flattening_layer')(v_conv_3)
+    squeezed_vel = Reshape(name='reshape_vel_layer', target_shape=[imu_len])(v_vec)
+
+    imu_conv_branch = Dropout(0.3)(flatten_imu)
+    vel_conv_branch = Dropout(0.3)(flatten_vel)
+    vel_branch = Dropout(0.3)(squeezed_vel)
+
+    stacked = Concatenate(name='concatenation_layer')([imu_conv_branch, vel_conv_branch, vel_branch])
+
+    dense_1 = Dense(100, name='dense_layer_1')(stacked)
+    b_norm_1 = BatchNormalization(name='b_norm_1')(dense_1)
+    activation_1 = Activation('relu', name='activation_1')(b_norm_1)
+
+    dense_2 = Dense(100, name='dense_layer_2')(activation_1)
+    b_norm_2 = BatchNormalization(name='b_norm_2')(dense_2)
+    activation_2 = Activation('relu', name='activation_2')(b_norm_2)
+
+    net_out = Dense(1, name='output_layer')(activation_2)
+
+    model = Model(net_in, net_out)
 
     return model
-
