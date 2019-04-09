@@ -1,5 +1,4 @@
 from tensorflow.python.keras.layers import Layer
-import tensorflow as tf
 
 
 class ForkLayer(Layer):
@@ -7,4 +6,4 @@ class ForkLayer(Layer):
         super(ForkLayer, self).__init__(args, kwargs)
 
     def call(self, inputs, **kwargs):
-        return inputs[:, :, 0:6, :] * 0, inputs[:, :, 6, :] * 1
+        return inputs[:, :, 0:6, :] * 1, inputs[:, :, 6, :] * 1
