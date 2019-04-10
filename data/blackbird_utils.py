@@ -39,6 +39,12 @@ class BBGT(GT):
         self.att = data[4:8]
 
     def integrate(self, gt_old):
+        """
+        Integrates position and attitude to obtain velocity and angular velocity. Saves integrated values to current
+        BBGT object
+
+        :param gt_old: BBGT from previous timestamp
+        """
 
         dt = (self.timestamp - gt_old.timestamp) * 10e-6
         self.vel = (self.pos - gt_old.pos) / dt
@@ -207,7 +213,7 @@ def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_nam
     if not processed_ds_available:
         save_dir = bbds.download_blackbird_data()
         raw_imu_data, ground_truth_data = bbds.read_blackbird_data(save_dir)
-        raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+        raw_imu_data, gt_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
         # Cut away last few samples (outlier)
         raw_imu_data = raw_imu_data[0:int(np.ceil(0.95*len(raw_imu_data)))]

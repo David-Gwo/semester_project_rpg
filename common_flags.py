@@ -33,12 +33,12 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
 
 # Reading parameters
 gflags.DEFINE_string('train_ds', 'blackbird', 'Which dataset to use for training')
-gflags.DEFINE_boolean('prepared_file_available', True, 'Whether there is a processed dataset file available to load from')
+gflags.DEFINE_boolean('prepared_file_available', False, 'Whether there is a processed dataset file available to load from')
 gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-processed dataset training file')
 
 # Log parameters
 gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
-gflags.DEFINE_integer("resume_train_model_number", 4, "Which model number to resume training")
+gflags.DEFINE_integer("resume_train_model_number", 5, "Which model number to resume training")
 gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
 gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epochs")
 

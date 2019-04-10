@@ -4,8 +4,10 @@ import os
 import sys
 import cv2
 import errno
+import logging
 import requests
 import scipy.io
+from scipy.interpolate import interp1d
 
 from tensorflow.python.keras.preprocessing.image import Iterator
 from tensorflow.python.keras import datasets as k_ds
@@ -333,3 +335,36 @@ def load_mat_data(directory):
     x_tensor = mat_data['x']
 
     return x_tensor, y_tensor
+
+
+def interpolate_ts(ref_ts, target_ts, meas_vec, is_quaternion=False):
+    """
+    Interpolates a vector to different acquisition times, given the original aquisition times
+
+    :param ref_ts: reference timestamp vector
+    :param target_ts: target timestamp vector (must be inside the limits of `ref_ts`)
+    :param meas_vec: vector to be interpolated
+    :param is_quaternion: whether the vector is a quaternion or not
+    :return: the interpolated vector `meas_vec` at times `target_ts`
+    """
+
+    if is_quaternion:
+        logging.warning("Quaternion SLERP not implemented yet. A quaternion vector was interpolated using the euclidean"
+                        " method, which may yield an incorrect result!")
+        # TODO: implement SLERP!
+
+    _, d = np.shape(meas_vec)
+
+    # Generate interpolating functions for each component of the vector
+    interp_fx = [None for _ in range(d)]
+    for i in range(d):
+        interp_fx[i] = interp1d(ref_ts, meas_vec[:, i])
+
+    # Initialize array of interpolated Ground Truth velocities
+    interp_vec = np.zeros((len(ref_ts), d))
+
+    # Fill in array
+    for i, imu_timestamp in enumerate(target_ts):
+        interp_vec[i, :] = np.array([interp_fx[j](imu_timestamp) for j in range(d)])
+
+    return interp_vec

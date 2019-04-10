@@ -3,19 +3,18 @@ import yaml
 import numpy as np
 import tensorflow as tf
 import os
-from scipy.interpolate import interp1d
 from scipy import signal
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
-from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data
+from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data, interpolate_ts
 
 
 class IMU:
     def __init__(self):
         self.timestamp = 0.0
-        self.gyro = [0.0, 0.0, 0.0]
-        self.acc = [0.0, 0.0, 0.0]
+        self.gyro = np.array([0.0, 0.0, 0.0])
+        self.acc = np.array([0.0, 0.0, 0.0])
 
     def read(self, data):
         data = np.array(data)
@@ -28,11 +27,11 @@ class IMU:
 class GT:
     def __init__(self):
         self.timestamp = 0.0
-        self.pos = [0.0, 0.0, 0.0]
-        self.att = [0.0, 0.0, 0.0, 0.0]
-        self.vel = [0.0, 0.0, 0.0]
-        self.ang_vel = [0.0, 0.0, 0.0]
-        self.acc = [0.0, 0.0, 0.0]
+        self.pos = np.array([0.0, 0.0, 0.0])
+        self.att = np.array([0.0, 0.0, 0.0, 0.0])
+        self.vel = np.array([0.0, 0.0, 0.0])
+        self.ang_vel = np.array([0.0, 0.0, 0.0])
+        self.acc = np.array([0.0, 0.0, 0.0])
 
     def read(self, data):
         data = np.array(data)
@@ -43,6 +42,14 @@ class GT:
         self.vel = data[8:11]
         self.ang_vel = data[11:14]
         self.acc = data[14:17]
+
+    def read_from_tuple(self, data):
+        self.pos = data[0]
+        self.vel = data[1]
+        self.att = data[2]
+        self.ang_vel = data[3]
+        self.acc = data[4]
+        self.timestamp = data[5]
 
 
 SCALER_GYRO_FILE = "scaler_gyro.save"
@@ -105,34 +112,35 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     """
     Interpolates the data of the ground truth so that it matches the timestamps of the raw imu data
 
-    :param raw_imu_data: IMU data
-    :param ground_truth_data: ground truth velocity data
-    :return: the original imu data, and the interpolated velocity data
+    :param raw_imu_data: IMU data (an array of IMU objects)
+    :param ground_truth_data: ground truth velocity data (an array of GT objects)
+    :return: the original imu data, and the interpolated ground truth data
     """
     raw_imu_data = np.array(raw_imu_data)
 
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
-    gt_timestamps = np.array([gt_meas.timestamp for gt_meas in ground_truth_data])
-    gt_velocity = np.array([gt_meas.vel for gt_meas in ground_truth_data])
+    gt_unroll = np.array([(gt_meas.pos, gt_meas.vel, gt_meas.att, gt_meas.ang_vel, gt_meas.acc, gt_meas.timestamp) for
+                          gt_meas in ground_truth_data])
+
+    gt_pos = np.stack(gt_unroll[:, 0])
+    gt_vel = np.stack(gt_unroll[:, 1])
+    gt_att = np.stack(gt_unroll[:, 2])
+    gt_ang_vel = np.stack(gt_unroll[:, 3])
+    gt_acc = np.stack(gt_unroll[:, 4])
+    gt_timestamps = gt_unroll[:, 5]
 
     # Only keep imu data that is within the ground truth time span
     raw_imu_data = raw_imu_data[(imu_timestamps > gt_timestamps[0]) * (imu_timestamps < gt_timestamps[-1])]
-
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
 
-    # Interpolate Ground truth velocities to match IMU time acquisitions
-    v_x_interp = interp1d(gt_timestamps, gt_velocity[:, 0])
-    v_y_interp = interp1d(gt_timestamps, gt_velocity[:, 1])
-    v_z_interp = interp1d(gt_timestamps, gt_velocity[:, 2])
+    # Interpolate Ground truth to match IMU time acquisitions
+    gt_pos_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_pos)
+    gt_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_vel)
+    gt_att_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_att, is_quaternion=True)
+    gt_ang_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_ang_vel)
+    gt_acc_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_acc)
 
-    # Initialize array of interpolated Ground Truth velocities
-    v_interp = [GT() for _ in range(len(imu_timestamps))]
-
-    # Fill in array
-    for i, imu_timestamp in enumerate(imu_timestamps):
-        v_interp[i] = np.array([v_x_interp(imu_timestamp), v_y_interp(imu_timestamp), v_z_interp(imu_timestamp)])
-
-    return [raw_imu_data, v_interp]
+    return [raw_imu_data, (gt_pos_interp, gt_vel_interp, gt_att_interp, gt_ang_vel_interp, gt_acc_interp, imu_timestamps)]
 
 
 def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
@@ -354,7 +362,9 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
     if not processed_ds_available:
         imu_yaml_data, raw_imu_data, ground_truth_data = read_euroc_dataset(euroc_dir)
 
-        raw_imu_data, gt_v_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+        raw_imu_data, gt_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+
+        # TODO: fix gt_interp -> gt_v_interp
 
         processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, euroc_dir)
 
