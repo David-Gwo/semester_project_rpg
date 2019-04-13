@@ -3,11 +3,12 @@ import yaml
 import numpy as np
 import tensorflow as tf
 import os
-from scipy import signal
+from scipy.signal import butter as butterworth_filter
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
-from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data, interpolate_ts
+from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data, interpolate_ts, \
+    filter_with_coeffs
 
 
 class IMU:
@@ -22,6 +23,9 @@ class IMU:
         self.timestamp = data[0]
         self.gyro = data[1:4]
         self.acc = data[4:7]
+
+    def unroll(self):
+        return self.gyro, self.acc, self.timestamp
 
 
 class GT:
@@ -50,6 +54,10 @@ class GT:
         self.ang_vel = data[3]
         self.acc = data[4]
         self.timestamp = data[5]
+        return self
+
+    def unroll(self):
+        return self.pos, self.vel, self.att, self.ang_vel, self.acc, self.timestamp
 
 
 SCALER_GYRO_FILE = "scaler_gyro.save"
@@ -119,8 +127,7 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     raw_imu_data = np.array(raw_imu_data)
 
     imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
-    gt_unroll = np.array([(gt_meas.pos, gt_meas.vel, gt_meas.att, gt_meas.ang_vel, gt_meas.acc, gt_meas.timestamp) for
-                          gt_meas in ground_truth_data])
+    gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in ground_truth_data])
 
     gt_pos = np.stack(gt_unroll[:, 0])
     gt_vel = np.stack(gt_unroll[:, 1])
@@ -143,90 +150,48 @@ def interpolate_ground_truth(raw_imu_data, ground_truth_data):
     return [raw_imu_data, (gt_pos_interp, gt_vel_interp, gt_att_interp, gt_ang_vel_interp, gt_acc_interp, imu_timestamps)]
 
 
-def pre_process_data(raw_imu_data, gt_v_interp, euroc_dir):
+def pre_process_data(raw_imu_data, gt_interp, euroc_dir):
     """
     Pre-process euroc dataset (apply low-pass filter and minmax scaling)
 
     :param raw_imu_data: 1D array of IMU objects with IMU measurements
-    :param gt_v_interp: list of 3D arrays with the decomposed velocity ground truth measurements
+    :param gt_interp: list of 3D arrays with the decomposed velocity ground truth measurements
     :param euroc_dir: root directory of the euroc data
     :return: the filtered dataset
     """
 
-    imu_vec = np.array([(imu_s.gyro, imu_s.acc) for imu_s in raw_imu_data])
-    filt_imu_vec = np.copy(imu_vec)
+    # Transform the data to numpy matrices
+    imu_unroll = np.array([(imu_s.unroll()) for imu_s in raw_imu_data])
+    gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in gt_interp])
 
-    fs = 200.0  # Sample frequency (Hz)
-    f0 = 10.0  # Frequency to be removed from signal (Hz)
-    w0 = f0 / (fs / 2)  # Normalized Frequency
+    # Get number of channels per data type (we subtract 1 because timestamp is not a channel we want to filter)
+    imu_channels = np.shape(imu_unroll)[1] - 1
+    gt_channels = np.shape(gt_unroll)[1] - 1
+
+    # TODO: pass sampling frequency as param
 
     # Design butterworth filter
-    b_bw, a_bw = signal.butter(10, w0, output='ba')
+    fs = 100.0  # Sample frequency (Hz)
+    f0 = 10.0  # Frequency to be removed from signal (Hz)
+    w0 = f0 / (fs / 2)  # Normalized Frequency
+    [b_bw, a_bw] = butterworth_filter(10, w0, output='ba')
 
-    plt.figure()
-    f, t, stft = signal.stft(imu_vec[:, 0, 1], 200)
-    plt.subplot(2, 1, 1)
-    plt.pcolormesh(t, f, np.abs(stft))
-    plt.title('STFT Magnitude')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
-
-    filt_imu_vec[:, 0, :] = signal.lfilter(b_bw, a_bw, imu_vec[:, 0, :], axis=0)
-    filt_imu_vec[:, 1, :] = signal.lfilter(b_bw, a_bw, imu_vec[:, 1, :], axis=0)
-    filt_gt_v_interp = signal.lfilter(b_bw, a_bw, gt_v_interp, axis=0)
-
-    # Add more flat region so avoid model from learning average value
-    # flat_region = filt_imu_vec[6000:7000, :, :]
-    # flat_region_v = filt_gt_v_interp[6000:7000, :]
-    # flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
-    # flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
-    # filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
-    # filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
-
-    f, t, stft = signal.stft(filt_imu_vec[:, 0, 1], 200)
-
-    plt.subplot(2, 1, 2)
-    plt.pcolormesh(t, f, np.abs(stft))
-    plt.title('STFT Magnitude')
-    plt.ylabel('Frequency [Hz]')
-    plt.xlabel('Time [sec]')
-
-    y1 = np.squeeze(gt_v_interp)
-    y2 = np.squeeze(filt_gt_v_interp)
-    x1 = imu_vec.reshape((-1, 6))
-    x2 = filt_imu_vec.reshape((-1, 6))
-
-    plt.figure()
-    plt.subplot(3, 2, 1)
-    plt.plot(x1[:, 0:3])
-    plt.title('Gyro')
-    plt.subplot(3, 2, 3)
-    plt.plot(x1[:, 3:6])
-    plt.title('Acc')
-    plt.subplot(3, 2, 5)
-    plt.plot(np.linalg.norm(y1, axis=1))
-    plt.title('Ground-truth speed')
-
-    plt.subplot(3, 2, 2)
-    plt.plot(x2[:, 0:3])
-    plt.title('Filt Gyro')
-    plt.subplot(3, 2, 4)
-    plt.plot(x2[:, 3:6])
-    plt.title('Filt Acc')
-    plt.subplot(3, 2, 6)
-    plt.plot(np.linalg.norm(y2, axis=1))
-    plt.title('Filt Ground-truth speed')
-    plt.show()
+    filt_imu_vec = np.stack([filter_with_coeffs(a_bw, b_bw, imu_unroll[:, i], fs) for i in range(imu_channels)], axis=1)
+    filt_gt_vec = np.stack([filter_with_coeffs(a_bw, b_bw, gt_unroll[:, i], fs) for i in range(gt_channels)], axis=1)
 
     scale_g = MinMaxScaler()
-    scale_g.fit(filt_imu_vec[:, 0, :].reshape(-1, 1))
+    scale_g.fit(np.stack(filt_imu_vec[:, 0]))
     scale_a = MinMaxScaler()
-    scale_a.fit(filt_imu_vec[:, 1, :].reshape(-1, 1))
+    scale_a.fit(np.stack(filt_imu_vec[:, 1]))
 
     joblib.dump(scale_g, euroc_dir + SCALER_GYRO_FILE)
     joblib.dump(scale_a, euroc_dir + SCALER_ACC_FILE)
 
-    return filt_imu_vec, filt_gt_v_interp
+    # Add back the timestamps to the data matrix and return
+    filt_imu_vec = np.append(filt_imu_vec, np.expand_dims(imu_unroll[:, -1], axis=1), axis=1)
+    filt_gt_vec = np.append(filt_gt_vec, np.expand_dims(gt_unroll[:, -1], axis=1), axis=1)
+
+    return filt_imu_vec, filt_gt_vec
 
 
 def generate_speed_regression_ds(imu_len, raw_imu, gt_v, ds_dir, train_file_name, test_file_name):
@@ -373,3 +338,68 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
     add_scaler_ref_to_training_dir(euroc_dir, trained_model_dir)
 
     return generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_size, trained_model_dir)
+
+
+def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
+    """
+    Plots the imu and ground truth data in two separate figures
+
+    :param imu_vec: vector of imu data (either vector of IMU, or 2d numpy array)
+    :param gt_vec: vector of ground truth data (either vector of GT, or 2d numpy array)
+    :param title: title of the plot
+    :param from_numpy: format of the input data
+    :param show: whether to show plot or not
+    :return:
+    """
+
+    plt.figure()
+
+    if from_numpy:
+        plt.subplot(2, 1, 1)
+        plt.plot(np.stack(imu_vec[:, 0]))
+        plt.subplot(2, 1, 2)
+        plt.plot(np.stack(imu_vec[:, 1]))
+
+        plt.figure()
+        plt.subplot(2, 2, 1)
+        plt.plot(np.stack(gt_vec[:, 0]))
+        plt.subplot(2, 2, 2)
+        plt.plot(np.stack(gt_vec[:, 1]))
+        plt.subplot(2, 2, 3)
+        plt.plot(np.stack(gt_vec[:, 2]))
+        plt.subplot(2, 2, 4)
+        plt.plot(np.stack(gt_vec[:, 3]))
+
+    else:
+        plt.subplot(2, 1, 1)
+        plt.plot([imu.gyro for imu in imu_vec])
+        plt.subplot(2, 1, 2)
+        plt.plot([imu.acc for imu in imu_vec])
+
+        plt.figure()
+        plt.subplot(2, 2, 1)
+        plt.plot([gt.pos for gt in gt_vec])
+        plt.subplot(2, 2, 2)
+        plt.plot([gt.vel for gt in gt_vec])
+        plt.subplot(2, 2, 3)
+        plt.plot([gt.att for gt in gt_vec])
+        plt.subplot(2, 2, 4)
+        plt.plot([gt.ang_vel for gt in gt_vec])
+
+    plt.title(title)
+
+    if show:
+        plt.show()
+
+
+def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):
+    # TODO: remove
+    # Add more flat region so avoid model from learning average value
+    flat_region = filt_imu_vec[6000:7000, :, :]
+    flat_region_v = filt_gt_v_interp[6000:7000, :]
+    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
+    flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
+    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
+    filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
+
+    return filt_imu_vec, filt_gt_v_interp

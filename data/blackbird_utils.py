@@ -6,9 +6,10 @@ import os
 
 import numpy as np
 import quaternion as q
+import matplotlib.pyplot as plt
 
 from data.euroc_utils import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
-    generate_tf_imu_train_ds
+    generate_tf_imu_train_ds, plot_all_data
 from data.data_utils import safe_mkdir_recursive, get_file_from_url
 from data.data_utils import generate_imu_speed_integration_dataset, save_processed_dataset_files
 from data.blackbird_flags import FLAGS
@@ -45,6 +46,7 @@ class BBGT(GT):
 
         :param gt_old: BBGT from previous timestamp
         """
+        # TODO: review angular velocity integration -> https://www.ashwinnarayan.com/post/how-to-integrate-quaternions/
 
         dt = (self.timestamp - gt_old.timestamp) * 10e-6
         self.vel = (self.pos - gt_old.pos) / dt
@@ -213,13 +215,22 @@ def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_nam
     if not processed_ds_available:
         save_dir = bbds.download_blackbird_data()
         raw_imu_data, ground_truth_data = bbds.read_blackbird_data(save_dir)
-        raw_imu_data, gt_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
-        # Cut away last few samples (outlier)
+        raw_imu_data, gt_interp_tuple = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+
+        # Re-make vector of interpolated GT measurements
+        n_samples = len(gt_interp_tuple[0])
+        gt_interp = [BBGT().read_from_tuple(tuple([gt_interp_tuple[i][j] for i in range(6)]))for j in range(n_samples)]
+
+        # Cut away last 5% samples (noisy measurements)
         raw_imu_data = raw_imu_data[0:int(np.ceil(0.95*len(raw_imu_data)))]
-        gt_v_interp = gt_v_interp[0:int(np.ceil(0.95*len(gt_v_interp)))]
+        gt_interp = gt_interp[0:int(np.ceil(0.95*len(gt_interp)))]
 
-        processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, save_dir)
+        processed_imu, processed_gt = pre_process_data(raw_imu_data, gt_interp, save_dir)
+
+        plot_all_data(raw_imu_data, ground_truth_data, title="raw")
+        plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
+
         generate_speed_integration_dataset(imu_w_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name,
                                            test_file_name)
 

@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
+
 import re
 import os
 import sys
@@ -7,12 +9,14 @@ import errno
 import logging
 import requests
 import scipy.io
+from scipy import signal
 from scipy.interpolate import interp1d
 
 from tensorflow.python.keras.preprocessing.image import Iterator
 from tensorflow.python.keras import datasets as k_ds
 from tensorflow.python.keras.utils import to_categorical
 from tensorflow.python.data import Dataset
+
 ############################################################################
 # EXAMPLE CLASS TO FETCH FILENAMES (AND OPTIONALLY LABELS) FROM DIRECTORIES#
 ############################################################################
@@ -361,10 +365,46 @@ def interpolate_ts(ref_ts, target_ts, meas_vec, is_quaternion=False):
         interp_fx[i] = interp1d(ref_ts, meas_vec[:, i])
 
     # Initialize array of interpolated Ground Truth velocities
-    interp_vec = np.zeros((len(ref_ts), d))
+    interp_vec = np.zeros((len(target_ts), d))
 
     # Fill in array
     for i, imu_timestamp in enumerate(target_ts):
         interp_vec[i, :] = np.array([interp_fx[j](imu_timestamp) for j in range(d)])
 
     return interp_vec
+
+
+def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
+    """
+    Applies a digital filter along a signal using the filter coefficients a, b
+
+    :param a:
+    :param b:
+    :param time_series:
+    :param sampling_f:
+    :param plot_stft:
+    :return:
+    """
+
+    if plot_stft:
+        assert sampling_f is not None, "A sampling frequency must be specified to plot the STFT"
+        plt.figure()
+        f, t, stft = signal.stft(time_series[:, 0], sampling_f)
+        plt.subplot(2, 1, 1)
+        plt.pcolormesh(t, f, np.abs(stft))
+        plt.title('STFT Magnitude')
+        plt.ylabel('Frequency [Hz]')
+        plt.xlabel('Time [sec]')
+
+    filtered_signal = signal.lfilter(b, a, time_series, axis=0)
+
+    if plot_stft:
+        f, t, stft = signal.stft(filtered_signal[:, 0], 200)
+        plt.subplot(2, 1, 2)
+        plt.pcolormesh(t, f, np.abs(stft))
+        plt.title('STFT Magnitude')
+        plt.ylabel('Frequency [Hz]')
+        plt.xlabel('Time [sec]')
+        plt.show()
+
+    return filtered_signal
