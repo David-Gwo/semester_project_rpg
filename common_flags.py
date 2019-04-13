@@ -50,5 +50,5 @@ gflags.DEFINE_string("generate_training_progression", False, "Whether or not to 
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")
 
 # TODO: remove
-gflags.DEFINE_string('train_dir', './data/EuRoC_dataset_2/', 'Directory of the training dataset')
-gflags.DEFINE_string('test_dir', './data/EuRoC_dataset_2/', 'Directory of the training dataset')
+gflags.DEFINE_string('train_dir', './data/dataset/EuRoC_dataset_2/', 'Directory of the training dataset')
+gflags.DEFINE_string('test_dir', './data/dataset/EuRoC_dataset_2/', 'Directory of the training dataset')

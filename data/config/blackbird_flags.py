@@ -2,7 +2,7 @@ import gflags
 FLAGS = gflags.FLAGS
 
 # Train parameters
-gflags.DEFINE_string('blackbird_local_dir', './data/blackbird_dataset/', 'Local general directory of blackbird dataset')
+gflags.DEFINE_string('blackbird_local_dir', './data/dataset/blackbird_dataset/', 'Local general directory of blackbird dataset')
 gflags.DEFINE_string('blackbird_url', 'http://blackbird-dataset.mit.edu/BlackbirdDatasetData', 'URL of blackbird dataset')
 gflags.DEFINE_string('blackbird_topics', '/blackbird/imu', 'List of topics to extract, separated by spaces')
 

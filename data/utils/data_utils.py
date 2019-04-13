@@ -256,73 +256,16 @@ def generate_imu_img_dataset(imu_vec, gt_vec, imu_len):
     return imu_img_tensor, gt_v_tensor
 
 
-def generate_imu_speed_integration_dataset(imu_vec, gt_vec, imu_len):
+def save_mat_data(x_data, y_data, file_name):
     """
-    Generates a dataset of combine imu and ground truth velocity data to do one-step speed prediction. The training data
-    is defined as a stack of matrices of dimensions <imu_len x 7>, where the first 6 of the 7 columns are the IMU
-    readings (3 gyro + 3 acc), and the 7th is the corresponding ground truth velocity. The number of rows correspond to
-    the number of used imu samples to predict the speed for next timestamp.
+    Saves a dataset as .mat in the specified directory
 
-    :param imu_vec: vector of ordered IMU readings. Shape: <n, 2, 3>, n = number of acquisitions, imu_vec[:, 0, :]
-    corresponds to the three gyro readings and imu_vec[:, 1, :] to the tree accelerometer readings
-    :param gt_vec: ground truth velocity data. Shape: <n, 3>, n = number of acquisitions, and each acquisition is a
-    3-dimensional vector with x,y,z velocities
-    :param imu_len: number of columns of the imu_image
-    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
+    :param x_data: feature data
+    :param y_data: label data
+    :param file_name: directory for .mat file
     """
 
-    seq_len = len(imu_vec)
-
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((seq_len - 1, imu_len, 7, 1))
-    # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.zeros(seq_len - 1)
-
-    gt_vec = np.expand_dims(np.linalg.norm(gt_vec, axis=1), axis=1)
-    imu_vec = np.append(imu_vec, np.zeros((imu_len - 1, 2, 3)), axis=0)
-
-    for i in range(seq_len - imu_len - 1):
-        imu_img = np.append(imu_vec[i:i + imu_len, :, :].reshape(imu_len, 6), gt_vec[i:i + imu_len], axis=1)
-
-        imu_img_tensor[i] = np.expand_dims(imu_img, 2)
-
-        gt_v_tensor[i] = gt_vec[i + imu_len]
-
-    return imu_img_tensor, gt_v_tensor
-
-
-def save_processed_dataset_files(train_ds_node, test_ds_node, x_data, y_data):
-    """
-    Saves a copy of the train & test datasets as a mat file in a specified file names
-
-    :param train_ds_node: Training ds file name <dir/file.mat>
-    :param test_ds_node: Test ds file name <dir/file.mat>
-    :param x_data: x data (samples in first dimension)
-    :param y_data: y data (samples in first dimension)
-    """
-    if os.path.exists(train_ds_node):
-        os.remove(train_ds_node)
-    os.mknod(train_ds_node)
-
-    if os.path.exists(test_ds_node):
-        os.remove(test_ds_node)
-    os.mknod(test_ds_node)
-
-    total_ds_len = int(len(y_data))
-    test_ds_len = int(np.ceil(total_ds_len * 0.1))
-
-    # Choose some entries to separate for the test set
-    test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
-
-    test_set_x = x_data[test_indexes]
-    test_set_y = y_data[test_indexes]
-
-    # Remove the test ds entries from train dataset
-    train_set_x = np.delete(x_data, test_indexes, 0)
-    train_set_y = np.delete(y_data, test_indexes)
-
-    scipy.io.savemat(train_ds_node, mdict={'x': train_set_x, 'y': train_set_y}, oned_as='row')
-    scipy.io.savemat(test_ds_node, mdict={'x': test_set_x, 'y': test_set_y}, oned_as='row')
+    scipy.io.savemat(file_name, mdict={'x': x_data, 'y': y_data}, oned_as='row')
 
 
 def load_mat_data(directory):
@@ -378,11 +321,11 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
     """
     Applies a digital filter along a signal using the filter coefficients a, b
 
-    :param a:
-    :param b:
-    :param time_series:
-    :param sampling_f:
-    :param plot_stft:
+    :param a: array of filter coefficients a
+    :param b: array of filter coefficients b
+    :param time_series: signal to filter
+    :param sampling_f: sampling frequency of signal
+    :param plot_stft: whether to plot the STFT
     :return:
     """
 
@@ -408,3 +351,37 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
         plt.show()
 
     return filtered_signal
+
+
+def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data):
+    """
+    Saves a copy of the train & test datasets as a mat file in a specified file names
+
+    :param train_ds_node: Training ds file name <dir/file.mat>
+    :param test_ds_node: Test ds file name <dir/file.mat>
+    :param x_data: x data (samples in first dimension)
+    :param y_data: y data (samples in first dimension)
+    """
+    if os.path.exists(train_ds_node):
+        os.remove(train_ds_node)
+    os.mknod(train_ds_node)
+
+    if os.path.exists(test_ds_node):
+        os.remove(test_ds_node)
+    os.mknod(test_ds_node)
+
+    total_ds_len = int(len(y_data))
+    test_ds_len = int(np.ceil(total_ds_len * 0.1))
+
+    # Choose some entries to separate for the test set
+    test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
+
+    test_set_x = x_data[test_indexes]
+    test_set_y = y_data[test_indexes]
+
+    # Remove the test ds entries from train dataset
+    train_set_x = np.delete(x_data, test_indexes, 0)
+    train_set_y = np.delete(y_data, test_indexes)
+
+    save_mat_data(train_set_x, train_set_y, train_ds_node)
+    save_mat_data(test_set_x, test_set_y, test_ds_node)

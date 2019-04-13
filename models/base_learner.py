@@ -1,22 +1,17 @@
 import os
-import re
 import sys
-import time
-from itertools import count
 import math
-import random
 import numpy as np
 import tensorflow as tf
 from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
-from tensorflow.python.keras.losses import MeanSquaredError
-from tensorflow.python.keras.optimizers import Adam, SGD
+from tensorflow.python.keras.optimizers import Adam
 from .nets import one_step_vel_net as prediction_network
 from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
-from data.data_utils import get_mnist_datasets, safe_mkdir_recursive
-from data.euroc_utils import load_euroc_dataset, generate_cnn_testing_dataset
-from data.blackbird_utils import load_blackbird_dataset, BlackbirdDSManager
+from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive
+from data.euroc_manager import load_euroc_dataset, generate_cnn_testing_dataset
+from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
 
 #############################################################################

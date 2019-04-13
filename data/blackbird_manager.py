@@ -6,13 +6,11 @@ import os
 
 import numpy as np
 import quaternion as q
-import matplotlib.pyplot as plt
 
-from data.euroc_utils import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
+from data.euroc_manager import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
     generate_tf_imu_train_ds, plot_all_data
-from data.data_utils import safe_mkdir_recursive, get_file_from_url
-from data.data_utils import generate_imu_speed_integration_dataset, save_processed_dataset_files
-from data.blackbird_flags import FLAGS
+from data.utils.data_utils import safe_mkdir_recursive, get_file_from_url
+from data.config.blackbird_flags import FLAGS
 
 
 class BBIMU(IMU):
@@ -199,14 +197,6 @@ class BlackbirdDSManager:
         return [raw_imu_data, ground_truth_data]
 
 
-def generate_speed_integration_dataset(imu_len, raw_imu, gt_v, ds_dir, train_file_name, test_file_name):
-
-    imu_img_tensor, gt_v_tensor = generate_imu_speed_integration_dataset(raw_imu, gt_v, imu_len)
-    euroc_training_ds = "{0}{1}".format(ds_dir, train_file_name)
-    euroc_testing_ds = "{0}{1}".format(ds_dir, test_file_name)
-    save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
-
-
 def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_name, processed_ds_available,
                            trained_model_dir):
 
@@ -231,8 +221,7 @@ def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_nam
         plot_all_data(raw_imu_data, ground_truth_data, title="raw")
         plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
 
-        generate_speed_integration_dataset(imu_w_len, processed_imu, processed_v, bbds.ds_local_dir, train_file_name,
-                                           test_file_name)
+        generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name)
 
     add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
     return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir)

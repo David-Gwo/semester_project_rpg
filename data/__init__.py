@@ -1,1 +1,1 @@
-from .data_utils import DirectoryIterator
+from data.utils.data_utils import DirectoryIterator

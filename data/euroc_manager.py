@@ -7,8 +7,8 @@ from scipy.signal import butter as butterworth_filter
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
-from data.data_utils import generate_imu_img_dataset, save_processed_dataset_files, load_mat_data, interpolate_ts, \
-    filter_with_coeffs
+from data.utils.data_utils import load_mat_data, interpolate_ts, filter_with_coeffs
+from data.imu_dataset_generators import generate_dataset
 
 
 class IMU:
@@ -194,23 +194,6 @@ def pre_process_data(raw_imu_data, gt_interp, euroc_dir):
     return filt_imu_vec, filt_gt_vec
 
 
-def generate_speed_regression_ds(imu_len, raw_imu, gt_v, ds_dir, train_file_name, test_file_name):
-    """
-
-    :param imu_len: number of IMU acquisitions in the input (length)
-    :param raw_imu: 3D array of IMU measurements (n_samples x 2 <gyro, acc> x 3 <x, y, z>)
-    :param gt_v: list of 3D arrays with the decomposed velocity ground truth measurements
-    :param ds_dir: root directory of the dataset
-    :param train_file_name: Name of the preprocessed training dataset
-    :param test_file_name: Name of the preprocessed testing dataset
-    """
-
-    imu_img_tensor, gt_v_tensor = generate_imu_img_dataset(raw_imu, gt_v, imu_len)
-    euroc_training_ds = ds_dir + train_file_name
-    euroc_testing_ds = ds_dir + test_file_name
-    save_processed_dataset_files(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_v_tensor)
-
-
 def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
@@ -333,7 +316,7 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
 
         processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, euroc_dir)
 
-        generate_speed_regression_ds(imu_seq_len, processed_imu, processed_v, euroc_dir, euroc_train, euroc_test)
+        generate_dataset(processed_imu, processed_v, euroc_dir, euroc_train, euroc_test, "imu_img_gt_vel", imu_seq_len)
 
     add_scaler_ref_to_training_dir(euroc_dir, trained_model_dir)
 
@@ -393,7 +376,7 @@ def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
 
 
 def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):
-    # TODO: remove
+    # TODO: remove this function
     # Add more flat region so avoid model from learning average value
     flat_region = filt_imu_vec[6000:7000, :, :]
     flat_region_v = filt_gt_v_interp[6000:7000, :]

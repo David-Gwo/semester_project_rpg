@@ -114,7 +114,7 @@ API, like Keras, to build it. There are few examples on how to do it!
 
 [__data__](./data): This is the base folder for I/0. In here should go your script to load all filenames (and optionally the labels) of your data. Note
 that you will load the data __during__ training, not before it! This allows to scale very well to large datasets, that might not fit in memory.
-Additionally you need to be able to load batches of images at test/validation time. Have a look at the file [data_utils.py](./data/data_utils.py) to have an example on how to do it.
+Additionally you need to be able to load batches of images at test/validation time. Have a look at the file [data_utils.py](data/utils/data_utils.py) to have an example on how to do it.
 
 __results__ and __tests__ : Self-explanatory, they should contain the outputs and checkpoints of your tests and results.
 
