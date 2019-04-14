@@ -18,9 +18,9 @@ gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer"
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 30, "Maximum number of training epochs")
 
-gflags.DEFINE_string("model_name", "one_step_net", "Name for the deep model")
+gflags.DEFINE_string("model_name", "imu_int_1_depth", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
-gflags.DEFINE_integer('window_length', 8, 'The number of past samples used to predict next velocity value')
+gflags.DEFINE_integer('window_length', 1, 'The number of past samples used to predict next velocity value')
 
 ###############################################################
 # MAKE SURE TO CONFIG THIS PARAMETER SUCH THAT YOUR GPU USAGE #
@@ -37,7 +37,7 @@ gflags.DEFINE_boolean('prepared_file_available', True, 'Whether there is a proce
 gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-processed dataset training file')
 
 # Log parameters
-gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
+gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
 gflags.DEFINE_integer("resume_train_model_number", 5, "Which model number to resume training")
 gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
 gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epochs")

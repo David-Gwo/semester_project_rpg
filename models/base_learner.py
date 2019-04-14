@@ -6,7 +6,7 @@ import tensorflow as tf
 from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
-from .nets import one_step_vel_net as prediction_network
+from .nets import imu_integration_net as prediction_network
 from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
 from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive
@@ -117,7 +117,7 @@ class Learner(object):
         #                            l2_reg_scale=self.config.l2_reg_scale,
         #                            output_dim=self.config.output_dim)
 
-        model = prediction_network(self.config.window_length)
+        model = prediction_network(self.config.window_length, 10)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
