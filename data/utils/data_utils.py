@@ -278,10 +278,16 @@ def load_mat_data(directory):
 
     mat_data = scipy.io.loadmat(directory)
 
-    y_tensor = np.expand_dims(mat_data['y'][0], 1)
+    y_tensor = mat_data['y']
     x_tensor = mat_data['x']
 
-    return x_tensor, y_tensor
+    # Reduce dimensionality of y data
+    y_aux = np.zeros(y_tensor.shape)
+    for i in range(np.shape(y_tensor)[0]):
+        for j in range(np.shape(y_tensor)[1]):
+            y_aux[i][j] = y_tensor[i][j][0][0]
+
+    return x_tensor, y_aux
 
 
 def interpolate_ts(ref_ts, target_ts, meas_vec, is_quaternion=False):
@@ -380,8 +386,8 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data):
     test_set_y = y_data[test_indexes]
 
     # Remove the test ds entries from train dataset
-    train_set_x = np.delete(x_data, test_indexes, 0)
-    train_set_y = np.delete(y_data, test_indexes)
+    train_set_x = np.delete(x_data, test_indexes, axis=0)
+    train_set_y = np.delete(y_data, test_indexes, axis=0)
 
     save_mat_data(train_set_x, train_set_y, train_ds_node)
     save_mat_data(test_set_x, test_set_y, test_ds_node)

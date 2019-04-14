@@ -64,6 +64,9 @@ SCALER_GYRO_FILE = "scaler_gyro.save"
 SCALER_ACC_FILE = "scaler_acc.save"
 SCALER_DIR_FILE = '/scaler_files_dir.txt'
 
+# TODO: refactor as class, such as blackbird_manager.py
+# TODO: move common functions to more general class (e.g. dataset_manager.py) and inherit from it
+
 
 def read_euroc_dataset(euroc_dir):
     imu_file = euroc_dir + 'mav0/imu0/data.csv'
@@ -194,7 +197,7 @@ def pre_process_data(raw_imu_data, gt_interp, euroc_dir):
     return filt_imu_vec, filt_gt_vec
 
 
-def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir):
+def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir, window_len):
     """
     Read the processed euroc dataset from the saved file. Generate the tf-compatible train/validation datasets
 
@@ -202,6 +205,7 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir)
     :param euroc_train: Name of the preprocessed euroc training dataset
     :param batch_s: (mini)-batch size of datasets
     :param trained_model_dir: Name of the directory where trained model will be stored
+    :param window_len: length of the sampling window
     :return: the tf-compatible training and validation datasets, and their respective lengths
     """
 
@@ -209,7 +213,7 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir)
 
     train_filename = euroc_dir + euroc_train
 
-    imu_img_tensor, gt_v_tensor = load_mat_data(train_filename)
+    imu_img_tensor, gt_tensor = load_mat_data(train_filename)
 
     file = open(trained_model_dir + SCALER_DIR_FILE, "r")
     scaler_dir = file.read()
@@ -217,22 +221,22 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir)
     scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
     scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
 
-    for i in range(3):
-        imu_img_tensor[:, :, i, 0] = scale_g.transform(imu_img_tensor[:, :, i, 0])
-        imu_img_tensor[:, :, i+3, 0] = scale_a.transform(imu_img_tensor[:, :, i+3, 0])
+    for i in range(window_len):
+        imu_img_tensor[:, i, 0:3, 0] = scale_g.transform(imu_img_tensor[:, i, 0:3, 0])
+        imu_img_tensor[:, i, 3:6, 0] = scale_a.transform(imu_img_tensor[:, i, 3:6, 0])
 
-    full_ds_len = len(gt_v_tensor)
+    full_ds_len = len(gt_tensor)
     val_ds_len = np.ceil(full_ds_len * 0.1)
     train_ds_len = full_ds_len - val_ds_len
 
     val_ds_indexes = np.random.choice(range(full_ds_len), int(val_ds_len), replace=False)
     val_ds_imu_vec = imu_img_tensor[val_ds_indexes]
-    val_ds_v_vec = gt_v_tensor[val_ds_indexes]
+    val_ds_v_vec = gt_tensor[val_ds_indexes]
 
     imu_img_tensor = np.delete(imu_img_tensor, val_ds_indexes, axis=0)
-    gt_v_tensor = np.delete(gt_v_tensor, val_ds_indexes)
+    gt_tensor = np.delete(gt_tensor, val_ds_indexes, axis=0)
 
-    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor)).shuffle(batch_s, seed=seed)
+    full_train_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_tensor)).shuffle(batch_s, seed=seed)
     val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec)).batch(batch_s)
     train_ds = full_train_ds.batch(batch_s).repeat()
 
@@ -369,7 +373,7 @@ def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
         plt.subplot(2, 2, 4)
         plt.plot([gt.ang_vel for gt in gt_vec])
 
-    plt.title(title)
+    plt.    suptitle(title)
 
     if show:
         plt.show()

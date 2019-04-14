@@ -10,6 +10,7 @@ import quaternion as q
 from data.euroc_manager import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
     generate_tf_imu_train_ds, plot_all_data
 from data.utils.data_utils import safe_mkdir_recursive, get_file_from_url
+from data.imu_dataset_generators import generate_dataset
 from data.config.blackbird_flags import FLAGS
 
 
@@ -197,7 +198,7 @@ class BlackbirdDSManager:
         return [raw_imu_data, ground_truth_data]
 
 
-def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_name, processed_ds_available,
+def load_blackbird_dataset(batch_size, integration_window, train_file_name, test_file_name, processed_ds_available,
                            trained_model_dir):
 
     bbds = BlackbirdDSManager()
@@ -221,7 +222,9 @@ def load_blackbird_dataset(batch_size, imu_w_len, train_file_name, test_file_nam
         plot_all_data(raw_imu_data, ground_truth_data, title="raw")
         plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
 
-        generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name)
+        generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name,
+                         "windowed_imu_integration", integration_window)
 
     add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
-    return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir)
+    return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir,
+                                    integration_window)
