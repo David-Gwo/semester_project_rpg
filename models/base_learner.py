@@ -10,7 +10,7 @@ from .nets import imu_integration_net as prediction_network
 from utils import plot_regression_predictions, get_checkpoint_file_list
 from data import DirectoryIterator
 from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive
-from data.euroc_manager import load_euroc_dataset, generate_cnn_testing_dataset
+from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
 from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
 
@@ -290,10 +290,11 @@ class Learner(object):
             else:
                 test_dir = self.config.test_dir
 
-            test_ds, steps = generate_cnn_testing_dataset(test_dir,
-                                                          dataset,
-                                                          self.config.batch_size,
-                                                          self.config.checkpoint_dir + self.model_version_number)
+            test_ds, steps = generate_tf_imu_test_ds(test_dir,
+                                                     dataset,
+                                                     self.config.batch_size,
+                                                     self.config.checkpoint_dir + self.model_version_number,
+                                                     self.config.window_length)
             steps = steps / self.config.batch_size
         else:
             test_ds = testing_ds.take(steps)

@@ -243,7 +243,7 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir,
     return train_ds, val_ds, (train_ds_len, val_ds_len)
 
 
-def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_dir):
+def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, window_len):
     """
     Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
 
@@ -251,6 +251,7 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
     :param euroc_test:
     :param batch_s: (mini)-batch size of datasets
     :param trained_model_dir: Name of the directory where trained model is stored
+    :param window_len: length of the sampling window
     :return: the tf-compatible testing dataset, and its length
     """
 
@@ -264,9 +265,9 @@ def generate_cnn_testing_dataset(euroc_dir, euroc_test, batch_s, trained_model_d
     scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
     scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
 
-    for i in range(3):
-        imu_img_tensor[:, :, i, 0] = scale_g.transform(imu_img_tensor[:, :, i, 0])
-        imu_img_tensor[:, :, i+3, 0] = scale_a.transform(imu_img_tensor[:, :, i+3, 0])
+    for i in range(window_len):
+        imu_img_tensor[:, i, 0:3, 0] = scale_g.transform(imu_img_tensor[:, i, 0:3, 0])
+        imu_img_tensor[:, i, 3:6, 0] = scale_a.transform(imu_img_tensor[:, i, 3:6, 0])
 
     ds_len = len(gt_v_tensor)
 
@@ -339,44 +340,65 @@ def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
     :return:
     """
 
-    plt.figure()
-
     if from_numpy:
-        plt.subplot(2, 1, 1)
-        plt.plot(np.stack(imu_vec[:, 0]))
-        plt.subplot(2, 1, 2)
-        plt.plot(np.stack(imu_vec[:, 1]))
+        fig = plt.figure()
+        ax = fig.add_subplot(2, 1, 1)
+        ax.plot(np.stack(imu_vec[:, 0]))
+        ax = fig.add_subplot(2, 1, 2)
+        ax.plot(np.stack(imu_vec[:, 1]))
+        fig.suptitle(title)
 
-        plt.figure()
-        plt.subplot(2, 2, 1)
-        plt.plot(np.stack(gt_vec[:, 0]))
-        plt.subplot(2, 2, 2)
-        plt.plot(np.stack(gt_vec[:, 1]))
-        plt.subplot(2, 2, 3)
-        plt.plot(np.stack(gt_vec[:, 2]))
-        plt.subplot(2, 2, 4)
-        plt.plot(np.stack(gt_vec[:, 3]))
+        fig = plt.figure()
+        ax = fig.add_subplot(2, 2, 1)
+        ax.plot(np.stack(gt_vec[:, 0]))
+        ax = fig.add_subplot(2, 2, 2)
+        ax.plot(np.stack(gt_vec[:, 1]))
+        ax = fig.add_subplot(2, 2, 3)
+        ax.plot(np.stack(gt_vec[:, 2]))
+        ax = fig.add_subplot(2, 2, 4)
+        ax.plot(np.stack(gt_vec[:, 3]))
+        fig.suptitle(title)
 
     else:
-        plt.subplot(2, 1, 1)
-        plt.plot([imu.gyro for imu in imu_vec])
-        plt.subplot(2, 1, 2)
-        plt.plot([imu.acc for imu in imu_vec])
+        fig = plt.figure()
+        ax = fig.add_subplot(2, 1, 1)
+        ax.plot([imu.gyro for imu in imu_vec])
+        ax = fig.add_subplot(2, 1, 2)
+        ax.plot([imu.acc for imu in imu_vec])
+        fig.suptitle(title)
 
-        plt.figure()
-        plt.subplot(2, 2, 1)
-        plt.plot([gt.pos for gt in gt_vec])
-        plt.subplot(2, 2, 2)
-        plt.plot([gt.vel for gt in gt_vec])
-        plt.subplot(2, 2, 3)
-        plt.plot([gt.att for gt in gt_vec])
-        plt.subplot(2, 2, 4)
-        plt.plot([gt.ang_vel for gt in gt_vec])
-
-    plt.    suptitle(title)
+        fig = plt.figure()
+        ax = fig.add_subplot(2, 2, 1)
+        ax.plot([gt.pos for gt in gt_vec])
+        ax = fig.add_subplot(2, 2, 2)
+        ax.plot([gt.vel for gt in gt_vec])
+        ax = fig.add_subplot(2, 2, 3)
+        ax.plot([gt.att for gt in gt_vec])
+        ax = fig.add_subplot(2, 2, 4)
+        ax.plot([gt.ang_vel for gt in gt_vec])
+        fig.suptitle(title)
 
     if show:
         plt.show()
+
+
+def plot_prediction(gt, prediction):
+
+    fig = plt.figure()
+    ax = fig.add_subplot(3, 1, 1)
+    ax.plot(gt[:, 0:3], 'b')
+    ax.plot(prediction[:, 0:3], 'r')
+    ax.set_title('position')
+    ax = fig.add_subplot(3, 1, 2)
+    ax.plot(gt[:, 3:6], 'b')
+    ax.plot(prediction[:, 3:6], 'r')
+    ax.set_title('velocity')
+    ax = fig.add_subplot(3, 1, 3)
+    ax.plot(gt[:, 6:10], 'b')
+    ax.plot(prediction[:, 6:10], 'r')
+    ax.set_title('attitude (quat)')
+
+    return fig
 
 
 def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):

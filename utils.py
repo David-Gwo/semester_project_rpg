@@ -2,17 +2,15 @@ import numpy as np
 import os
 import re
 import matplotlib.pyplot as plt
+from data.euroc_manager import plot_prediction
 
 
 def plot_regression_predictions(test_ds, pred_y, epoch=None, i=0):
 
     y = [np.squeeze(y_ds) for (_, y_ds) in test_ds]
-    y_flat = [item for sublist in y for item in sublist]
+    y_flat = np.array([item for sublist in y for item in sublist])
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111)
-    ax.plot(np.squeeze(y_flat))
-    ax.plot(np.squeeze(pred_y), 'r')
+    fig = plot_prediction(y_flat, pred_y)
 
     if epoch is not None:
         if i != 0:

@@ -287,14 +287,18 @@ def imu_integration_net(window_len, state_len):
 
     stacked = Concatenate(name='data_concatenating_layer')([flatten_conv_imu, flatten_state_0])
 
-    dense_1 = Dense(100, name='dense_layer_1')(stacked)
-    b_norm_1 = BatchNormalization(name='b_norm_1')(dense_1)
-    activation_1 = Activation('relu', name='activation_1')(b_norm_1)
+    dense_1 = Dense(400, name='dense_layer_1')(stacked)
+    # b_norm_1 = BatchNormalization(name='b_norm_1')(dense_1)
+    activation_1 = Activation('relu', name='activation_1')(dense_1)
 
-    dense_2 = Dense(100, name='dense_layer_2')(activation_1)
-    b_norm_2 = BatchNormalization(name='b_norm_2')(dense_2)
-    activation_2 = Activation('relu', name='activation_2')(b_norm_2)
+    dense_2 = Dense(200, name='dense_layer_2')(activation_1)
+    # b_norm_2 = BatchNormalization(name='b_norm_2')(dense_2)
+    activation_2 = Activation('relu', name='activation_2')(dense_2)
 
-    net_out = Dense(state_len, name='output_layer')(activation_2)
+    dense_3 = Dense(100, name='dense_layer_3')(activation_2)
+    # b_norm_3 = BatchNormalization(name='b_norm_2')(dense_3)
+    activation_3 = Activation('relu', name='activation_3')(dense_3)
+
+    net_out = Dense(state_len, name='output_layer')(activation_3)
 
     return Model(net_in, net_out)
