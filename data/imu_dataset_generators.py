@@ -101,7 +101,7 @@ def windowed_imu_integration_dataset(raw_imu, gt, window_len):
     gt = reformat_data(gt)
 
     imu_channels = np.shape(raw_imu)[1] - 1
-    n_samples = len(raw_imu)
+    n_samples = len(raw_imu) - window_len
 
     # Keep only position, attitude, velocity information (remove angular velocity, acceleration and timestamp)
     gt = np.delete(gt, np.s_[10:17], axis=1)
@@ -112,14 +112,14 @@ def windowed_imu_integration_dataset(raw_imu, gt, window_len):
 
     # Add the initial state of the window at the beginning of each training sequence
     zero_padded_gt = np.zeros((n_samples, (imu_channels + 1) * kept_channels))
-    zero_padded_gt[:, :kept_channels] = gt
+    zero_padded_gt[:, :kept_channels] = gt_augmented[:n_samples, :]
     zero_padded_gt = zero_padded_gt.reshape((n_samples, kept_channels, imu_channels + 1, 1), order='F')
     imu_window_with_initial_state = np.zeros((n_samples, window_len + kept_channels, imu_channels + 1, 1))
-    imu_window_with_initial_state[:, 0:window_len, :, :] = window_imu_data(raw_imu, window_len)
+    imu_window_with_initial_state[:, 0:window_len, :, :] = window_imu_data(raw_imu, window_len)[:n_samples, :, :, :]
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the state at the end of the window
-    return imu_window_with_initial_state, gt_augmented[window_len:, :]
+    return imu_window_with_initial_state, gt[window_len:, :]
 
 
 def generate_dataset(raw_imu, gt, ds_dir, train_file_name, test_file_name, dataset_type, *args):

@@ -7,7 +7,7 @@ from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 from .nets import imu_integration_net as prediction_network
-from utils import plot_regression_predictions, get_checkpoint_file_list
+from utils import plot_regression_predictions, get_checkpoint_file_list, imu_integration
 from data import DirectoryIterator
 from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive
 from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
@@ -275,7 +275,7 @@ class Learner(object):
         else:
             return model_used_pos+1
 
-    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0):
+    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0, compare_manual=False):
 
         dataset = self.config.prepared_test_data_file
         if self.config.generate_training_progression:
@@ -301,10 +301,25 @@ class Learner(object):
 
         predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
 
+        if compare_manual:
+            # TODO: idem
+            if self.config.test_ds == 'blackbird':
+                bb_manager = BlackbirdDSManager()
+                test_dir = bb_manager.ds_local_dir
+            else:
+                test_dir = self.config.test_dir
+            test_ds, steps = generate_tf_imu_test_ds(test_dir,
+                                                     dataset,
+                                                     self.config.batch_size,
+                                                     self.config.checkpoint_dir + self.model_version_number,
+                                                     self.config.window_length,
+                                                     normalize=False)
+            manual_predictions = imu_integration(test_ds, self.config.window_length)
+
         if save_figures:
             plot_regression_predictions(test_ds, predictions, self.last_epoch_number, fig_n)
         else:
-            plot_regression_predictions(test_ds, predictions)
+            plot_regression_predictions(test_ds, predictions, manual_predictions)
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy

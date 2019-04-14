@@ -243,7 +243,7 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir,
     return train_ds, val_ds, (train_ds_len, val_ds_len)
 
 
-def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, window_len):
+def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, window_len, normalize=True):
     """
     Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
 
@@ -252,6 +252,7 @@ def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, w
     :param batch_s: (mini)-batch size of datasets
     :param trained_model_dir: Name of the directory where trained model is stored
     :param window_len: length of the sampling window
+    :param normalize: whether data should be normalized using scaler factors
     :return: the tf-compatible testing dataset, and its length
     """
 
@@ -259,15 +260,16 @@ def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, w
 
     imu_img_tensor, gt_v_tensor = load_mat_data(test_filename)
 
-    file = open(trained_model_dir + SCALER_DIR_FILE, "r")
-    scaler_dir = file.read()
+    if normalize:
+        file = open(trained_model_dir + SCALER_DIR_FILE, "r")
+        scaler_dir = file.read()
 
-    scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
-    scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
+        scale_g = joblib.load(scaler_dir + SCALER_GYRO_FILE)
+        scale_a = joblib.load(scaler_dir + SCALER_ACC_FILE)
 
-    for i in range(window_len):
-        imu_img_tensor[:, i, 0:3, 0] = scale_g.transform(imu_img_tensor[:, i, 0:3, 0])
-        imu_img_tensor[:, i, 3:6, 0] = scale_a.transform(imu_img_tensor[:, i, 3:6, 0])
+        for i in range(window_len):
+            imu_img_tensor[:, i, 0:3, 0] = scale_g.transform(imu_img_tensor[:, i, 0:3, 0])
+            imu_img_tensor[:, i, 3:6, 0] = scale_a.transform(imu_img_tensor[:, i, 3:6, 0])
 
     ds_len = len(gt_v_tensor)
 
@@ -382,23 +384,86 @@ def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
         plt.show()
 
 
-def plot_prediction(gt, prediction):
+def plot_prediction(gt, prediction, manual_pred):
 
-    fig = plt.figure()
-    ax = fig.add_subplot(3, 1, 1)
-    ax.plot(gt[:, 0:3], 'b')
-    ax.plot(prediction[:, 0:3], 'r')
-    ax.set_title('position')
-    ax = fig.add_subplot(3, 1, 2)
-    ax.plot(gt[:, 3:6], 'b')
-    ax.plot(prediction[:, 3:6], 'r')
-    ax.set_title('velocity')
-    ax = fig.add_subplot(3, 1, 3)
-    ax.plot(gt[:, 6:10], 'b')
-    ax.plot(prediction[:, 6:10], 'r')
-    ax.set_title('attitude (quat)')
+    if manual_pred is not None:
+        fig1 = plt.figure()
+        ax1 = fig1.add_subplot(3, 1, 1)
+        ax2 = fig1.add_subplot(3, 1, 2)
+        ax3 = fig1.add_subplot(3, 1, 3)
 
-    return fig
+        ax1.plot(gt[:, 0], 'b')
+        ax1.plot(prediction[:, 0], 'r')
+        ax1.plot(manual_pred[:, 0], 'k')
+        ax2.plot(gt[:, 1], 'b')
+        ax2.plot(prediction[:, 1], 'r')
+        ax2.plot(manual_pred[:, 1], 'k')
+        ax3.plot(gt[:, 2], 'b')
+        ax3.plot(prediction[:, 2], 'r')
+        ax3.plot(manual_pred[:, 2], 'k')
+        ax1.set_title('pos_x')
+        ax2.set_title('pos_y')
+        ax3.set_title('pos_z')
+
+        fig2 = plt.figure()
+        ax1 = fig2.add_subplot(3, 1, 1)
+        ax2 = fig2.add_subplot(3, 1, 2)
+        ax3 = fig2.add_subplot(3, 1, 3)
+
+        ax1.plot(gt[:, 3], 'b')
+        ax1.plot(prediction[:, 3], 'r')
+        ax1.plot(manual_pred[:, 3], 'k')
+        ax2.plot(gt[:, 4], 'b')
+        ax2.plot(prediction[:, 4], 'r')
+        ax2.plot(manual_pred[:, 4], 'k')
+        ax3.plot(gt[:, 5], 'b')
+        ax3.plot(prediction[:, 5], 'r')
+        ax3.plot(manual_pred[:, 5], 'k')
+        ax1.set_title('vel_x')
+        ax2.set_title('vel_y')
+        ax3.set_title('vel_z')
+
+        fig3 = plt.figure()
+        ax1 = fig3.add_subplot(4, 1, 1)
+        ax2 = fig3.add_subplot(4, 1, 2)
+        ax3 = fig3.add_subplot(4, 1, 3)
+        ax4 = fig3.add_subplot(4, 1, 4)
+
+        ax1.plot(gt[:, 6], 'b')
+        ax1.plot(prediction[:, 6], 'r')
+        ax1.plot(manual_pred[:, 6], 'k')
+        ax2.plot(gt[:, 7], 'b')
+        ax2.plot(prediction[:, 7], 'r')
+        ax2.plot(manual_pred[:, 7], 'k')
+        ax3.plot(gt[:, 8], 'b')
+        ax3.plot(prediction[:, 8], 'r')
+        ax3.plot(manual_pred[:, 8], 'k')
+        ax4.plot(gt[:, 9], 'b')
+        ax4.plot(prediction[:, 9], 'r')
+        ax4.plot(manual_pred[:, 9], 'k')
+        ax1.set_title('att_w')
+        ax2.set_title('att_y')
+        ax3.set_title('att_z')
+        ax4.set_title('att_x')
+
+        return fig1, fig2, fig3
+
+    else:
+        fig = plt.figure()
+        ax = fig.add_subplot(3, 1, 1)
+        ax.plot(gt[:, 0:3], 'b')
+        ax.plot(prediction[:, 0:3], 'r')
+        ax.set_title('position')
+        ax = fig.add_subplot(3, 1, 2)
+        ax.plot(gt[:, 3:6], 'b')
+        ax.plot(prediction[:, 3:6], 'r')
+        ax.set_title('velocity')
+        ax = fig.add_subplot(3, 1, 3)
+        ax.plot(gt[:, 6:10], 'b')
+        ax.plot(prediction[:, 6:10], 'r')
+        ax.set_title('attitude (quat)')
+
+        return fig
 
 
 def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):

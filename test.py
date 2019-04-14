@@ -16,7 +16,7 @@ def _main():
             learner.evaluate_model(save_figures=True)
     else:
         learner.recover_model_from_checkpoint(mode="test")
-        learner.evaluate_model()
+        learner.evaluate_model(compare_manual=True)
 
 
 def main(argv):

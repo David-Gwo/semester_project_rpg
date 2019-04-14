@@ -219,8 +219,8 @@ def load_blackbird_dataset(batch_size, integration_window, train_file_name, test
 
         processed_imu, processed_gt = pre_process_data(raw_imu_data, gt_interp, save_dir)
 
-        plot_all_data(raw_imu_data, ground_truth_data, title="raw")
-        plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
+        # plot_all_data(raw_imu_data, ground_truth_data, title="raw")
+        # plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
 
         generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name,
                          "windowed_imu_integration", integration_window)
