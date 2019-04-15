@@ -8,7 +8,6 @@ import requests
 import scipy.io
 import numpy as np
 from matplotlib import pyplot as plt
-from pyquaternion import Quaternion
 from scipy import signal
 from scipy.interpolate import interp1d
 from utils import quaternion_error
@@ -396,7 +395,7 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data):
 
 def plot_prediction(gt, prediction, manual_pred):
 
-    if manual_pred is not None:
+    if manual_pred is not 0 and manual_pred is not None:
         fig1 = plt.figure()
         ax1 = fig1.add_subplot(3, 1, 1)
         ax2 = fig1.add_subplot(3, 1, 2)
@@ -459,11 +458,8 @@ def plot_prediction(gt, prediction, manual_pred):
         ax4.set_title('att_z')
         fig3.suptitle('Attitude predictions')
 
-        q_pred_e = [quaternion_error(Quaternion(gt[i, 6:]).unit, Quaternion(prediction[i, 6:]).unit).angle
-                    for i in range(len(gt))]
-
-        q_mpred_e = [quaternion_error(Quaternion(gt[i, 6:]).unit, Quaternion(manual_pred[i, 6:]).unit).angle
-                     for i in range(len(gt))]
+        q_pred_e = [np.sin(quaternion_error(gt[i, 6:], prediction[i, 6:]).angle) for i in range(len(gt))]
+        q_mpred_e = [np.sin(quaternion_error(gt[i, 6:], manual_pred[i, 6:]).angle) for i in range(len(gt))]
 
         fig4 = plt.figure()
         ax1 = fig4.add_subplot(3, 1, 1)

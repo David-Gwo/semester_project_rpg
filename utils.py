@@ -74,21 +74,28 @@ def rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
-def quaternion_error(quat_1, quat_2):
+def quaternion_error(quat_1, quat_2, normalize=True):
     """
     Calculates the quaternion that rotates quaternion quat_1 to quaternion quat_2, or element-wise if given two lists of
     quaternions
 
-    :param quat_1: initial quaternion (or list of quaternions)
-    :param quat_2: target quaternion (or list of quaternions)
+    :param quat_1: initial quaternion (or list of quaternions) in numpy array format
+    :param quat_2: target quaternion (or list of quaternions) in numpy array format
+    :param normalize: whether quaternions should be normalized prior to the error calculation
     :return: the quaternion (or lists of quaternions) that transforms quat_1 to quat_2
     """
 
-    if type(quat_1) == type(quat_2) == list:
-        q_pred_e = [rotate_quat(quat_1[i], quat_2[i]) for i in range(len(quat_1))]
-    elif type(quat_1) == type(quat_2):
-        q_pred_e = rotate_quat(quat_1, quat_2)
+    if len(np.shape(quat_1)) == len(np.shape(quat_1)) == 2:
+        if normalize:
+            q_pred_e = [rotate_quat(Quaternion(quat_1[i]).unit, Quaternion(quat_2[i]).unit) for i in range(len(quat_1))]
+        else:
+            q_pred_e = [rotate_quat(Quaternion(quat_1[i]), Quaternion(quat_2[i])) for i in range(len(quat_1))]
+    elif len(np.shape(quat_1)) == len(np.shape(quat_1)) == 1:
+        if normalize:
+            q_pred_e = rotate_quat(Quaternion(quat_1).unit, Quaternion(quat_2).unit)
+        else:
+            q_pred_e = rotate_quat(Quaternion(quat_1), Quaternion(quat_2))
     else:
-        raise TypeError("quat_1 and quat_2 must be quaternions, or lists of quaternions")
+        raise TypeError("quat_1 and quat_2 must be the same dimensions")
 
     return q_pred_e

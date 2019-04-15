@@ -3,9 +3,11 @@ import sys
 import math
 import numpy as np
 import tensorflow as tf
+
 from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
+
 from .nets import imu_integration_net as prediction_network
 from utils import get_checkpoint_file_list, imu_integration
 from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive, DirectoryIterator, \
@@ -13,6 +15,7 @@ from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive, Dire
 from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
 from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
+from models.custom_losses import state_loss as loss_fx
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -78,10 +81,6 @@ class Learner(object):
         iterator = DirectoryIterator(directory, shuffle=False)
         return iterator.filenames, iterator.ground_truth
 
-    @staticmethod
-    def l2_loss(y_true, y_pred):
-        return tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
-
     def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
 
         optimizer = tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1)
@@ -97,7 +96,7 @@ class Learner(object):
                 logit = self.regressor_model(tf.cast(x, tf.float32))
 
                 # External loss calculation
-                loss = self.l2_loss(y, logit)
+                loss = loss_fx(y, logit)
 
                 # Manual loss combination:
                 loss += sum(self.regressor_model.losses)
@@ -113,16 +112,12 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
 
     def build_and_compile_model(self):
-        # model = prediction_network(input_shape=(self.config.img_height, self.config.img_width, 1),
-        #                            l2_reg_scale=self.config.l2_reg_scale,
-        #                            output_dim=self.config.output_dim)
-
         model = prediction_network(self.config.window_length, 10)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
             model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                          loss=self.l2_loss,
+                          loss=loss_fx,
                           metrics=['mse'])
         self.regressor_model = model
 
@@ -273,7 +268,7 @@ class Learner(object):
         if model_version_used == files[-1]:
             return -1
         else:
-            return model_used_pos+1
+            return model_used_pos + 1
 
     def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0, compare_manual=False):
 
@@ -319,7 +314,7 @@ class Learner(object):
             manual_predictions = None
 
         if save_figures:
-            plot_regression_predictions(test_ds, predictions, self.last_epoch_number, fig_n)
+            plot_regression_predictions(test_ds, predictions, epoch=self.last_epoch_number, i=fig_n)
         else:
             plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
 
