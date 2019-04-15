@@ -1,6 +1,3 @@
-import numpy as np
-import matplotlib.pyplot as plt
-
 import re
 import os
 import sys
@@ -9,8 +6,12 @@ import errno
 import logging
 import requests
 import scipy.io
+import numpy as np
+from matplotlib import pyplot as plt
+from pyquaternion import Quaternion
 from scipy import signal
 from scipy.interpolate import interp1d
+from utils import quaternion_error
 
 from tensorflow.python.keras.preprocessing.image import Iterator
 from tensorflow.python.keras import datasets as k_ds
@@ -391,3 +392,127 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data):
 
     save_mat_data(train_set_x, train_set_y, train_ds_node)
     save_mat_data(test_set_x, test_set_y, test_ds_node)
+
+
+def plot_prediction(gt, prediction, manual_pred):
+
+    if manual_pred is not None:
+        fig1 = plt.figure()
+        ax1 = fig1.add_subplot(3, 1, 1)
+        ax2 = fig1.add_subplot(3, 1, 2)
+        ax3 = fig1.add_subplot(3, 1, 3)
+
+        ax1.plot(gt[:, 0], 'b')
+        ax1.plot(prediction[:, 0], 'r')
+        ax1.plot(manual_pred[:, 0], 'k')
+        ax2.plot(gt[:, 1], 'b')
+        ax2.plot(prediction[:, 1], 'r')
+        ax2.plot(manual_pred[:, 1], 'k')
+        ax3.plot(gt[:, 2], 'b')
+        ax3.plot(prediction[:, 2], 'r')
+        ax3.plot(manual_pred[:, 2], 'k')
+        ax1.set_title('pos_x')
+        ax2.set_title('pos_y')
+        ax3.set_title('pos_z')
+        fig1.suptitle('Position predictions')
+
+        fig2 = plt.figure()
+        ax1 = fig2.add_subplot(3, 1, 1)
+        ax2 = fig2.add_subplot(3, 1, 2)
+        ax3 = fig2.add_subplot(3, 1, 3)
+
+        ax1.plot(gt[:, 3], 'b')
+        ax1.plot(prediction[:, 3], 'r')
+        ax1.plot(manual_pred[:, 3], 'k')
+        ax2.plot(gt[:, 4], 'b')
+        ax2.plot(prediction[:, 4], 'r')
+        ax2.plot(manual_pred[:, 4], 'k')
+        ax3.plot(gt[:, 5], 'b')
+        ax3.plot(prediction[:, 5], 'r')
+        ax3.plot(manual_pred[:, 5], 'k')
+        ax1.set_title('vel_x')
+        ax2.set_title('vel_y')
+        ax3.set_title('vel_z')
+        fig2.suptitle('Velocity predictions')
+
+        fig3 = plt.figure()
+        ax1 = fig3.add_subplot(4, 1, 1)
+        ax2 = fig3.add_subplot(4, 1, 2)
+        ax3 = fig3.add_subplot(4, 1, 3)
+        ax4 = fig3.add_subplot(4, 1, 4)
+
+        ax1.plot(gt[:, 6], 'b')
+        ax1.plot(prediction[:, 6], 'r')
+        ax1.plot(manual_pred[:, 6], 'k')
+        ax2.plot(gt[:, 7], 'b')
+        ax2.plot(prediction[:, 7], 'r')
+        ax2.plot(manual_pred[:, 7], 'k')
+        ax3.plot(gt[:, 8], 'b')
+        ax3.plot(prediction[:, 8], 'r')
+        ax3.plot(manual_pred[:, 8], 'k')
+        ax4.plot(gt[:, 9], 'b')
+        ax4.plot(prediction[:, 9], 'r')
+        ax4.plot(manual_pred[:, 9], 'k')
+        ax1.set_title('att_w')
+        ax2.set_title('att_x')
+        ax3.set_title('att_y')
+        ax4.set_title('att_z')
+        fig3.suptitle('Attitude predictions')
+
+        q_pred_e = [quaternion_error(Quaternion(gt[i, 6:]).unit, Quaternion(prediction[i, 6:]).unit).angle
+                    for i in range(len(gt))]
+
+        q_mpred_e = [quaternion_error(Quaternion(gt[i, 6:]).unit, Quaternion(manual_pred[i, 6:]).unit).angle
+                     for i in range(len(gt))]
+
+        fig4 = plt.figure()
+        ax1 = fig4.add_subplot(3, 1, 1)
+        ax1.plot(np.linalg.norm(gt[:, :3] - prediction[:, :3], axis=1), 'r')
+        ax1.plot(np.linalg.norm(gt[:, :3] - manual_pred[:, :3], axis=1), 'k')
+        ax1.set_title('position norm error')
+        ax2 = fig4.add_subplot(3, 1, 2)
+        ax2.plot(np.linalg.norm(gt[:, 3:6] - prediction[:, 3:6], axis=1), 'r')
+        ax2.plot(np.linalg.norm(gt[:, 3:6] - manual_pred[:, 3:6], axis=1), 'k')
+        ax2.set_title('velocity norm error')
+        ax3 = fig4.add_subplot(3, 1, 3)
+        ax3.plot(q_pred_e, 'r')
+        ax3.plot(q_mpred_e, 'k')
+        ax3.set_title('attitude norm error')
+        fig4.suptitle('Prediction vs manual integration errors')
+
+        return fig1, fig2, fig3, fig4
+
+    else:
+        fig = plt.figure()
+        ax = fig.add_subplot(3, 1, 1)
+        ax.plot(gt[:, 0:3], 'b')
+        ax.plot(prediction[:, 0:3], 'r')
+        ax.set_title('position')
+        ax = fig.add_subplot(3, 1, 2)
+        ax.plot(gt[:, 3:6], 'b')
+        ax.plot(prediction[:, 3:6], 'r')
+        ax.set_title('velocity')
+        ax = fig.add_subplot(3, 1, 3)
+        ax.plot(gt[:, 6:10], 'b')
+        ax.plot(prediction[:, 6:10], 'r')
+        ax.set_title('attitude (quat)')
+
+        return fig
+
+
+def plot_regression_predictions(test_ds, pred_y, manual_pred=None, epoch=None, i=0):
+
+    y = [np.squeeze(y_ds) for (_, y_ds) in test_ds]
+    y_flat = np.array([item for sublist in y for item in sublist])
+
+    fig = plot_prediction(y_flat, pred_y, manual_pred)
+
+    if epoch is not None:
+        if i != 0:
+            fig.savefig('figures/fig_{0}_{1}.png'.format(epoch, i))
+        else:
+            fig.savefig('figures/fig_{0}'.format(epoch))
+        plt.close(fig)
+
+    else:
+        plt.show()

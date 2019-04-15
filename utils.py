@@ -1,28 +1,8 @@
 import numpy as np
 import os
 import re
-import matplotlib.pyplot as plt
 from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
-from data.euroc_manager import plot_prediction
-
-
-def plot_regression_predictions(test_ds, pred_y, manual_pred=None, epoch=None, i=0):
-
-    y = [np.squeeze(y_ds) for (_, y_ds) in test_ds]
-    y_flat = np.array([item for sublist in y for item in sublist])
-
-    fig = plot_prediction(y_flat, pred_y, manual_pred)
-
-    if epoch is not None:
-        if i != 0:
-            fig.savefig('figures/fig_{0}_{1}.png'.format(epoch, i))
-        else:
-            fig.savefig('figures/fig_{0}'.format(epoch))
-        plt.close(fig)
-
-    else:
-        plt.show()
 
 
 def get_checkpoint_file_list(checkpoint_dir, name):
@@ -88,3 +68,27 @@ def imu_integration(data, window_len):
         out[sample, 6:] = q_i.elements
 
     return out
+
+
+def rotate_quat(q1, q2):
+    return q2 * q1.inverse
+
+
+def quaternion_error(quat_1, quat_2):
+    """
+    Calculates the quaternion that rotates quaternion quat_1 to quaternion quat_2, or element-wise if given two lists of
+    quaternions
+
+    :param quat_1: initial quaternion (or list of quaternions)
+    :param quat_2: target quaternion (or list of quaternions)
+    :return: the quaternion (or lists of quaternions) that transforms quat_1 to quat_2
+    """
+
+    if type(quat_1) == type(quat_2) == list:
+        q_pred_e = [rotate_quat(quat_1[i], quat_2[i]) for i in range(len(quat_1))]
+    elif type(quat_1) == type(quat_2):
+        q_pred_e = rotate_quat(quat_1, quat_2)
+    else:
+        raise TypeError("quat_1 and quat_2 must be quaternions, or lists of quaternions")
+
+    return q_pred_e

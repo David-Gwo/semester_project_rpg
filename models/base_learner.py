@@ -7,9 +7,9 @@ from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 from .nets import imu_integration_net as prediction_network
-from utils import plot_regression_predictions, get_checkpoint_file_list, imu_integration
-from data import DirectoryIterator
-from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive
+from utils import get_checkpoint_file_list, imu_integration
+from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive, DirectoryIterator, \
+    plot_regression_predictions
 from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
 from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
@@ -315,11 +315,13 @@ class Learner(object):
                                                      self.config.window_length,
                                                      normalize=False)
             manual_predictions = imu_integration(test_ds, self.config.window_length)
+        else:
+            manual_predictions = None
 
         if save_figures:
             plot_regression_predictions(test_ds, predictions, self.last_epoch_number, fig_n)
         else:
-            plot_regression_predictions(test_ds, predictions, manual_predictions)
+            plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
 
     def epoch_end_callback(self, sess, sv, epoch_num):
         # Evaluate val accuracy
