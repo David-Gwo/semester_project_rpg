@@ -2,6 +2,8 @@ import numpy as np
 import os
 import re
 import matplotlib.pyplot as plt
+from tensorflow.python.keras.utils import Progbar
+from pyquaternion import Quaternion
 from data.euroc_manager import plot_prediction
 
 
@@ -43,25 +45,46 @@ def imu_integration(data, window_len):
 
     out = np.zeros((samples, output_dim))
 
-    imu, t_diff, x_0 = x_flat[:, :window_len, :6], x_flat[:, :window_len, 6:], x_flat[:, window_len:, 0]
+    imu_v, t_diff_v, x_0_v = x_flat[:, :window_len, :6], x_flat[:, :window_len, 6:], x_flat[:, window_len:, 0]
 
     # Convert time diff to seconds
-    t_diff = np.squeeze(np.stack(t_diff/1000))
+    t_diff_v = np.squeeze(np.stack(t_diff_v/1000))
 
-    acc_correction = np.zeros((window_len, 3))
-    acc_correction[:, -1] = 9.81
+    bar = Progbar(samples)
 
     for sample in range(samples):
+        bar.update(sample)
 
-        dt = np.tile(t_diff[sample, :], (window_len, 1))
+        t_diff = t_diff_v[sample, :]
 
-        acc = imu[sample, :, 3:] + acc_correction
+        # Get initial states (world frame)
+        x_i = x_0_v[sample, :3]
+        v_i = x_0_v[sample, 3:6]
+        q_i = Quaternion(x_0_v[sample, 6:]).unit
 
-        dv = np.sum(dt.dot(acc), axis=0)
-        dx = np.sum(0.5*dt.dot(dt.dot(acc)), axis=0)
+        for i in range(window_len):
 
-        out[sample, 0:3] = x_0[sample, 0:3] + dx
-        out[sample, 3:6] = x_0[sample, 3:6] + dv
-        out[sample, 6:] = x_0[sample, 6:]
+            dt = t_diff[i]
+
+            # Rotation body -> world
+            w_R_b = q_i.inverse
+
+            # Rotate angular velocity to world frame
+            w_w = w_R_b.rotate(imu_v[sample, i, :3])
+            # Rotate acceleration to world frame
+            w_a = w_R_b.rotate(imu_v[sample, i, 3:]) + [0, 0, 9.81]
+
+            # Integrate attitude (world frame)
+            q_i.integrate(w_w, dt)
+
+            # Integrate velocity
+            v_i += w_a*dt
+
+            # Integrate position
+            x_i += v_i*dt + 1/2*w_a*(dt**2)
+
+        out[sample, 0:3] = x_i
+        out[sample, 3:6] = v_i
+        out[sample, 6:] = q_i.elements
 
     return out

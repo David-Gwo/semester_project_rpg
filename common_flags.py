@@ -18,7 +18,7 @@ gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer"
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 50, "Maximum number of training epochs")
 
-gflags.DEFINE_string("model_name", "imu_int_1_depth", "Name for the deep model")
+gflags.DEFINE_string("model_name", "imu_int_8_depth", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
 gflags.DEFINE_integer('window_length', 8, 'The number of past samples used to predict next velocity value')
 
@@ -45,7 +45,7 @@ gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epo
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
-gflags.DEFINE_integer("test_model_number", 1, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
 gflags.DEFINE_string("generate_training_progression", False, "Whether or not to generate training progression images")
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")
 
