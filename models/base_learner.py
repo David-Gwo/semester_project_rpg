@@ -4,7 +4,6 @@ import math
 import numpy as np
 import tensorflow as tf
 
-from tensorflow.python.summary import summary as tf_summary
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 
@@ -136,44 +135,6 @@ class Learner(object):
                                           self.config.prepared_train_data_file, self.config.prepared_test_data_file,
                                           self.config.prepared_file_available, self.trained_model_dir)
 
-    def collect_summaries(self):
-        """Collects all summaries to be shown in the tensorboard"""
-
-        #######################################################
-        # ADD HERE THE VARIABLES YOU WANT TO SEE IN THE BOARD #
-        #######################################################
-        tf_summary.scalar("train_loss", self.total_loss, collections=["step_sum"])
-        tf_summary.scalar("accuracy", self.accuracy, collections=["step_sum"])
-        tf_summary.histogram("logits_distribution", self.logits, collections=["step_sum"])
-        tf_summary.histogram("predicted_out_distributions", tf.argmax(self.logits, 1), collections=["step_sum"])
-        tf_summary.histogram("ground_truth_distribution", self.labels, collections=["step_sum"])
-
-        ###################################################
-        # LEAVE UNCHANGED (gradients and tensors summary) #
-        ###################################################
-        for var in tf.compat.v1.trainable_variables():
-            tf_summary.histogram(var.op.name + "/values", var, collections=["step_sum"])
-        for grad, var in self.grads_and_vars:
-            tf_summary.histogram(var.op.name + "/gradients", grad, collections=["step_sum"])
-        self.step_sum = tf.summary.merge(tf.compat.v1.get_collection('step_sum'))
-
-        ####################
-        # VALIDATION ERROR #
-        ####################
-        self.validation_loss = tf.compat.v1.placeholder(tf.float32, [])
-        self.validation_accuracy = tf.compat.v1.placeholder(tf.float32, [])
-        tf_summary.scalar("Validation_Loss", self.validation_loss, collections=["validation_summary"])
-        tf_summary.scalar("Validation_Accuracy", self.validation_accuracy, collections=["validation_summary"])
-        self.val_sum = tf_summary.merge(tf.compat.v1.get_collection('validation_summary'))
-
-    def save(self, sess, checkpoint_dir, step):
-        model_name = 'model'
-        print(" [*] Saving checkpoint to {}/model-{}".format(checkpoint_dir, step))
-        if step == 'best':
-            self.saver.save(sess, os.path.join(checkpoint_dir, model_name + '.best'))
-        else:
-            self.saver.save(sess, os.path.join(checkpoint_dir, model_name), global_step=step)
-
     def train(self):
         self.build_and_compile_model()
 
@@ -226,7 +187,7 @@ class Learner(object):
         #     self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
 
         # Train!
-        history = self.regressor_model.fit(
+        self.regressor_model.fit(
             train_ds,
             verbose=2,
             epochs=self.config.max_epochs,
@@ -276,7 +237,7 @@ class Learner(object):
         if self.config.generate_training_progression:
             dataset = self.config.prepared_train_data_file
 
-        dataset = self.config.prepared_train_data_file
+        # dataset = self.config.prepared_train_data_file
         if testing_ds is None:
             # TODO: make more elegant
             if self.config.test_ds == 'blackbird':
@@ -290,7 +251,7 @@ class Learner(object):
                                                      self.config.batch_size,
                                                      self.config.checkpoint_dir + self.model_version_number,
                                                      self.config.window_length)
-            steps = steps / self.config.batch_size
+            steps = np.floor(steps / self.config.batch_size)
         else:
             test_ds = testing_ds.take(steps)
 
@@ -303,12 +264,15 @@ class Learner(object):
                 test_dir = bb_manager.ds_local_dir
             else:
                 test_dir = self.config.test_dir
+
+            # Generate un-normalized dataset for manual integration
             test_ds, steps = generate_tf_imu_test_ds(test_dir,
                                                      dataset,
                                                      self.config.batch_size,
                                                      self.config.checkpoint_dir + self.model_version_number,
                                                      self.config.window_length,
-                                                     normalize=False)
+                                                     normalize=False,
+                                                     full_batches=True)
             manual_predictions = imu_integration(test_ds, self.config.window_length)
         else:
             manual_predictions = None
@@ -317,28 +281,3 @@ class Learner(object):
             plot_regression_predictions(test_ds, predictions, epoch=self.last_epoch_number, i=fig_n)
         else:
             plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
-
-    def epoch_end_callback(self, sess, sv, epoch_num):
-        # Evaluate val accuracy
-        val_loss = 0
-        val_accuracy = 0
-        for i in range(self.val_steps_per_epoch):
-            loss, accuracy = sess.run([self.total_loss, self.accuracy],
-                             feed_dict={self.is_training: False})
-            val_loss+= loss
-            val_accuracy += accuracy
-        val_loss = val_loss / self.val_steps_per_epoch
-        val_accuracy = val_accuracy / self.val_steps_per_epoch
-        # Log to Tensorflow board
-        val_sum = sess.run(self.val_sum, feed_dict ={
-            self.validation_loss: val_loss,
-            self.validation_accuracy: val_accuracy})
-        sv.summary_writer.add_summary(val_sum, epoch_num)
-        print("Epoch [{}] Validation Loss: {} Validation Accuracy: {}".format(
-            epoch_num, val_loss, val_accuracy))
-        # Model Saving
-        if val_loss < self.min_val_loss:
-            self.save(sess, self.config.checkpoint_dir, 'best')
-            self.min_val_loss = val_loss
-        if epoch_num % self.config.save_freq == 0:
-            self.save(sess, self.config.checkpoint_dir, epoch_num)

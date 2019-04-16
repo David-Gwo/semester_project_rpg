@@ -243,7 +243,8 @@ def generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_s, trained_model_dir,
     return train_ds, val_ds, (train_ds_len, val_ds_len)
 
 
-def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, window_len, normalize=True):
+def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, window_len, normalize=True,
+                            full_batches=False):
     """
     Read the preprocessed euroc dataset from saved file. Generate the tf-compatible testing dataset
 
@@ -253,6 +254,7 @@ def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, w
     :param trained_model_dir: Name of the directory where trained model is stored
     :param window_len: length of the sampling window
     :param normalize: whether data should be normalized using scaler factors
+    :param full_batches: whether batches should all be the same size
     :return: the tf-compatible testing dataset, and its length
     """
 
@@ -274,7 +276,7 @@ def generate_tf_imu_test_ds(euroc_dir, euroc_test, batch_s, trained_model_dir, w
     ds_len = len(gt_v_tensor)
 
     test_ds = tf.data.Dataset.from_tensor_slices((imu_img_tensor, gt_v_tensor))
-    test_ds = test_ds.batch(batch_s)
+    test_ds = test_ds.batch(batch_s, drop_remainder=full_batches)
 
     return test_ds, ds_len
 

@@ -7,10 +7,11 @@ import logging
 import requests
 import scipy.io
 import numpy as np
+from pyquaternion import Quaternion
 from matplotlib import pyplot as plt
 from scipy import signal
 from scipy.interpolate import interp1d
-from utils import quaternion_error
+from utils import quaternion_error, unit_quat
 
 from tensorflow.python.keras.preprocessing.image import Iterator
 from tensorflow.python.keras import datasets as k_ds
@@ -440,18 +441,22 @@ def plot_prediction(gt, prediction, manual_pred):
         ax3 = fig3.add_subplot(4, 1, 3)
         ax4 = fig3.add_subplot(4, 1, 4)
 
-        ax1.plot(gt[:, 6], 'b')
-        ax1.plot(prediction[:, 6], 'r')
-        ax1.plot(manual_pred[:, 6], 'k')
-        ax2.plot(gt[:, 7], 'b')
-        ax2.plot(prediction[:, 7], 'r')
-        ax2.plot(manual_pred[:, 7], 'k')
-        ax3.plot(gt[:, 8], 'b')
-        ax3.plot(prediction[:, 8], 'r')
-        ax3.plot(manual_pred[:, 8], 'k')
-        ax4.plot(gt[:, 9], 'b')
-        ax4.plot(prediction[:, 9], 'r')
-        ax4.plot(manual_pred[:, 9], 'k')
+        gt_q = np.array([unit_quat(gt[i, 6:]).elements for i in range(len(gt))])
+        pred_q = np.array([unit_quat(prediction[i, 6:]).elements for i in range(len(gt))])
+        mpred_q = np.array([unit_quat(manual_pred[i, 6:]).elements for i in range(len(gt))])
+
+        ax1.plot(gt_q[:, 0], 'b')
+        ax1.plot(pred_q[:, 0], 'r')
+        ax1.plot(mpred_q[:, 0], 'k')
+        ax2.plot(gt_q[:, 1], 'b')
+        ax2.plot(pred_q[:, 1], 'r')
+        ax2.plot(mpred_q[:, 1], 'k')
+        ax3.plot(gt_q[:, 2], 'b')
+        ax3.plot(pred_q[:, 2], 'r')
+        ax3.plot(mpred_q[:, 2], 'k')
+        ax4.plot(gt_q[:, 3], 'b')
+        ax4.plot(pred_q[:, 3], 'r')
+        ax4.plot(mpred_q[:, 3], 'k')
         ax1.set_title('att_w')
         ax2.set_title('att_x')
         ax3.set_title('att_y')

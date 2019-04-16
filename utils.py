@@ -74,6 +74,15 @@ def rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
+def unit_quat(q):
+    if len(np.shape(q)) == 2:
+        return [Quaternion(q_i).unit for q_i in q]
+    elif len(np.shape(q)) == 1:
+        return Quaternion(q).unit
+    else:
+        TypeError("input should be a 4 component array or an nx4 numpy matrix")
+
+
 def quaternion_error(quat_1, quat_2, normalize=True):
     """
     Calculates the quaternion that rotates quaternion quat_1 to quaternion quat_2, or element-wise if given two lists of
@@ -87,12 +96,12 @@ def quaternion_error(quat_1, quat_2, normalize=True):
 
     if len(np.shape(quat_1)) == len(np.shape(quat_1)) == 2:
         if normalize:
-            q_pred_e = [rotate_quat(Quaternion(quat_1[i]).unit, Quaternion(quat_2[i]).unit) for i in range(len(quat_1))]
+            q_pred_e = [rotate_quat(unit_quat(quat_1[i]), unit_quat(quat_2[i])) for i in range(len(quat_1))]
         else:
             q_pred_e = [rotate_quat(Quaternion(quat_1[i]), Quaternion(quat_2[i])) for i in range(len(quat_1))]
     elif len(np.shape(quat_1)) == len(np.shape(quat_1)) == 1:
         if normalize:
-            q_pred_e = rotate_quat(Quaternion(quat_1).unit, Quaternion(quat_2).unit)
+            q_pred_e = rotate_quat(unit_quat(quat_1), unit_quat(quat_2))
         else:
             q_pred_e = rotate_quat(Quaternion(quat_1), Quaternion(quat_2))
     else:
