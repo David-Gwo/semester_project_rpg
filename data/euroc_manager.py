@@ -7,65 +7,17 @@ from scipy.signal import butter as butterworth_filter
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
-from data.utils.data_utils import load_mat_data, interpolate_ts, filter_with_coeffs
+
+from data.inertial_dataset_manager import IMU, GT
+from data.utils.data_utils import load_mat_data, filter_with_coeffs
 from data.imu_dataset_generators import generate_dataset
-
-
-class IMU:
-    def __init__(self):
-        self.timestamp = 0.0
-        self.gyro = np.array([0.0, 0.0, 0.0])
-        self.acc = np.array([0.0, 0.0, 0.0])
-
-    def read(self, data):
-        data = np.array(data)
-        data = data.astype(np.float)
-        self.timestamp = data[0]
-        self.gyro = data[1:4]
-        self.acc = data[4:7]
-
-    def unroll(self):
-        return self.gyro, self.acc, self.timestamp
-
-
-class GT:
-    def __init__(self):
-        self.timestamp = 0.0
-        self.pos = np.array([0.0, 0.0, 0.0])
-        self.att = np.array([0.0, 0.0, 0.0, 0.0])
-        self.vel = np.array([0.0, 0.0, 0.0])
-        self.ang_vel = np.array([0.0, 0.0, 0.0])
-        self.acc = np.array([0.0, 0.0, 0.0])
-
-    def read(self, data):
-        data = np.array(data)
-        data = data.astype(np.float)
-        self.timestamp = data[0]
-        self.pos = data[1:4]
-        self.att = data[4:8]
-        self.vel = data[8:11]
-        self.ang_vel = data[11:14]
-        self.acc = data[14:17]
-
-    def read_from_tuple(self, data):
-        self.pos = data[0]
-        self.vel = data[1]
-        self.att = data[2]
-        self.ang_vel = data[3]
-        self.acc = data[4]
-        self.timestamp = data[5]
-        return self
-
-    def unroll(self):
-        return self.pos, self.vel, self.att, self.ang_vel, self.acc, self.timestamp
-
 
 SCALER_GYRO_FILE = "scaler_gyro.save"
 SCALER_ACC_FILE = "scaler_acc.save"
 SCALER_DIR_FILE = '/scaler_files_dir.txt'
 
 # TODO: refactor as class, such as blackbird_manager.py
-# TODO: move common functions to more general class (e.g. dataset_manager.py) and inherit from it
+# TODO: move common functions to more general class (e.g. inertial_dataset_manager.py) and inherit from it
 
 
 def read_euroc_dataset(euroc_dir):
@@ -119,38 +71,7 @@ def read_euroc_dataset(euroc_dir):
     return [imu_yaml_data, raw_imu_data, ground_truth_data]
 
 
-def interpolate_ground_truth(raw_imu_data, ground_truth_data):
-    """
-    Interpolates the data of the ground truth so that it matches the timestamps of the raw imu data
 
-    :param raw_imu_data: IMU data (an array of IMU objects)
-    :param ground_truth_data: ground truth velocity data (an array of GT objects)
-    :return: the original imu data, and the interpolated ground truth data
-    """
-    raw_imu_data = np.array(raw_imu_data)
-
-    imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
-    gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in ground_truth_data])
-
-    gt_pos = np.stack(gt_unroll[:, 0])
-    gt_vel = np.stack(gt_unroll[:, 1])
-    gt_att = np.stack(gt_unroll[:, 2])
-    gt_ang_vel = np.stack(gt_unroll[:, 3])
-    gt_acc = np.stack(gt_unroll[:, 4])
-    gt_timestamps = gt_unroll[:, 5]
-
-    # Only keep imu data that is within the ground truth time span
-    raw_imu_data = raw_imu_data[(imu_timestamps > gt_timestamps[0]) * (imu_timestamps < gt_timestamps[-1])]
-    imu_timestamps = np.array([imu_meas.timestamp for imu_meas in raw_imu_data])
-
-    # Interpolate Ground truth to match IMU time acquisitions
-    gt_pos_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_pos)
-    gt_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_vel)
-    gt_att_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_att, is_quaternion=True)
-    gt_ang_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_ang_vel)
-    gt_acc_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_acc)
-
-    return [raw_imu_data, (gt_pos_interp, gt_vel_interp, gt_att_interp, gt_ang_vel_interp, gt_acc_interp, imu_timestamps)]
 
 
 def pre_process_data(raw_imu_data, gt_interp, euroc_dir):
@@ -330,60 +251,6 @@ def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_te
     add_scaler_ref_to_training_dir(euroc_dir, trained_model_dir)
 
     return generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_size, trained_model_dir)
-
-
-def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
-    """
-    Plots the imu and ground truth data in two separate figures
-
-    :param imu_vec: vector of imu data (either vector of IMU, or 2d numpy array)
-    :param gt_vec: vector of ground truth data (either vector of GT, or 2d numpy array)
-    :param title: title of the plot
-    :param from_numpy: format of the input data
-    :param show: whether to show plot or not
-    :return:
-    """
-
-    if from_numpy:
-        fig = plt.figure()
-        ax = fig.add_subplot(2, 1, 1)
-        ax.plot(np.stack(imu_vec[:, 0]))
-        ax = fig.add_subplot(2, 1, 2)
-        ax.plot(np.stack(imu_vec[:, 1]))
-        fig.suptitle(title)
-
-        fig = plt.figure()
-        ax = fig.add_subplot(2, 2, 1)
-        ax.plot(np.stack(gt_vec[:, 0]))
-        ax = fig.add_subplot(2, 2, 2)
-        ax.plot(np.stack(gt_vec[:, 1]))
-        ax = fig.add_subplot(2, 2, 3)
-        ax.plot(np.stack(gt_vec[:, 2]))
-        ax = fig.add_subplot(2, 2, 4)
-        ax.plot(np.stack(gt_vec[:, 3]))
-        fig.suptitle(title)
-
-    else:
-        fig = plt.figure()
-        ax = fig.add_subplot(2, 1, 1)
-        ax.plot([imu.gyro for imu in imu_vec])
-        ax = fig.add_subplot(2, 1, 2)
-        ax.plot([imu.acc for imu in imu_vec])
-        fig.suptitle(title)
-
-        fig = plt.figure()
-        ax = fig.add_subplot(2, 2, 1)
-        ax.plot([gt.pos for gt in gt_vec])
-        ax = fig.add_subplot(2, 2, 2)
-        ax.plot([gt.vel for gt in gt_vec])
-        ax = fig.add_subplot(2, 2, 3)
-        ax.plot([gt.att for gt in gt_vec])
-        ax = fig.add_subplot(2, 2, 4)
-        ax.plot([gt.ang_vel for gt in gt_vec])
-        fig.suptitle(title)
-
-    if show:
-        plt.show()
 
 
 def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):

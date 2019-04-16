@@ -7,10 +7,10 @@ import logging
 import requests
 import scipy.io
 import numpy as np
-from pyquaternion import Quaternion
 from matplotlib import pyplot as plt
 from scipy import signal
 from scipy.interpolate import interp1d
+
 from utils import quaternion_error, unit_quat
 
 from tensorflow.python.keras.preprocessing.image import Iterator
@@ -221,42 +221,6 @@ def get_file_from_url(file_name, link):
                 sys.stdout.flush()
 
 
-def generate_imu_img_dataset(imu_vec, gt_vec, imu_len):
-    """
-    Generates a dataset of imu images to regress linear speed. An imu image is defined as a stack of matrices of
-    dimensions <imu_len x 6>, where 6 are the 6 dimensions of the IMU readings (3 gyro + 3 acc), and the number of
-    rows are the number of used imu samples to regress the speed corresponding to the last sample.
-
-    :param imu_vec: vector of ordered IMU readings. Shape: <n, 2, 3>, n = number of acquisitions, imu_vec[:, 0, :]
-    corresponds to the three gyro readings and imu_vec[:, 1, :] to the tree accelerometer readings
-    :param gt_vec: ground truth velocity data. Shape: <n, 3>, n = number of acquisitions, and each acquisition is a
-    3-dimensional vector with x,y,z velocities
-    :param imu_len: number of columns of the imu_image
-    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
-    """
-
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((len(imu_vec), imu_len, 6, 1))
-    # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.zeros(len(imu_vec))
-
-    for i in range(len(imu_vec) - imu_len):
-        imu_img = np.zeros((imu_len, 6))
-
-        # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
-        if i < imu_len:
-            imu_img[imu_len - i - 1:imu_len, :] = imu_vec[0:i+1, :, :].reshape(i+1, 6)
-        else:
-            imu_img = imu_vec[i:i + imu_len, :, :].reshape(imu_len, 6)
-
-        # TODO: Should the elapsed time be included in the data?
-
-        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
-        gt_v_tensor[i] = np.linalg.norm(gt_vec[i])
-
-    return imu_img_tensor, gt_v_tensor
-
-
 def save_mat_data(x_data, y_data, file_name):
     """
     Saves a dataset as .mat in the specified directory
@@ -358,40 +322,6 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
         plt.show()
 
     return filtered_signal
-
-
-def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data):
-    """
-    Saves a copy of the train & test datasets as a mat file in a specified file names
-
-    :param train_ds_node: Training ds file name <dir/file.mat>
-    :param test_ds_node: Test ds file name <dir/file.mat>
-    :param x_data: x data (samples in first dimension)
-    :param y_data: y data (samples in first dimension)
-    """
-    if os.path.exists(train_ds_node):
-        os.remove(train_ds_node)
-    os.mknod(train_ds_node)
-
-    if os.path.exists(test_ds_node):
-        os.remove(test_ds_node)
-    os.mknod(test_ds_node)
-
-    total_ds_len = int(len(y_data))
-    test_ds_len = int(np.ceil(total_ds_len * 0.1))
-
-    # Choose some entries to separate for the test set
-    test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
-
-    test_set_x = x_data[test_indexes]
-    test_set_y = y_data[test_indexes]
-
-    # Remove the test ds entries from train dataset
-    train_set_x = np.delete(x_data, test_indexes, axis=0)
-    train_set_y = np.delete(y_data, test_indexes, axis=0)
-
-    save_mat_data(train_set_x, train_set_y, train_ds_node)
-    save_mat_data(test_set_x, test_set_y, test_ds_node)
 
 
 def plot_prediction(gt, prediction, manual_pred):
@@ -517,3 +447,41 @@ def plot_regression_predictions(test_ds, pred_y, manual_pred=None, epoch=None, i
 
     else:
         plt.show()
+
+
+def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, shuffle):
+        """
+        Saves a copy of the train & test datasets as a mat file in a specified file names
+
+        :param train_ds_node: Training ds file name <dir/file.mat>
+        :param test_ds_node: Test ds file name <dir/file.mat>
+        :param x_data: x data (samples in first dimension)
+        :param y_data: y data (samples in first dimension)
+        :param shuffle: whether datasets should be shuffled
+        """
+        if os.path.exists(train_ds_node):
+            os.remove(train_ds_node)
+        os.mknod(train_ds_node)
+
+        if os.path.exists(test_ds_node):
+            os.remove(test_ds_node)
+        os.mknod(test_ds_node)
+
+        total_ds_len = int(len(y_data))
+        test_ds_len = int(np.ceil(total_ds_len * 0.1))
+
+        # Choose some entries to separate for the test set
+        if shuffle:
+            test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
+        else:
+            test_indexes = range(total_ds_len - test_ds_len, total_ds_len)
+
+        test_set_x = x_data[test_indexes]
+        test_set_y = y_data[test_indexes]
+
+        # Remove the test ds entries from train dataset
+        train_set_x = np.delete(x_data, test_indexes, axis=0)
+        train_set_y = np.delete(y_data, test_indexes, axis=0)
+
+        save_mat_data(train_set_x, train_set_y, train_ds_node)
+        save_mat_data(test_set_x, test_set_y, test_ds_node)

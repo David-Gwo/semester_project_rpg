@@ -7,11 +7,12 @@ import os
 import numpy as np
 import quaternion as q
 
-from data.euroc_manager import IMU, GT, interpolate_ground_truth, pre_process_data, add_scaler_ref_to_training_dir, \
-    generate_tf_imu_train_ds, plot_all_data
+from data.euroc_manager import pre_process_data, add_scaler_ref_to_training_dir, \
+    generate_tf_imu_train_ds
 from data.utils.data_utils import safe_mkdir_recursive, get_file_from_url
 from data.imu_dataset_generators import generate_dataset
 from data.config.blackbird_flags import FLAGS
+from data.inertial_dataset_manager import DatasetManager, IMU, GT
 
 
 class BBIMU(IMU):
@@ -57,7 +58,10 @@ class BBGT(GT):
 
 
 class BlackbirdDSManager:
-    def __init__(self, *args):
+    def __init__(self, ds_manager, *args):
+
+        self.idm = ds_manager
+        self.integration_window = args
 
         self.ds_flags = FLAGS
 
@@ -197,33 +201,39 @@ class BlackbirdDSManager:
 
         return [raw_imu_data, ground_truth_data]
 
+    def make_dataset(self, plot):
 
-def load_blackbird_dataset(batch_size, integration_window, train_file_name, test_file_name, processed_ds_available,
-                           trained_model_dir):
+        save_dir = self.download_blackbird_data()
+        raw_imu_data, ground_truth_data = self.read_blackbird_data(save_dir)
 
-    bbds = BlackbirdDSManager()
-
-    if not processed_ds_available:
-        save_dir = bbds.download_blackbird_data()
-        raw_imu_data, ground_truth_data = bbds.read_blackbird_data(save_dir)
-
-        raw_imu_data, gt_interp_tuple = interpolate_ground_truth(raw_imu_data, ground_truth_data)
+        raw_imu_data, gt_interp_tuple = self.idm.interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
         # Re-make vector of interpolated GT measurements
         n_samples = len(gt_interp_tuple[0])
-        gt_interp = [BBGT().read_from_tuple(tuple([gt_interp_tuple[i][j] for i in range(6)]))for j in range(n_samples)]
+        gt_interp = [BBGT().read_from_tuple(tuple([gt_interp_tuple[i][j] for i in range(6)])) for j in range(n_samples)]
 
         # Cut away last 5% samples (noisy measurements)
-        raw_imu_data = raw_imu_data[0:int(np.ceil(0.95*len(raw_imu_data)))]
-        gt_interp = gt_interp[0:int(np.ceil(0.95*len(gt_interp)))]
+        raw_imu_data = raw_imu_data[0:int(np.ceil(0.95 * len(raw_imu_data)))]
+        gt_interp = gt_interp[0:int(np.ceil(0.95 * len(gt_interp)))]
 
         processed_imu, processed_gt = pre_process_data(raw_imu_data, gt_interp, save_dir)
 
-        plot_all_data(raw_imu_data, ground_truth_data, title="raw")
-        plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
+        # Show plots of the training dataset
+        if plot:
+            self.idm.plot_all_data(raw_imu_data, ground_truth_data, title="raw")
+            self.idm.plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
 
+        # Generate the training and testing datasets
         generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name,
-                         "windowed_imu_integration", integration_window)
+                         "windowed_imu_integration", self.integration_window, shuffle=False)
+
+
+def load_blackbird_dataset(batch_size, integration_window, train_file_name, test_file_name, processed_ds_available,
+                           trained_model_dir, plot_dataset=False):
+    bbds = BlackbirdDSManager()
+
+    if not processed_ds_available:
+        generate_blackbird_dataset(integration_window, train_file_name, test_file_name, plot_dataset)
 
     add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
     return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir,

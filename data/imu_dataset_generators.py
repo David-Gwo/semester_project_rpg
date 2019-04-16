@@ -1,5 +1,4 @@
 import numpy as np
-from .utils.data_utils import save_train_and_test_datasets
 
 
 def window_imu_data(imu_vec, window_len):
@@ -121,27 +120,3 @@ def windowed_imu_integration_dataset(raw_imu, gt, window_len):
     # The ground truth data to be predicted is the state at the end of the window
     return imu_window_with_initial_state, gt[window_len:, :]
 
-
-def generate_dataset(raw_imu, gt, ds_dir, train_file_name, test_file_name, dataset_type, *args):
-    """
-    Generates training and testing datasets, and saves a copy of them
-
-    :param raw_imu: 3D array of IMU measurements (n_samples x 2 <gyro, acc> x 3 <x, y, z>)
-    :param gt: list of 3D arrays with the ground truth measurements
-    :param ds_dir: root directory of the dataset
-    :param train_file_name: Name of the preprocessed training dataset
-    :param test_file_name: Name of the preprocessed testing dataset
-    :param dataset_type: Type of dataset to be generated
-    :param args: extra arguments for dataset generation
-    """
-
-    if dataset_type == "imu_img_gt_vel":
-        imu_img_tensor, gt_tensor = imu_gt_vel_dataset(raw_imu, gt, *args)
-    elif dataset_type == "windowed_imu_integration":
-        imu_img_tensor, gt_tensor = windowed_imu_integration_dataset(raw_imu, gt, *args)
-    else:
-        imu_img_tensor, gt_tensor = imu_img_dataset(raw_imu, gt, *args)
-
-    euroc_training_ds = "{0}{1}".format(ds_dir, train_file_name)
-    euroc_testing_ds = "{0}{1}".format(ds_dir, test_file_name)
-    save_train_and_test_datasets(euroc_training_ds, euroc_testing_ds, imu_img_tensor, gt_tensor)

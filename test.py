@@ -17,6 +17,7 @@ def _main():
     else:
         learner.recover_model_from_checkpoint(mode="test")
         learner.evaluate_model(compare_manual=True)
+        learner.iterate_model_output()
 
 
 def main(argv):

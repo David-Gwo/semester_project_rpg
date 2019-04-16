@@ -11,6 +11,7 @@ from .nets import imu_integration_net as prediction_network
 from utils import get_checkpoint_file_list, imu_integration
 from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive, DirectoryIterator, \
     plot_regression_predictions
+from data.inertial_dataset_manager import DatasetManager
 from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
 from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
@@ -122,18 +123,14 @@ class Learner(object):
 
     def get_dataset(self):
 
-        dataset_name = self.config.train_ds
+        dataset_manager = DatasetManager(self.config.batch_size,
+                                         self.config.prepared_train_data_file,
+                                         self.config.prepared_test_data_file,
+                                         self.config.prepared_file_available,
+                                         self.trained_model_dir,
+                                         self.config.dataset_name)
 
-        if dataset_name == 'mnist':
-            return get_mnist_datasets(self.config.img_height, self.config.img_width, self.config.batch_size)
-        if dataset_name == 'euroc':
-            return load_euroc_dataset(self.config.train_dir, self.config.batch_size, self.config.window_length,
-                                      self.config.prepared_train_data_file, self.config.prepared_test_data_file,
-                                      self.config.prepared_file_available, self.trained_model_dir)
-        if dataset_name == 'blackbird':
-            return load_blackbird_dataset(self.config.batch_size, self.config.window_length,
-                                          self.config.prepared_train_data_file, self.config.prepared_test_data_file,
-                                          self.config.prepared_file_available, self.trained_model_dir)
+        dataset_manager.get_dataset(self.config.window_length)
 
     def train(self):
         self.build_and_compile_model()
@@ -160,7 +157,13 @@ class Learner(object):
 
         self.trained_model_dir = self.config.checkpoint_dir + model_number
 
-        # Get training and validation datasets
+
+        # TODO: how to take into account the window len that originated the dataset?
+        # Verify if we need to create the datasets:
+        if not self.config.prepared_file_available:
+            # Dataset not yet available
+            tf.print("Dataset file is not yet available. Generating it...")
+        # Get training and validation datasets from saved files
         train_ds, validation_ds, ds_lengths = self.get_dataset()
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
@@ -281,3 +284,6 @@ class Learner(object):
             plot_regression_predictions(test_ds, predictions, epoch=self.last_epoch_number, i=fig_n)
         else:
             plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
+
+
+    def iterate_model_output(self):
