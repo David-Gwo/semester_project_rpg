@@ -118,7 +118,7 @@ class Learner(object):
                           metrics=['mse'])
         self.regressor_model = model
 
-    def get_dataset(self, train, validation_split, plot, shuffle, constant_batch_size, normalize, force_remake):
+    def get_dataset(self, train, val_split, plot, shuffle, const_batch_size, normalize, repeat_ds, force_remake):
 
         if train:
             dataset_name = self.config.train_ds
@@ -133,12 +133,13 @@ class Learner(object):
         return dataset_manager.get_dataset("windowed_imu_integration",
                                            self.config.window_length,
                                            batch_size=self.config.batch_size,
-                                           validation_split=validation_split,
+                                           validation_split=val_split,
                                            train=train,
                                            plot=plot,
                                            shuffle=shuffle,
-                                           full_batches=constant_batch_size,
+                                           full_batches=const_batch_size,
                                            normalize=normalize,
+                                           repeat_ds=repeat_ds,
                                            force_remake=force_remake)
 
     def train(self):
@@ -168,11 +169,12 @@ class Learner(object):
 
         # Get training and validation datasets from saved files
         dataset = self.get_dataset(train=True,
-                                   validation_split=True,
-                                   constant_batch_size=False,
+                                   val_split=True,
+                                   const_batch_size=False,
                                    plot=False,
                                    shuffle=False,
                                    normalize=True,
+                                   repeat_ds=True,
                                    force_remake=self.config.force_ds_remake)
         train_ds, validation_ds, ds_lengths = dataset
 
@@ -268,11 +270,12 @@ class Learner(object):
 
         if testing_ds is None:
             dataset = self.get_dataset(train=is_train,
-                                       validation_split=False,
-                                       constant_batch_size=False,
+                                       val_split=False,
+                                       const_batch_size=False,
                                        plot=False,
                                        shuffle=False,
                                        normalize=True,
+                                       repeat_ds=False,
                                        force_remake=self.config.force_ds_remake)
             test_ds, test_ds_length = dataset
             steps = np.floor(test_ds_length / self.config.batch_size)
@@ -283,11 +286,12 @@ class Learner(object):
 
         if compare_manual:
             dataset = self.get_dataset(train=is_train,
-                                       validation_split=False,
-                                       constant_batch_size=True,
+                                       val_split=False,
+                                       const_batch_size=True,
                                        plot=False,
                                        shuffle=False,
                                        normalize=False,
+                                       repeat_ds=False,
                                        force_remake=self.config.force_ds_remake)
             test_ds, test_ds_length = dataset
             manual_predictions = imu_integration(test_ds, self.config.window_length)

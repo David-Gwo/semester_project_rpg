@@ -47,7 +47,7 @@ class DatasetManager:
             raise NameError("Invalid dataset name")
 
     def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
-                    shuffle=True, normalize=True, full_batches=False, force_remake=False):
+                    shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False):
         """
 
         :param dataset_type: Type of dataset to be generated
@@ -60,6 +60,7 @@ class DatasetManager:
         :param shuffle: whether to shuffle the dataset
         :param normalize: whether to normalize the dataset
         :param full_batches: whether to enforce same-sized batches in the dataset
+        :param repeat_ds: whether to repeat indefinitely the main generated dataset
         :param force_remake: whether to reinforce the reconstruction of the dataset, or try to load it from directory
         :return: the requested tensorflow dataset/datasets
         """
@@ -90,7 +91,8 @@ class DatasetManager:
                                    validation_split=validation_split,
                                    split_percentage=split_percentage,
                                    batch_size=batch_size,
-                                   full_batches=full_batches)
+                                   full_batches=full_batches,
+                                   repeat_main_ds=repeat_ds)
 
     def generate_dataset(self, x_data, y_data, args, test_split, shuffle):
         """
@@ -176,7 +178,7 @@ class DatasetManager:
         return filtered_imu_vec, filtered_gt_vec
 
     def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, batch_size,
-                       full_batches):
+                       full_batches, repeat_main_ds):
         """
         Recovers the dataset from the files, and generates tensorflow-compatible datasets
 
@@ -188,6 +190,7 @@ class DatasetManager:
         :param normalize: whether to normalize the dataset
         :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param full_batches: whether to enforce same-sized batches in the dataset
+        :param repeat_main_ds: whether to repeat indefinitely the main generated dataset
         :return:
         """
 
@@ -237,8 +240,11 @@ class DatasetManager:
         if shuffle:
             main_ds.shuffle(batch_size, seed=seed)
 
-        main_ds = main_ds.batch(batch_size, drop_remainder=full_batches).repeat()
+        main_ds = main_ds.batch(batch_size, drop_remainder=full_batches)
         val_ds.batch(batch_size, drop_remainder=full_batches)
+
+        if repeat_main_ds:
+            main_ds.repeat()
 
         if validation_split:
             return main_ds, val_ds, (main_ds_len, val_ds_len)

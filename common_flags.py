@@ -46,7 +46,7 @@ gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epo
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
 gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
-gflags.DEFINE_string("generate_training_progression", False, "Whether or not to generate training progression images")
+gflags.DEFINE_string("generate_training_progression", True, "Whether or not to generate training progression images")
 gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")
 
 # TODO: remove
