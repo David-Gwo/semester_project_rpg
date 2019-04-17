@@ -11,7 +11,6 @@ from .nets import imu_integration_net as prediction_network
 from utils import get_checkpoint_file_list, imu_integration, safe_mkdir_recursive
 from data.utils.data_utils import DirectoryIterator, plot_regression_predictions
 from data.inertial_dataset_manager import DatasetManager
-from data.utils.blackbird_utils import BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
 from models.custom_losses import state_loss as loss_fx
 
@@ -119,25 +118,26 @@ class Learner(object):
                           metrics=['mse'])
         self.regressor_model = model
 
-    def get_dataset(self, train, validation_split, plot, shuffle, normalize, force_remake):
+    def get_dataset(self, train, validation_split, plot, shuffle, constant_batch_size, normalize, force_remake):
 
         if train:
             dataset_name = self.config.train_ds
         else:
             dataset_name = self.config.test_ds
 
-        dataset_manager = DatasetManager(self.config.batch_size,
-                                         self.config.prepared_train_data_file,
+        dataset_manager = DatasetManager(self.config.prepared_train_data_file,
                                          self.config.prepared_test_data_file,
                                          self.trained_model_dir,
                                          dataset_name)
 
         return dataset_manager.get_dataset("windowed_imu_integration",
                                            self.config.window_length,
+                                           batch_size=self.config.batch_size,
                                            validation_split=validation_split,
                                            train=train,
                                            plot=plot,
                                            shuffle=shuffle,
+                                           full_batches=constant_batch_size,
                                            normalize=normalize,
                                            force_remake=force_remake)
 
@@ -167,12 +167,14 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        train_ds, validation_ds, ds_lengths = self.get_dataset(train=True,
-                                                               validation_split=True,
-                                                               plot=False,
-                                                               shuffle=False,
-                                                               normalize=True,
-                                                               force_remake=self.config.force_ds_remake)
+        dataset = self.get_dataset(train=True,
+                                   validation_split=True,
+                                   constant_batch_size=False,
+                                   plot=False,
+                                   shuffle=False,
+                                   normalize=True,
+                                   force_remake=self.config.force_ds_remake)
+        train_ds, validation_ds, ds_lengths = dataset
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -211,6 +213,21 @@ class Learner(object):
         self.evaluate_model(val_ds[0], val_ds_splits[0])
         self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
 
+    def test(self):
+        self.build_and_compile_model()
+
+        if self.config.generate_training_progression:
+            model_pos = 0
+            while model_pos != -1:
+                model_pos = self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
+                self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
+                self.evaluate_model(save_figures=True)
+        else:
+            self.recover_model_from_checkpoint(mode="test")
+            self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
+            self.evaluate_model(compare_manual=True)
+            #self.iterate_model_output()
+
     def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):
         """
         Loads the weights of the default model from the checkpoint files
@@ -244,46 +261,35 @@ class Learner(object):
 
     def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0, compare_manual=False):
 
-        dataset = self.config.prepared_test_data_file
+        is_train = False
         if self.config.generate_training_progression:
-            dataset = self.config.prepared_train_data_file
+            # To generate the sequential progression images of how the model fits to the training set
+            is_train = True
 
-        # dataset = self.config.prepared_train_data_file
         if testing_ds is None:
-            # TODO: make more elegant
-            if self.config.test_ds == 'blackbird':
-                bb_manager = BlackbirdDSManager()
-                test_dir = bb_manager.ds_local_dir
-            else:
-                test_dir = self.config.test_dir
-
-            test_ds, steps = generate_tf_imu_test_ds(test_dir,
-                                                     dataset,
-                                                     self.config.batch_size,
-                                                     self.config.checkpoint_dir + self.model_version_number,
-                                                     self.config.window_length)
-            steps = np.floor(steps / self.config.batch_size)
+            dataset = self.get_dataset(train=is_train,
+                                       validation_split=False,
+                                       constant_batch_size=False,
+                                       plot=False,
+                                       shuffle=False,
+                                       normalize=True,
+                                       force_remake=self.config.force_ds_remake)
+            test_ds, test_ds_length = dataset
+            steps = np.floor(test_ds_length / self.config.batch_size)
         else:
             test_ds = testing_ds.take(steps)
 
         predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
 
         if compare_manual:
-            # TODO: idem
-            if self.config.test_ds == 'blackbird':
-                bb_manager = BlackbirdDSManager()
-                test_dir = bb_manager.ds_local_dir
-            else:
-                test_dir = self.config.test_dir
-
-            # Generate un-normalized dataset for manual integration
-            test_ds, steps = generate_tf_imu_test_ds(test_dir,
-                                                     dataset,
-                                                     self.config.batch_size,
-                                                     self.config.checkpoint_dir + self.model_version_number,
-                                                     self.config.window_length,
-                                                     normalize=False,
-                                                     full_batches=True)
+            dataset = self.get_dataset(train=is_train,
+                                       validation_split=False,
+                                       constant_batch_size=True,
+                                       plot=False,
+                                       shuffle=False,
+                                       normalize=False,
+                                       force_remake=self.config.force_ds_remake)
+            test_ds, test_ds_length = dataset
             manual_predictions = imu_integration(test_ds, self.config.window_length)
         else:
             manual_predictions = None

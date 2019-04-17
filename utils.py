@@ -1,16 +1,26 @@
 import errno
-
 import numpy as np
 import os
 import re
 from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
+from functools import cmp_to_key
+
+
+def sort_string_func(x, y):
+    if len(x) > len(y):
+        return 1
+    if len(y) > len(x):
+        return -1
+    if str(x).lower() > str(y).lower():
+        return 1
+    return -1
 
 
 def get_checkpoint_file_list(checkpoint_dir, name):
     regex = name + r"_[0-9]"
     files = [f for f in os.listdir(checkpoint_dir) if re.match(regex, f)]
-    files.sort(key=str.lower)
+    files = sorted(files, key=cmp_to_key(sort_string_func))
     return files
 
 

@@ -18,17 +18,15 @@ DATASET_CONF_PARAMS_FILE = "generated_ds_params.txt"
 
 
 class DatasetManager:
-    def __init__(self, batch_size, prepared_train_data_file, prepared_test_data_file, trained_model_dir, dataset_name):
+    def __init__(self, prepared_train_data_file, prepared_test_data_file, trained_model_dir, dataset_name):
         """
 
-        :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param prepared_train_data_file: Name of the preprocessed training dataset
         :param prepared_test_data_file: Name of the preprocessed testing dataset
-        :param trained_model_dir:
-        :param dataset_name:
+        :param trained_model_dir: Local directory of the model currently being trained
+        :param dataset_name: Name of the dataset to use
         """
 
-        self.batch_size = batch_size
         self.train_data_file = prepared_train_data_file
         self.test_data_file = prepared_test_data_file
         self.training_dir = trained_model_dir
@@ -48,13 +46,14 @@ class DatasetManager:
         else:
             raise NameError("Invalid dataset name")
 
-    def get_dataset(self, dataset_type, *args, train, validation_split, split_percentage=0.1, plot=False, shuffle=True,
-                    normalize=True, full_batches=False, force_remake=False):
+    def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
+                    shuffle=True, normalize=True, full_batches=False, force_remake=False):
         """
 
         :param dataset_type: Type of dataset to be generated
         :param args: extra arguments for dataset generation
         :param train: whether dataset is for training or testing
+        :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param validation_split: whether a validation split should be generated
         :param split_percentage: the percentage of dataset to be split for validation/testing
         :param plot: whether to plot the dataset
@@ -81,7 +80,8 @@ class DatasetManager:
             # Generate the training and testing datasets
             self.generate_dataset(processed_imu, processed_gt, args, split_percentage, shuffle=shuffle)
 
-        add_text_to_txt_file(self.dataset.get_ds_directory(), self.training_dir, self.scaler_dir_file)
+        if train:
+            add_text_to_txt_file(self.dataset.get_ds_directory(), self.training_dir, self.scaler_dir_file)
 
         return self.generate_tf_ds(args,
                                    normalize=normalize,
@@ -89,6 +89,7 @@ class DatasetManager:
                                    training=train,
                                    validation_split=validation_split,
                                    split_percentage=split_percentage,
+                                   batch_size=batch_size,
                                    full_batches=full_batches)
 
     def generate_dataset(self, x_data, y_data, args, test_split, shuffle):
@@ -174,7 +175,8 @@ class DatasetManager:
 
         return filtered_imu_vec, filtered_gt_vec
 
-    def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, full_batches):
+    def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, batch_size,
+                       full_batches):
         """
         Recovers the dataset from the files, and generates tensorflow-compatible datasets
 
@@ -184,6 +186,7 @@ class DatasetManager:
         :param split_percentage: the percentage of dataset to be split for validation/testing
         :param shuffle: whether to shuffle the dataset
         :param normalize: whether to normalize the dataset
+        :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param full_batches: whether to enforce same-sized batches in the dataset
         :return:
         """
@@ -232,10 +235,10 @@ class DatasetManager:
         val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec))
 
         if shuffle:
-            main_ds.shuffle(self.batch_size, seed=seed)
+            main_ds.shuffle(batch_size, seed=seed)
 
-        main_ds = main_ds.batch(self.batch_size, drop_remainder=full_batches).repeat()
-        val_ds.batch(self.batch_size, drop_remainder=full_batches)
+        main_ds = main_ds.batch(batch_size, drop_remainder=full_batches).repeat()
+        val_ds.batch(batch_size, drop_remainder=full_batches)
 
         if validation_split:
             return main_ds, val_ds, (main_ds_len, val_ds_len)
