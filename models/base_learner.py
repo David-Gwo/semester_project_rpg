@@ -31,39 +31,6 @@ class Learner(object):
         self.trained_model_dir = ""
         pass
 
-    def preprocess_image(self, image):
-        ##############################
-        # DO YOUR PREPROCESSING HERE #
-        ##############################
-        """ Preprocess an input image.
-        Args:
-            image: A uint8 tensor
-        Returns:
-            image: A preprocessed float32 tensor.
-        """
-        image = tf.image.decode_jpeg(image)
-        image = tf.image.resize(image, [self.config.img_height, self.config.img_width])
-        image = tf.cast(image, dtype=tf.float32)
-        image = tf.divide(image, 255.0)
-        return image
-
-    def read_image_from_dir(self, image_dir):
-        image = tf.io.read_file(image_dir)
-        return self.preprocess_image(image)
-
-    def read_from_disk(self, inputs_queue):
-        """Consumes the inputs queue.
-        Args:
-            inputs_queue: A scalar string tensor.
-        Returns:
-            Two tensors: the decoded images, and the labels.
-        """
-        pnt_seq = tf.strings.to_number(inputs_queue[1], out_type=tf.dtypes.int32)
-        file_content = inputs_queue[0].map(self.read_image_from_dir)
-        image_seq = tf.image.decode_png(file_content, channels=3)
-
-        return image_seq, pnt_seq
-
     @staticmethod
     def get_filenames_list(directory):
         """ This function should return all the filenames of the
@@ -227,7 +194,7 @@ class Learner(object):
         else:
             self.recover_model_from_checkpoint(mode="test")
             self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
-            self.evaluate_model(compare_manual=True)
+            self.evaluate_model()
             #self.iterate_model_output()
 
     def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):
@@ -261,7 +228,8 @@ class Learner(object):
         else:
             return model_used_pos + 1
 
-    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0, compare_manual=False):
+    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0):
+        compare_manual = self.config.compare_prediction
 
         is_train = False
         if self.config.generate_training_progression:

@@ -8,11 +8,8 @@ FLAGS = gflags.FLAGS
 
 
 # Train parameters
-gflags.DEFINE_integer('img_width', 28, 'Target Image Width')
-gflags.DEFINE_integer('img_height', 28, 'Target Image Height')
 gflags.DEFINE_integer('batch_size', 20, 'Batch size in training and evaluation')
 gflags.DEFINE_float("l2_reg_scale", 0.00000001, "Scale for regularization losses")
-gflags.DEFINE_integer('output_dim', 1, "Number of outputs")
 
 gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer")  # 0.0000001
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
@@ -47,7 +44,7 @@ gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
 gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
 gflags.DEFINE_string("generate_training_progression", True, "Whether or not to generate training progression images")
-gflags.DEFINE_string("ckpt_file", None, "Checkpoint file")
+gflags.DEFINE_string("compare_prediction", True, "Whether or not to compare the test results with alternative method")
 
 # TODO: remove
 gflags.DEFINE_string('train_dir', './data/dataset/EuRoC_dataset_2/', 'Directory of the training dataset')
