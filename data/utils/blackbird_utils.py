@@ -7,12 +7,10 @@ import os
 import numpy as np
 import quaternion as q
 
-from data.euroc_manager import pre_process_data, add_scaler_ref_to_training_dir, \
-    generate_tf_imu_train_ds
-from data.utils.data_utils import safe_mkdir_recursive, get_file_from_url
-from data.imu_dataset_generators import generate_dataset
+from data.utils.data_utils import get_file_from_url
+from utils import safe_mkdir_recursive
 from data.config.blackbird_flags import FLAGS
-from data.inertial_dataset_manager import DatasetManager, IMU, GT
+from data.inertial_ABCs import IMU, GT
 
 
 class BBIMU(IMU):
@@ -60,8 +58,8 @@ class BBGT(GT):
 class BlackbirdDSManager:
     def __init__(self, ds_manager, *args):
 
+        # TODO: remove this -> refactor, make ABC descendant
         self.idm = ds_manager
-        self.integration_window = args
 
         self.ds_flags = FLAGS
 
@@ -86,6 +84,9 @@ class BlackbirdDSManager:
 
         self.ds_version = self.get_dataset_version()
         self.ds_local_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
+
+    def get_ds_directory(self):
+        return self.ds_local_dir
 
     @staticmethod
     def encode_max_speed(max_speed):
@@ -129,10 +130,9 @@ class BlackbirdDSManager:
 
     def download_blackbird_data(self):
 
-        save_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
-        safe_mkdir_recursive(save_dir)
-        pose_file_dir = "{0}{1}".format(save_dir, self.gt_file_name)
-        data_file_dir = "{0}{1}".format(save_dir, self.data_file_name)
+        safe_mkdir_recursive(self.ds_local_dir)
+        pose_file_dir = "{0}{1}".format(self.ds_local_dir, self.gt_file_name)
+        data_file_dir = "{0}{1}".format(self.ds_local_dir, self.data_file_name)
 
         max_speed = self.encode_max_speed(self.ds_flags.max_speed)
 
@@ -156,11 +156,9 @@ class BlackbirdDSManager:
         else:
             print("Sensor file already available")
 
-        return save_dir
-
-    def read_blackbird_data(self, save_dir):
-        data_file_dir = "{0}{1}".format(save_dir, self.csv_imu_file_name)
-        gt_file_dir = "{0}{1}".format(save_dir, self.gt_file_name)
+    def read_blackbird_data(self):
+        data_file_dir = "{0}{1}".format(self.ds_local_dir, self.csv_imu_file_name)
+        gt_file_dir = "{0}{1}".format(self.ds_local_dir, self.gt_file_name)
 
         raw_imu_data = []
         ground_truth_data = []
@@ -201,10 +199,10 @@ class BlackbirdDSManager:
 
         return [raw_imu_data, ground_truth_data]
 
-    def make_dataset(self, plot):
+    def get_raw_ds(self):
 
-        save_dir = self.download_blackbird_data()
-        raw_imu_data, ground_truth_data = self.read_blackbird_data(save_dir)
+        self.download_blackbird_data()
+        raw_imu_data, ground_truth_data = self.read_blackbird_data()
 
         raw_imu_data, gt_interp_tuple = self.idm.interpolate_ground_truth(raw_imu_data, ground_truth_data)
 
@@ -216,25 +214,4 @@ class BlackbirdDSManager:
         raw_imu_data = raw_imu_data[0:int(np.ceil(0.95 * len(raw_imu_data)))]
         gt_interp = gt_interp[0:int(np.ceil(0.95 * len(gt_interp)))]
 
-        processed_imu, processed_gt = pre_process_data(raw_imu_data, gt_interp, save_dir)
-
-        # Show plots of the training dataset
-        if plot:
-            self.idm.plot_all_data(raw_imu_data, ground_truth_data, title="raw")
-            self.idm.plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
-
-        # Generate the training and testing datasets
-        generate_dataset(processed_imu, processed_gt, bbds.ds_local_dir, train_file_name, test_file_name,
-                         "windowed_imu_integration", self.integration_window, shuffle=False)
-
-
-def load_blackbird_dataset(batch_size, integration_window, train_file_name, test_file_name, processed_ds_available,
-                           trained_model_dir, plot_dataset=False):
-    bbds = BlackbirdDSManager()
-
-    if not processed_ds_available:
-        generate_blackbird_dataset(integration_window, train_file_name, test_file_name, plot_dataset)
-
-    add_scaler_ref_to_training_dir(bbds.ds_local_dir, trained_model_dir)
-    return generate_tf_imu_train_ds(bbds.ds_local_dir, train_file_name, batch_size, trained_model_dir,
-                                    integration_window)
+        return raw_imu_data, gt_interp

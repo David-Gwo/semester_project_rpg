@@ -2,7 +2,6 @@ import re
 import os
 import sys
 import cv2
-import errno
 import logging
 import requests
 import scipy.io
@@ -189,17 +188,6 @@ def get_mnist_datasets(img_h, img_w, batch_s):
     ds_lengths = (len(x_train), len(x_valid))
 
     return train_ds, validation_ds, ds_lengths
-
-
-def safe_mkdir_recursive(directory):
-    if not os.path.exists(directory):
-        try:
-            os.makedirs(directory)
-        except OSError as exc:
-            if exc.errno == errno.EEXIST and os.path.isdir(directory):
-                pass
-            else:
-                raise
 
 
 def get_file_from_url(file_name, link):
@@ -449,39 +437,40 @@ def plot_regression_predictions(test_ds, pred_y, manual_pred=None, epoch=None, i
         plt.show()
 
 
-def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, shuffle):
-        """
-        Saves a copy of the train & test datasets as a mat file in a specified file names
+def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, test_split, shuffle):
+    """
+    Saves a copy of the train & test datasets as a mat file in a specified file names
 
-        :param train_ds_node: Training ds file name <dir/file.mat>
-        :param test_ds_node: Test ds file name <dir/file.mat>
-        :param x_data: x data (samples in first dimension)
-        :param y_data: y data (samples in first dimension)
-        :param shuffle: whether datasets should be shuffled
-        """
-        if os.path.exists(train_ds_node):
-            os.remove(train_ds_node)
-        os.mknod(train_ds_node)
+    :param train_ds_node: Training ds file name <dir/file.mat>
+    :param test_ds_node: Test ds file name <dir/file.mat>
+    :param x_data: x data (samples in first dimension)
+    :param y_data: y data (samples in first dimension)
+    :param test_split: the percentage of dataset to be split for testing
+    :param shuffle: whether datasets should be shuffled
+    """
+    if os.path.exists(train_ds_node):
+        os.remove(train_ds_node)
+    os.mknod(train_ds_node)
 
-        if os.path.exists(test_ds_node):
-            os.remove(test_ds_node)
-        os.mknod(test_ds_node)
+    if os.path.exists(test_ds_node):
+        os.remove(test_ds_node)
+    os.mknod(test_ds_node)
 
-        total_ds_len = int(len(y_data))
-        test_ds_len = int(np.ceil(total_ds_len * 0.1))
+    total_ds_len = int(len(y_data))
+    test_ds_len = int(np.ceil(total_ds_len * test_split))
 
-        # Choose some entries to separate for the test set
-        if shuffle:
-            test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
-        else:
-            test_indexes = range(total_ds_len - test_ds_len, total_ds_len)
+    # Choose some entries to separate for the test set
+    if shuffle:
+        test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
+    else:
+        test_indexes = range(total_ds_len - test_ds_len, total_ds_len)
 
-        test_set_x = x_data[test_indexes]
-        test_set_y = y_data[test_indexes]
+    test_set_x = x_data[test_indexes]
+    test_set_y = y_data[test_indexes]
 
-        # Remove the test ds entries from train dataset
-        train_set_x = np.delete(x_data, test_indexes, axis=0)
-        train_set_y = np.delete(y_data, test_indexes, axis=0)
+    # Remove the test ds entries from train dataset
+    train_set_x = np.delete(x_data, test_indexes, axis=0)
+    train_set_y = np.delete(y_data, test_indexes, axis=0)
 
-        save_mat_data(train_set_x, train_set_y, train_ds_node)
-        save_mat_data(test_set_x, test_set_y, test_ds_node)
+    save_mat_data(train_set_x, train_set_y, train_ds_node)
+    save_mat_data(test_set_x, test_set_y, test_ds_node)

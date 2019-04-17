@@ -45,40 +45,6 @@ def imu_img_dataset(imu_vec, gt_vec, imu_len):
     return imu_img_tensor, gt_v_tensor
 
 
-def imu_gt_vel_dataset(imu_vec, gt_vec, imu_len):
-    """
-    Generates a dataset of combine imu and ground truth velocity data to do one-step speed prediction. The training data
-    is defined as a stack of matrices of dimensions <imu_len x 7>, where the first 6 of the 7 columns are the IMU
-    readings (3 gyro + 3 acc), and the 7th is the corresponding ground truth velocity. The number of rows correspond to
-    the number of used imu samples to predict the speed for next timestamp.
-    :param imu_vec: vector of ordered IMU readings. Shape: <n, 2, 3>, n = number of acquisitions, imu_vec[:, 0, :]
-    corresponds to the three gyro readings and imu_vec[:, 1, :] to the tree accelerometer readings
-    :param gt_vec: ground truth velocity data. Shape: <n, 3>, n = number of acquisitions, and each acquisition is a
-    3-dimensional vector with x,y,z velocities
-    :param imu_len: number of columns of the imu_image
-    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
-    """
-
-    seq_len = len(imu_vec)
-
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
-    imu_img_tensor = np.zeros((seq_len - 1, imu_len, 7, 1))
-    # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.zeros(seq_len - 1)
-
-    gt_vec = np.expand_dims(np.linalg.norm(gt_vec, axis=1), axis=1)
-    imu_vec = np.append(imu_vec, np.zeros((imu_len - 1, 2, 3)), axis=0)
-
-    for i in range(seq_len - imu_len - 1):
-        imu_img = np.append(imu_vec[i:i + imu_len, :, :].reshape(imu_len, 6), gt_vec[i:i + imu_len], axis=1)
-
-        imu_img_tensor[i] = np.expand_dims(imu_img, 2)
-
-        gt_v_tensor[i] = gt_vec[i + imu_len]
-
-    return imu_img_tensor, gt_v_tensor
-
-
 def reformat_data(compact_data):
 
     data_channels = np.shape(compact_data)[1] - 1
@@ -94,7 +60,19 @@ def reformat_data(compact_data):
     return flattened_data
 
 
-def windowed_imu_integration_dataset(raw_imu, gt, window_len):
+def windowed_imu_integration_dataset(raw_imu, gt, args):
+    """
+
+    :param raw_imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
+    correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is the
+    time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
+    :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
+    17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular velocity,
+    x,y,z acceleration and timestamp difference (same as `raw_imu`)
+    :param args: extra arguments for dataset generation
+    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
+    """
+    window_len = args[0]
 
     raw_imu = reformat_data(raw_imu)
     gt = reformat_data(gt)
@@ -119,4 +97,3 @@ def windowed_imu_integration_dataset(raw_imu, gt, window_len):
 
     # The ground truth data to be predicted is the state at the end of the window
     return imu_window_with_initial_state, gt[window_len:, :]
-

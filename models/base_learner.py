@@ -8,12 +8,10 @@ from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 
 from .nets import imu_integration_net as prediction_network
-from utils import get_checkpoint_file_list, imu_integration
-from data.utils.data_utils import get_mnist_datasets, safe_mkdir_recursive, DirectoryIterator, \
-    plot_regression_predictions
+from utils import get_checkpoint_file_list, imu_integration, safe_mkdir_recursive
+from data.utils.data_utils import DirectoryIterator, plot_regression_predictions
 from data.inertial_dataset_manager import DatasetManager
-from data.euroc_manager import load_euroc_dataset, generate_tf_imu_test_ds
-from data.blackbird_manager import load_blackbird_dataset, BlackbirdDSManager
+from data.utils.blackbird_utils import BlackbirdDSManager
 from models.custom_callback_fx import CustomModelCheckpoint
 from models.custom_losses import state_loss as loss_fx
 
@@ -121,16 +119,27 @@ class Learner(object):
                           metrics=['mse'])
         self.regressor_model = model
 
-    def get_dataset(self):
+    def get_dataset(self, train, validation_split, plot, shuffle, normalize, force_remake):
+
+        if train:
+            dataset_name = self.config.train_ds
+        else:
+            dataset_name = self.config.test_ds
 
         dataset_manager = DatasetManager(self.config.batch_size,
                                          self.config.prepared_train_data_file,
                                          self.config.prepared_test_data_file,
-                                         self.config.prepared_file_available,
                                          self.trained_model_dir,
-                                         self.config.dataset_name)
+                                         dataset_name)
 
-        dataset_manager.get_dataset(self.config.window_length)
+        return dataset_manager.get_dataset("windowed_imu_integration",
+                                           self.config.window_length,
+                                           validation_split=validation_split,
+                                           train=train,
+                                           plot=plot,
+                                           shuffle=shuffle,
+                                           normalize=normalize,
+                                           force_remake=force_remake)
 
     def train(self):
         self.build_and_compile_model()
@@ -155,16 +164,15 @@ class Learner(object):
                 model_number = self.config.model_name + '_' + str(int(files[-1].split('_')[-1]) + 1)
                 os.mkdir(self.config.checkpoint_dir + model_number)
 
-        self.trained_model_dir = self.config.checkpoint_dir + model_number
+        self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
-
-        # TODO: how to take into account the window len that originated the dataset?
-        # Verify if we need to create the datasets:
-        if not self.config.prepared_file_available:
-            # Dataset not yet available
-            tf.print("Dataset file is not yet available. Generating it...")
         # Get training and validation datasets from saved files
-        train_ds, validation_ds, ds_lengths = self.get_dataset()
+        train_ds, validation_ds, ds_lengths = self.get_dataset(train=True,
+                                                               validation_split=True,
+                                                               plot=False,
+                                                               shuffle=False,
+                                                               normalize=True,
+                                                               force_remake=self.config.force_ds_remake)
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
         val_ds = {}
@@ -286,4 +294,4 @@ class Learner(object):
             plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
 
 
-    def iterate_model_output(self):
+#    def iterate_model_output(self):
