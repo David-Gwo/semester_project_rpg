@@ -17,8 +17,6 @@ def window_imu_data(imu_vec, window_len):
         else:
             imu_img = imu_vec[i:i + window_len, :]
 
-        # TODO: Should the elapsed time be included in the data?
-
         imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
 
     return imu_img_tensor

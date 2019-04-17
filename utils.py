@@ -24,20 +24,16 @@ def get_checkpoint_file_list(checkpoint_dir, name):
     return files
 
 
-def imu_integration(data, window_len):
+def imu_integration(imu_data, window_len):
 
     # TODO: get a better comparison
 
-    # Get features of training set. Discard final labels
-    x = [np.squeeze(x_ds) for (x_ds, y_ds) in data]
-    x_flat = np.array([item for sublist in x for item in sublist])
-
-    samples = len(x_flat)
-    output_dim = np.shape(x_flat)[1] - window_len
+    samples = len(imu_data)
+    output_dim = np.shape(imu_data)[1] - window_len
 
     out = np.zeros((samples, output_dim))
 
-    imu_v, t_diff_v, x_0_v = x_flat[:, :window_len, :6], x_flat[:, :window_len, 6:], x_flat[:, window_len:, 0]
+    imu_v, t_diff_v, x_0_v = imu_data[:, :window_len, :6], imu_data[:, :window_len, 6:], imu_data[:, window_len:, 0]
 
     # Convert time diff to seconds
     t_diff_v = np.squeeze(np.stack(t_diff_v/1000))

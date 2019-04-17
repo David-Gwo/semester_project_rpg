@@ -2,10 +2,10 @@ import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, Conv1D, MaxPooling2D, \
-    BatchNormalization, Bidirectional, LSTM, Concatenate, Reshape
+    BatchNormalization, Concatenate, Reshape
 from tensorflow.python.keras.layers.merge import add
 
-from models.custom_layers import ForkLayer, ForkLayerIMUInt
+from models.customized_tf_funcs.custom_layers import ForkLayer, ForkLayerIMUInt
 
 ##########################################
 # ADD HERE YOUR NETWORK                  #

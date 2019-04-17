@@ -7,12 +7,13 @@ import tensorflow as tf
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 
-from .nets import imu_integration_net as prediction_network
 from utils import get_checkpoint_file_list, imu_integration, safe_mkdir_recursive
-from data.utils.data_utils import DirectoryIterator, plot_regression_predictions
+from data.utils.data_utils import DirectoryIterator
 from data.inertial_dataset_manager import DatasetManager
-from models.custom_callback_fx import CustomModelCheckpoint
-from models.custom_losses import state_loss as loss_fx
+from models.nets import imu_integration_net as prediction_network
+from models.customized_tf_funcs.custom_callback_fx import CustomModelCheckpoint
+from models.customized_tf_funcs.custom_losses import state_loss as loss_fx
+from models.test_experiments import ExperimentManager
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -29,7 +30,7 @@ class Learner(object):
         self.model_version_number = None
         self.last_epoch_number = 0
         self.trained_model_dir = ""
-        pass
+        self.experiment_manager = None
 
     @staticmethod
     def get_filenames_list(directory):
@@ -53,7 +54,6 @@ class Learner(object):
 
             if i % 100 == 0:
                 self.last_epoch_number = epoch
-                self.evaluate_model(validation_ds, ds_lengths[1], save_figures=True)
 
             with tf.GradientTape() as tape:
                 # Forward pass
@@ -85,7 +85,10 @@ class Learner(object):
                           metrics=['mse'])
         self.regressor_model = model
 
-    def get_dataset(self, train, val_split, plot, shuffle, const_batch_size, normalize, repeat_ds, force_remake):
+    def get_dataset(self, train, val_split, shuffle, repeat_ds, plot=False, const_batch_size=False, normalize=True,
+                    tensorflow_format=True):
+
+        force_remake = self.config.force_ds_remake
 
         if train:
             dataset_name = self.config.train_ds
@@ -107,7 +110,8 @@ class Learner(object):
                                            full_batches=const_batch_size,
                                            normalize=normalize,
                                            repeat_ds=repeat_ds,
-                                           force_remake=force_remake)
+                                           force_remake=force_remake,
+                                           tensorflow_format=tensorflow_format)
 
     def train(self):
         self.build_and_compile_model()
@@ -135,14 +139,8 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        dataset = self.get_dataset(train=True,
-                                   val_split=True,
-                                   const_batch_size=False,
-                                   plot=False,
-                                   shuffle=False,
-                                   normalize=True,
-                                   repeat_ds=True,
-                                   force_remake=self.config.force_ds_remake)
+        dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True)
+
         train_ds, validation_ds, ds_lengths = dataset
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
@@ -178,25 +176,6 @@ class Learner(object):
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
 
-        # Evaluate model in validation set and entire training set
-        self.evaluate_model(val_ds[0], val_ds_splits[0])
-        self.evaluate_model(train_ds, ds_lengths[0]/self.config.batch_size)
-
-    def test(self):
-        self.build_and_compile_model()
-
-        if self.config.generate_training_progression:
-            model_pos = 0
-            while model_pos != -1:
-                model_pos = self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
-                self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
-                self.evaluate_model(save_figures=True)
-        else:
-            self.recover_model_from_checkpoint(mode="test")
-            self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
-            self.evaluate_model()
-            #self.iterate_model_output()
-
     def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):
         """
         Loads the weights of the default model from the checkpoint files
@@ -228,7 +207,42 @@ class Learner(object):
         else:
             return model_used_pos + 1
 
-    def evaluate_model(self, testing_ds=None, steps=None, save_figures=False, fig_n=0):
+    def test(self, experiments):
+        self.build_and_compile_model()
+        self.experiment_manager = ExperimentManager(final_epoch=self.last_epoch_number,
+                                                    model_loader_func=self.recover_model_from_checkpoint,
+                                                    dataset_loader_func=self.experiment_dataset_request)
+
+        for experiment, dataset in experiments:
+            self.experiment_manager.run_experiment(experiment, dataset)
+
+    def experiment_dataset_request(self, dataset_tags):
+        train = False
+        val_split = False
+        const_batch_size = False
+        plot = False
+        shuffle = False
+        normalize = True
+        repeat_ds = False
+        tensorflow_format = True
+
+        if 'training' in dataset_tags:
+            train = True
+        if 'unnormalized' in dataset_tags:
+            normalize = False
+        if 'non_tensorflow' in dataset_tags:
+            tensorflow_format = False
+
+        return self.get_dataset(train=train,
+                                val_split=val_split,
+                                const_batch_size=const_batch_size,
+                                plot=plot,
+                                shuffle=shuffle,
+                                normalize=normalize,
+                                repeat_ds=repeat_ds,
+                                tensorflow_format=tensorflow_format)
+
+    def evaluate_model(self, testing_ds=None, steps=None):
         compare_manual = self.config.compare_prediction
 
         is_train = False
@@ -243,14 +257,11 @@ class Learner(object):
                                        plot=False,
                                        shuffle=False,
                                        normalize=True,
-                                       repeat_ds=False,
-                                       force_remake=self.config.force_ds_remake)
-            test_ds, test_ds_length = dataset
+                                       repeat_ds=False)
+            normalized_test_ds, test_ds_length = dataset
             steps = np.floor(test_ds_length / self.config.batch_size)
         else:
-            test_ds = testing_ds.take(steps)
-
-        predictions = self.regressor_model.predict(test_ds, verbose=1, steps=steps)
+            normalized_test_ds = testing_ds.take(steps)
 
         if compare_manual:
             dataset = self.get_dataset(train=is_train,
@@ -259,17 +270,12 @@ class Learner(object):
                                        plot=False,
                                        shuffle=False,
                                        normalize=False,
-                                       repeat_ds=False,
-                                       force_remake=self.config.force_ds_remake)
-            test_ds, test_ds_length = dataset
-            manual_predictions = imu_integration(test_ds, self.config.window_length)
+                                       repeat_ds=False)
+            unnormalized_test_ds, test_ds_length = dataset
+            manual_predictions = imu_integration(unnormalized_test_ds, self.config.window_length)
         else:
             manual_predictions = None
 
-        if save_figures:
-            plot_regression_predictions(test_ds, predictions, epoch=self.last_epoch_number, i=fig_n)
-        else:
-            plot_regression_predictions(test_ds, predictions, manual_pred=manual_predictions)
+        plot_and_compare_predictions()
+        iterative_predictions = iterate_model_output(self.regressor_model, normalized_test_ds)
 
-
-#    def iterate_model_output(self):

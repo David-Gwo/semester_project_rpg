@@ -47,7 +47,8 @@ class DatasetManager:
             raise NameError("Invalid dataset name")
 
     def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
-                    shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False):
+                    shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False,
+                    tensorflow_format=True):
         """
 
         :param dataset_type: Type of dataset to be generated
@@ -62,7 +63,8 @@ class DatasetManager:
         :param full_batches: whether to enforce same-sized batches in the dataset
         :param repeat_ds: whether to repeat indefinitely the main generated dataset
         :param force_remake: whether to reinforce the reconstruction of the dataset, or try to load it from directory
-        :return: the requested tensorflow dataset/datasets
+        :param tensorflow_format: whether to return the dataset in tensorflow dataset format or numpy array
+        :return: the requested dataset/datasets
         """
 
         self.dataset_type = dataset_type
@@ -92,7 +94,8 @@ class DatasetManager:
                                    split_percentage=split_percentage,
                                    batch_size=batch_size,
                                    full_batches=full_batches,
-                                   repeat_main_ds=repeat_ds)
+                                   repeat_main_ds=repeat_ds,
+                                   tensorflow_format=tensorflow_format)
 
     def generate_dataset(self, x_data, y_data, args, test_split, shuffle):
         """
@@ -178,7 +181,7 @@ class DatasetManager:
         return filtered_imu_vec, filtered_gt_vec
 
     def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, batch_size,
-                       full_batches, repeat_main_ds):
+                       full_batches, repeat_main_ds, tensorflow_format):
         """
         Recovers the dataset from the files, and generates tensorflow-compatible datasets
 
@@ -191,7 +194,8 @@ class DatasetManager:
         :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param full_batches: whether to enforce same-sized batches in the dataset
         :param repeat_main_ds: whether to repeat indefinitely the main generated dataset
-        :return:
+        :param tensorflow_format: whether to return the dataset in tensorflow dataset format or numpy array
+        :return: the requested dataset/datasets
         """
 
         seed = 8901
@@ -233,6 +237,9 @@ class DatasetManager:
 
         imu_tensor = np.delete(imu_tensor, val_ds_indexes, axis=0)
         gt_tensor = np.delete(gt_tensor, val_ds_indexes, axis=0)
+
+        if not tensorflow_format:
+            return imu_tensor, gt_tensor, val_ds_imu_vec, val_ds_v_vec, (main_ds_len, val_ds_len)
 
         main_ds = tf.data.Dataset.from_tensor_slices((imu_tensor, gt_tensor))
         val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec))
