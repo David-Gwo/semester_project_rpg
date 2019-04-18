@@ -30,7 +30,7 @@ class ExperimentManager:
         if comp_x is None:
             comp_x = range(len(comparative_prediction))
 
-        if type(comparative_prediction) == type(np.array([])):
+        if isinstance(comparative_prediction, np.ndarray):
             fig1 = plt.figure()
             ax1 = fig1.add_subplot(3, 1, 1)
             ax2 = fig1.add_subplot(3, 1, 2)
@@ -97,8 +97,10 @@ class ExperimentManager:
             ax4.set_title('att_z')
             fig3.suptitle('Attitude predictions')
 
-            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], model_prediction[i, 6:]).angle) for i in range(len(model_x))]
-            q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], comparative_prediction[i, 6:]).angle) for i in range(len(comp_x))]
+            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], model_prediction[i, 6:]).angle)
+                        for i in range(len(model_x))]
+            q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], comparative_prediction[i, 6:]).angle)
+                             for i in range(len(comp_x))]
 
             fig4 = plt.figure()
             ax1 = fig4.add_subplot(3, 1, 1)
@@ -191,7 +193,9 @@ class ExperimentManager:
                     elif option == "ground_truth":
                         gt = dataset[1]
 
-            figs.append(self.plot_prediction(ground_truth=gt, model_prediction=predictions, comparative_prediction=comparisons))
+            figs.append(self.plot_prediction(ground_truth=gt,
+                                             model_prediction=predictions,
+                                             comparative_prediction=comparisons))
 
         self.experiment_plot(figs, experiment_options)
 
@@ -245,14 +249,17 @@ class ExperimentManager:
                     gt = dataset[1][self.window_len:, :]
 
         predictions_x_axis = np.arange(0, len(gt), self.window_len)
-        fig = self.plot_prediction(ground_truth=gt, model_prediction=predictions, comparative_prediction=comparisons,
-                                   model_x=predictions_x_axis, comp_x=predictions_x_axis)
+        fig = self.plot_prediction(ground_truth=gt,
+                                   model_prediction=predictions,
+                                   comparative_prediction=comparisons,
+                                   model_x=predictions_x_axis,
+                                   comp_x=predictions_x_axis)
         self.experiment_plot(fig, experiment_options)
 
     @staticmethod
     def experiment_plot(figures, experiment_general_options):
         if experiment_general_options["output"] == "save":
-            if (type(figures) == tuple or type(figures) == list) and len(figures) > 1:
+            if isinstance(figures, (tuple, list)) and len(figures) > 1:
                 for i, fig_i in enumerate(figures):
                     if "append_save_name" in experiment_general_options.keys():
                         fig_i.savefig('figures/fig_{0}_{1}_{2}'.format(
