@@ -9,6 +9,26 @@ import random
 from common_flags import FLAGS
 
 
+def define_test_experiments():
+    experiments_dict = {
+        "plot_predictions": {
+            "ds_testing": ["predict"],
+            "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
+            "options": {
+                "output": "show"
+            }
+        },
+        "iterate_model_output": {
+            "ds_testing_non_tensorflow": ["predict"],
+            "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
+            "options": {
+                "output": "show"
+            }
+        }
+    }
+    return experiments_dict
+
+
 def _main():
 
     seed = 8964
@@ -24,7 +44,7 @@ def _main():
     pp.pprint(print_flags_dict)
     learner = Learner(FLAGS)
 
-    learner.test()
+    learner.test(define_test_experiments())
 
 
 def main(argv):

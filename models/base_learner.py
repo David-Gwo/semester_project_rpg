@@ -7,7 +7,7 @@ import tensorflow as tf
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 
-from utils import get_checkpoint_file_list, imu_integration, safe_mkdir_recursive
+from utils import get_checkpoint_file_list, safe_mkdir_recursive
 from data.utils.data_utils import DirectoryIterator
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import imu_integration_net as prediction_network
@@ -209,12 +209,20 @@ class Learner(object):
 
     def test(self, experiments):
         self.build_and_compile_model()
-        self.experiment_manager = ExperimentManager(final_epoch=self.last_epoch_number,
-                                                    model_loader_func=self.recover_model_from_checkpoint,
+        self.experiment_manager = ExperimentManager(window_len=self.config.window_length,
+                                                    final_epoch=self.last_epoch_number,
+                                                    model_loader_func=self.experiment_model_request,
                                                     dataset_loader_func=self.experiment_dataset_request)
 
-        for experiment, dataset in experiments:
-            self.experiment_manager.run_experiment(experiment, dataset)
+        self.recover_model_from_checkpoint(mode="test")
+        self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
+
+        for experiment in experiments.keys():
+            self.experiment_manager.run_experiment(experiment, experiments[experiment])
+
+    def experiment_model_request(self, args=-1):
+        self.recover_model_from_checkpoint(mode="test", model_used_pos=args)
+        return self.regressor_model
 
     def experiment_dataset_request(self, dataset_tags):
         train = False
@@ -240,42 +248,4 @@ class Learner(object):
                                 shuffle=shuffle,
                                 normalize=normalize,
                                 repeat_ds=repeat_ds,
-                                tensorflow_format=tensorflow_format)
-
-    def evaluate_model(self, testing_ds=None, steps=None):
-        compare_manual = self.config.compare_prediction
-
-        is_train = False
-        if self.config.generate_training_progression:
-            # To generate the sequential progression images of how the model fits to the training set
-            is_train = True
-
-        if testing_ds is None:
-            dataset = self.get_dataset(train=is_train,
-                                       val_split=False,
-                                       const_batch_size=False,
-                                       plot=False,
-                                       shuffle=False,
-                                       normalize=True,
-                                       repeat_ds=False)
-            normalized_test_ds, test_ds_length = dataset
-            steps = np.floor(test_ds_length / self.config.batch_size)
-        else:
-            normalized_test_ds = testing_ds.take(steps)
-
-        if compare_manual:
-            dataset = self.get_dataset(train=is_train,
-                                       val_split=False,
-                                       const_batch_size=True,
-                                       plot=False,
-                                       shuffle=False,
-                                       normalize=False,
-                                       repeat_ds=False)
-            unnormalized_test_ds, test_ds_length = dataset
-            manual_predictions = imu_integration(unnormalized_test_ds, self.config.window_length)
-        else:
-            manual_predictions = None
-
-        plot_and_compare_predictions()
-        iterative_predictions = iterate_model_output(self.regressor_model, normalized_test_ds)
-
+                                tensorflow_format=tensorflow_format)[0]

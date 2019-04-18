@@ -24,7 +24,7 @@ def get_checkpoint_file_list(checkpoint_dir, name):
     return files
 
 
-def imu_integration(imu_data, window_len):
+def imu_integration(imu_data, window_len, track_progress=True):
 
     # TODO: get a better comparison
 
@@ -36,12 +36,13 @@ def imu_integration(imu_data, window_len):
     imu_v, t_diff_v, x_0_v = imu_data[:, :window_len, :6], imu_data[:, :window_len, 6:], imu_data[:, window_len:, 0]
 
     # Convert time diff to seconds
-    t_diff_v = np.squeeze(np.stack(t_diff_v/1000))
+    t_diff_v = np.squeeze(np.stack(t_diff_v/1000), axis=2)
 
     bar = Progbar(samples)
 
     for sample in range(samples):
-        bar.update(sample)
+        if track_progress:
+            bar.update(sample)
 
         t_diff = t_diff_v[sample, :]
 

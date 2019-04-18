@@ -239,7 +239,10 @@ class DatasetManager:
         gt_tensor = np.delete(gt_tensor, val_ds_indexes, axis=0)
 
         if not tensorflow_format:
-            return imu_tensor, gt_tensor, val_ds_imu_vec, val_ds_v_vec, (main_ds_len, val_ds_len)
+            if validation_split:
+                return (imu_tensor, gt_tensor), (val_ds_imu_vec, val_ds_v_vec), (main_ds_len, val_ds_len)
+            else:
+                return (imu_tensor, gt_tensor), main_ds_len
 
         main_ds = tf.data.Dataset.from_tensor_slices((imu_tensor, gt_tensor))
         val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec))
