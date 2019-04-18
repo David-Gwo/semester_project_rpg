@@ -246,7 +246,7 @@ class ExperimentManager:
                     comparisons = model_predictions
 
                 elif option == "ground_truth":
-                    gt = dataset[1][self.window_len:, :]
+                    gt = dataset[1][self.window_len-1:, :]
 
         predictions_x_axis = np.arange(0, len(gt), self.window_len)
         fig = self.plot_prediction(ground_truth=gt,
