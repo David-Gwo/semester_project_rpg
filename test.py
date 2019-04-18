@@ -24,6 +24,13 @@ def define_test_experiments():
             "options": {
                 "output": "show"
             }
+        },
+        "training_progression": {
+            "ds_training": ["predict"],
+            "ds_training_non_tensorflow_unnormalized": ["ground_truth"],
+            "options": {
+                "output": "save"
+            }
         }
     }
     return experiments_dict

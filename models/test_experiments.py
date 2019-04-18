@@ -30,7 +30,7 @@ class ExperimentManager:
         if comp_x is None:
             comp_x = range(len(comparative_prediction))
 
-        if comparative_prediction is not 0 and comparative_prediction is not None:
+        if type(comparative_prediction) == type(np.array([])):
             fig1 = plt.figure()
             ax1 = fig1.add_subplot(3, 1, 1)
             ax2 = fig1.add_subplot(3, 1, 2)
@@ -155,9 +155,9 @@ class ExperimentManager:
 
     def plot_predictions(self, datasets, dataset_options, experiment_options):
 
-        gt = None
-        predictions = None
-        comparisons = None
+        gt = []
+        predictions = []
+        comparisons = []
 
         for i, dataset in enumerate(datasets):
             for option in dataset_options[i]:
@@ -171,28 +171,35 @@ class ExperimentManager:
         fig = self.plot_prediction(ground_truth=gt, model_prediction=predictions, comparative_prediction=comparisons)
         self.experiment_plot(fig, experiment_options)
 
-    def training_progression(self):
+    def training_progression(self, datasets, dataset_options, experiment_options):
 
-        # TODO: implement
+        gt = []
+        predictions = []
+        comparisons = []
 
-        # if self.config.generate_training_progression:
-        #     model_pos = 0
-        #     while model_pos != -1:
-        #         model_pos = self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
-        #         self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
-        #         self.evaluate_model(save_figures=True)
-        # else:
-        #     self.recover_model_from_checkpoint(mode="test")
-        #     self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
-        #     self.evaluate_model()
+        figs = []
 
-        raise NotImplemented
+        next_model_num = 0
+        while next_model_num != -1:
+            model, next_model_num = self.model_loader(next_model_num)
+            for i, dataset in enumerate(datasets):
+                for option in dataset_options[i]:
+                    if option == "predict":
+                        predictions = model.predict(dataset, verbose=1)
+                    elif option == "compare_prediction":
+                        comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
+                    elif option == "ground_truth":
+                        gt = dataset[1]
+
+            figs.append(self.plot_prediction(ground_truth=gt, model_prediction=predictions, comparative_prediction=comparisons))
+
+        self.experiment_plot(figs, experiment_options)
 
     def iterate_model_output(self, datasets, dataset_options, experiment_options):
 
-        gt = None
-        predictions = None
-        comparisons = None
+        gt = []
+        predictions = []
+        comparisons = []
 
         for i, dataset in enumerate(datasets):
             for option in dataset_options[i]:
@@ -245,7 +252,7 @@ class ExperimentManager:
     @staticmethod
     def experiment_plot(figures, experiment_general_options):
         if experiment_general_options["output"] == "save":
-            if len(figures) > 1:
+            if (type(figures) == tuple or type(figures) == list) and len(figures) > 1:
                 for i, fig_i in enumerate(figures):
                     if "append_save_name" in experiment_general_options.keys():
                         fig_i.savefig('figures/fig_{0}_{1}_{2}'.format(

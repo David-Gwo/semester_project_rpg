@@ -220,9 +220,16 @@ class Learner(object):
         for experiment in experiments.keys():
             self.experiment_manager.run_experiment(experiment, experiments[experiment])
 
-    def experiment_model_request(self, args=-1):
-        self.recover_model_from_checkpoint(mode="test", model_used_pos=args)
-        return self.regressor_model
+    def experiment_model_request(self, requested_model_num=None):
+
+        model_pos = -1
+
+        if requested_model_num is None:
+            self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
+            return self.regressor_model
+        else:
+            new_model_num = self.recover_model_from_checkpoint(mode="test", model_used_pos=requested_model_num)
+            return self.regressor_model, new_model_num
 
     def experiment_dataset_request(self, dataset_tags):
         train = False
