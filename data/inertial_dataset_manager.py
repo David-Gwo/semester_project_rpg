@@ -5,7 +5,7 @@ from sklearn.externals import joblib
 from data.imu_dataset_generators import windowed_imu_integration_dataset, imu_img_dataset
 from data.utils.data_utils import save_train_and_test_datasets, load_mat_data
 from data.utils.blackbird_utils import BlackbirdDSManager
-from utils import add_text_to_txt_file
+from utils.directories import add_text_to_txt_file
 
 
 SCALER_GYRO_FILE = "scaler_gyro.save"

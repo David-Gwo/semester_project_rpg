@@ -7,10 +7,11 @@ import os
 import numpy as np
 import quaternion as q
 
-from data.utils.data_utils import get_file_from_url
-from utils import safe_mkdir_recursive, correct_quaternion_flip
+from utils.directories import safe_mkdir_recursive
+from utils.algebra import correct_quaternion_flip
 from data.config.blackbird_flags import FLAGS
 from data.inertial_ABCs import IMU, GT, InertialDataset
+from data.utils.data_utils import get_file_from_url
 
 
 class BBIMU(IMU):

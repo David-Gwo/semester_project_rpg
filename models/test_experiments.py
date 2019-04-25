@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils import quaternion_error, unit_quat, imu_integration
+from utils.algebra import quaternion_error, unit_quat, imu_integration
 from tensorflow.python.keras.utils import Progbar
 
 

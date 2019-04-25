@@ -1,4 +1,5 @@
 import numpy as np
+from utils.algebra import log_mapping
 
 
 def window_imu_data(imu_vec, window_len):
@@ -60,6 +61,7 @@ def reformat_data(compact_data):
 
 def windowed_imu_integration_dataset(raw_imu, gt, args):
     """
+    # TODO: complete description. Add so3 stuff
 
     :param raw_imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
     correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is the
@@ -94,4 +96,6 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the state at the end of the window
-    return imu_window_with_initial_state, gt[:-window_len, :]
+    gt_so3 = log_mapping(gt[:-window_len, 6:])
+
+    return imu_window_with_initial_state, np.append(gt[:-window_len, :], gt_so3, axis=1)

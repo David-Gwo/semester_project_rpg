@@ -1,27 +1,6 @@
-import errno
 import numpy as np
-import os
-import re
-from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
-from functools import cmp_to_key
-
-
-def sort_string_func(x, y):
-    if len(x) > len(y):
-        return 1
-    if len(y) > len(x):
-        return -1
-    if str(x).lower() > str(y).lower():
-        return 1
-    return -1
-
-
-def get_checkpoint_file_list(checkpoint_dir, name):
-    regex = name + r"_[0-9]"
-    files = [f for f in os.listdir(checkpoint_dir) if re.match(regex, f)]
-    files = sorted(files, key=cmp_to_key(sort_string_func))
-    return files
+from tensorflow.python.keras.utils import Progbar
 
 
 def imu_integration(imu_data, window_len, track_progress=True):
@@ -119,45 +98,6 @@ def quaternion_error(quat_1, quat_2, normalize=True):
     return q_pred_e
 
 
-def safe_mkdir_recursive(directory):
-    if not os.path.exists(directory):
-        try:
-            os.makedirs(directory)
-        except OSError as exc:
-            if exc.errno == errno.EEXIST and os.path.isdir(directory):
-                pass
-            else:
-                raise
-
-
-def safe_mknode_recursive(destiny_dir, node_name, overwrite):
-    safe_mkdir_recursive(destiny_dir)
-    if overwrite and os.path.exists(destiny_dir + node_name):
-        os.remove(destiny_dir + node_name)
-    if not os.path.exists(destiny_dir + node_name):
-        os.mknod(destiny_dir + node_name)
-        return False
-    return True
-
-
-def add_text_to_txt_file(text, destiny, file_name, overwrite=False):
-    """
-    Adds a txt file at the training directory with the location of the scaler functions used to transform the data that
-    created the model for the first time
-
-    :param text: Text to write in the text file
-    :param destiny: Directory of the txt file
-    :param file_name: Name of the text file
-    :param overwrite: whether to overwrite the existing file
-    """
-
-    existed = safe_mknode_recursive(destiny, file_name, overwrite)
-    if overwrite or (not overwrite and not existed):
-        file = open(destiny + file_name, 'w')
-        file.write(text)
-        file.close()
-
-
 def correct_quaternion_flip(q_vec):
     """
     Makes sure that the quaternion is always positive inside a quaternion sequence
@@ -175,3 +115,33 @@ def correct_quaternion_flip(q_vec):
     else:
         q_vec = np.array([q if q.w >= 0 else -q for q in q_vec])
     return q_vec
+
+
+def log_mapping(q_vec):
+    """
+    Computes the Lie algebra so3 of the quaternion group SU2, or array of quaternions, via the logarithmic mapping
+
+    :param q_vec: quaternion (or list of quaternions) in numpy array format
+    :return: the Lie algebra so3 of the quaternion or array of quaternions
+    """
+
+    w = np.array([2 * np.arccos(q.w) / np.linalg.norm(q.imaginary) * q.imaginary for q in unit_quat(q_vec)])
+
+    return w
+
+
+def exp_mapping(w_vec):
+    """
+    Computes the Lie group SU2 of the Lie algebra vector so3, or array of vectors, via the exponential mapping
+
+    :param w_vec: 3 component vector or array of vectors
+    :return: the Lie group SU2 (in quaternion format) of the so3 Lie algebra
+    """
+    
+    q_vec = np.array(
+        [Quaternion().elements if all(np.isclose(w, [0, 0, 0]))
+         else np.append(np.cos(np.linalg.norm(w)/2), np.sin(np.linalg.norm(w)/2)/np.linalg.norm(w)*w)
+         for w in w_vec])
+
+    return q_vec
+

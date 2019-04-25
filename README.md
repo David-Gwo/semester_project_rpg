@@ -122,7 +122,7 @@ __results__ and __tests__ : Self-explanatory, they should contain the outputs an
 
 [__test.py__](./test.py): Main testing function. You might need some little adaptation to output the results of your trained models.
 
-[__utils.py__](./utils.py): Utility script, contains some general functions to automate testing or some other useful API.
+[__utils.py__](utils/directories.py): Utility script, contains some general functions to automate testing or some other useful API.
 
 [__common_flags.py__](./common_flags.py): Script containing all flags you want to use to set up your training and testing model.
 

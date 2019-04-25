@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from utils import quaternion_error
+from utils.algebra import quaternion_error
 
 
 def l2_loss(y_true, y_pred):

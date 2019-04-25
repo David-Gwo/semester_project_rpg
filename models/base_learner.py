@@ -7,8 +7,7 @@ import tensorflow as tf
 from tensorflow.python.keras import callbacks
 from tensorflow.python.keras.optimizers import Adam
 
-from utils import get_checkpoint_file_list, safe_mkdir_recursive
-from data.utils.data_utils import DirectoryIterator
+from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import imu_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callback_fx import CustomModelCheckpoint
@@ -31,20 +30,6 @@ class Learner(object):
         self.last_epoch_number = 0
         self.trained_model_dir = ""
         self.experiment_manager = None
-
-    @staticmethod
-    def get_filenames_list(directory):
-        """ This function should return all the filenames of the
-            files you want to train on.
-            In case of classification, it should also return labels.
-
-            Args:
-                directory: dataset directory
-            Returns:
-                List of filenames, [List of associated labels]
-        """
-        iterator = DirectoryIterator(directory, shuffle=False)
-        return iterator.filenames, iterator.ground_truth
 
     def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
 
