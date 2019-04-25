@@ -10,7 +10,7 @@ import quaternion as q
 from data.utils.data_utils import get_file_from_url
 from utils import safe_mkdir_recursive
 from data.config.blackbird_flags import FLAGS
-from data.inertial_ABCs import IMU, GT
+from data.inertial_ABCs import IMU, GT, InertialDataset
 
 
 class BBIMU(IMU):
@@ -55,11 +55,11 @@ class BBGT(GT):
         self.ang_vel = (att - old_att) / dt
 
 
-class BlackbirdDSManager:
-    def __init__(self, ds_manager, *args):
+class BlackbirdDSManager(InertialDataset):
+    def __init__(self, *args):
+        super(BlackbirdDSManager, self).__init__()
 
-        # TODO: remove this -> refactor, make ABC descendant
-        self.idm = ds_manager
+        self.sampling_freq = 100
 
         self.ds_flags = FLAGS
 
@@ -84,9 +84,6 @@ class BlackbirdDSManager:
 
         self.ds_version = self.get_dataset_version()
         self.ds_local_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
-
-    def get_ds_directory(self):
-        return self.ds_local_dir
 
     @staticmethod
     def encode_max_speed(max_speed):
@@ -197,21 +194,17 @@ class BlackbirdDSManager:
 
                 gt_old = gt
 
-        return [raw_imu_data, ground_truth_data]
+        self.imu_data = raw_imu_data
+        self.gt_data = ground_truth_data
 
     def get_raw_ds(self):
 
         self.download_blackbird_data()
-        raw_imu_data, ground_truth_data = self.read_blackbird_data()
-
-        raw_imu_data, gt_interp_tuple = self.idm.interpolate_ground_truth(raw_imu_data, ground_truth_data)
-
-        # Re-make vector of interpolated GT measurements
-        n_samples = len(gt_interp_tuple[0])
-        gt_interp = [BBGT().read_from_tuple(tuple([gt_interp_tuple[i][j] for i in range(6)])) for j in range(n_samples)]
+        self.read_blackbird_data()
+        self.interpolate_ground_truth()
 
         # Cut away last 5% samples (noisy measurements)
-        raw_imu_data = raw_imu_data[0:int(np.ceil(0.95 * len(raw_imu_data)))]
-        gt_interp = gt_interp[0:int(np.ceil(0.95 * len(gt_interp)))]
+        self.imu_data = self.imu_data[0:int(np.ceil(0.95 * len(self.imu_data)))]
+        self.gt_data = self.gt_data[0:int(np.ceil(0.95 * len(self.gt_data)))]
 
-        return raw_imu_data, gt_interp
+        return self.imu_data, self.gt_data

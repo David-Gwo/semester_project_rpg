@@ -1,12 +1,9 @@
 import numpy as np
-import matplotlib.pyplot as plt
 import tensorflow as tf
-from scipy.signal import butter as butterworth_filter
 from sklearn.externals import joblib
-from sklearn.preprocessing import MinMaxScaler
 
 from data.imu_dataset_generators import windowed_imu_integration_dataset, imu_img_dataset
-from data.utils.data_utils import save_train_and_test_datasets, interpolate_ts, filter_with_coeffs, load_mat_data
+from data.utils.data_utils import save_train_and_test_datasets, load_mat_data
 from data.utils.blackbird_utils import BlackbirdDSManager
 from utils import add_text_to_txt_file
 
@@ -71,14 +68,15 @@ class DatasetManager:
 
         if not self.is_dataset_ready(args) or force_remake:
 
-            raw_imu, raw_gt = self.dataset.get_raw_ds()
-            add_text_to_txt_file(str(args), self.dataset.get_ds_directory(), self.dataset_conf_file, overwrite=True)
-            processed_imu, processed_gt = self.pre_process_data(raw_imu, raw_gt, self.dataset.get_ds_directory())
-
-            # Show plots of the training dataset
+            self.dataset.get_raw_ds()
             if plot:
-                self.plot_all_data(raw_imu, raw_gt, title="raw")
-                self.plot_all_data(processed_imu, processed_gt, title="filtered", from_numpy=True, show=True)
+                self.dataset.plot_all_data(title="raw")
+
+            add_text_to_txt_file(str(args), self.dataset.get_ds_directory(), self.dataset_conf_file, overwrite=True)
+            processed_imu, processed_gt = self.dataset.pre_process_data(self.scaler_gyro_file, self.scaler_acc_file, 10)
+
+            if plot:
+                self.dataset.plot_all_data(title="filtered", from_numpy=True, show=True)
 
             # Generate the training and testing datasets
             self.generate_dataset(processed_imu, processed_gt, args, split_percentage, shuffle=shuffle)
@@ -134,51 +132,6 @@ class DatasetManager:
             return generated_ds_params == str(args)
         except (NotADirectoryError, FileNotFoundError):
             return False
-
-    def pre_process_data(self, raw_imu_data, gt_interp, euroc_dir):
-        """
-        Pre-process euroc dataset (apply low-pass filter and minmax scaling)
-
-        :param raw_imu_data: 1D array of IMU objects with IMU measurements
-        :param gt_interp: list of 3D arrays with the decomposed velocity ground truth measurements
-        :param euroc_dir: root directory of the euroc data
-        :return: the filtered dataset
-        """
-
-        # Transform the data to numpy matrices
-        imu_unroll = np.array([(imu_s.unroll()) for imu_s in raw_imu_data])
-        gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in gt_interp])
-
-        # Get number of channels per data type (we subtract 1 because timestamp is not a channel we want to filter)
-        imu_channels = np.shape(imu_unroll)[1] - 1
-        gt_channels = np.shape(gt_unroll)[1] - 1
-
-        # TODO: get sampling frequency from somewhere
-
-        # Design butterworth filter
-        fs = 100.0  # Sample frequency (Hz)
-        f0 = 10.0  # Frequency to be removed from signal (Hz)
-        w0 = f0 / (fs / 2)  # Normalized Frequency
-        [b_bw, a_bw] = butterworth_filter(10, w0, output='ba')
-
-        filtered_imu_vec = np.stack([filter_with_coeffs(a_bw, b_bw, imu_unroll[:, i], fs) for i in range(imu_channels)],
-                                    axis=1)
-        filtered_gt_vec = np.stack([filter_with_coeffs(a_bw, b_bw, gt_unroll[:, i], fs) for i in range(gt_channels)],
-                                   axis=1)
-
-        scale_g = MinMaxScaler()
-        scale_g.fit(np.stack(filtered_imu_vec[:, 0]))
-        scale_a = MinMaxScaler()
-        scale_a.fit(np.stack(filtered_imu_vec[:, 1]))
-
-        joblib.dump(scale_g, euroc_dir + self.scaler_gyro_file)
-        joblib.dump(scale_a, euroc_dir + self.scaler_acc_file)
-
-        # Add back the timestamps to the data matrix and return
-        filtered_imu_vec = np.append(filtered_imu_vec, np.expand_dims(imu_unroll[:, -1], axis=1), axis=1)
-        filtered_gt_vec = np.append(filtered_gt_vec, np.expand_dims(gt_unroll[:, -1], axis=1), axis=1)
-
-        return filtered_imu_vec, filtered_gt_vec
 
     def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, batch_size,
                        full_batches, repeat_main_ds, tensorflow_format):
@@ -260,92 +213,3 @@ class DatasetManager:
             return main_ds, val_ds, (main_ds_len, val_ds_len)
         else:
             return main_ds, main_ds_len
-
-    @staticmethod
-    def interpolate_ground_truth(x_data, gt_data):
-        """
-        Interpolates the data of the ground truth so that it matches the timestamps of the raw imu data
-
-        :param x_data: feature data (an array of IMU objects)
-        :param gt_data: ground truth velocity data (an array of GT objects)
-        :return: the original imu data, and the interpolated ground truth data
-        """
-        x_data = np.array(x_data)
-
-        imu_timestamps = np.array([imu_meas.timestamp for imu_meas in x_data])
-        gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in gt_data])
-
-        gt_pos = np.stack(gt_unroll[:, 0])
-        gt_vel = np.stack(gt_unroll[:, 1])
-        gt_att = np.stack(gt_unroll[:, 2])
-        gt_ang_vel = np.stack(gt_unroll[:, 3])
-        gt_acc = np.stack(gt_unroll[:, 4])
-        gt_timestamps = gt_unroll[:, 5]
-
-        # Only keep imu data that is within the ground truth time span
-        x_data = x_data[(imu_timestamps > gt_timestamps[0]) * (imu_timestamps < gt_timestamps[-1])]
-        imu_timestamps = np.array([imu_meas.timestamp for imu_meas in x_data])
-
-        # Interpolate Ground truth to match IMU time acquisitions
-        gt_pos_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_pos)
-        gt_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_vel)
-        gt_att_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_att, is_quaternion=True)
-        gt_ang_vel_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_ang_vel)
-        gt_acc_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_acc)
-
-        return [x_data,
-                (gt_pos_interp, gt_vel_interp, gt_att_interp, gt_ang_vel_interp, gt_acc_interp, imu_timestamps)]
-
-    @staticmethod
-    def plot_all_data(imu_vec, gt_vec, title="", from_numpy=False, show=False):
-        """
-        Plots the imu and ground truth data in two separate figures
-
-        :param imu_vec: vector of imu data (either vector of IMU, or 2d numpy array)
-        :param gt_vec: vector of ground truth data (either vector of GT, or 2d numpy array)
-        :param title: title of the plot
-        :param from_numpy: format of the input data
-        :param show: whether to show plot or not
-        :return:
-        """
-
-        if from_numpy:
-            fig = plt.figure()
-            ax = fig.add_subplot(2, 1, 1)
-            ax.plot(np.stack(imu_vec[:, 0]))
-            ax = fig.add_subplot(2, 1, 2)
-            ax.plot(np.stack(imu_vec[:, 1]))
-            fig.suptitle(title)
-
-            fig = plt.figure()
-            ax = fig.add_subplot(2, 2, 1)
-            ax.plot(np.stack(gt_vec[:, 0]))
-            ax = fig.add_subplot(2, 2, 2)
-            ax.plot(np.stack(gt_vec[:, 1]))
-            ax = fig.add_subplot(2, 2, 3)
-            ax.plot(np.stack(gt_vec[:, 2]))
-            ax = fig.add_subplot(2, 2, 4)
-            ax.plot(np.stack(gt_vec[:, 3]))
-            fig.suptitle(title)
-
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(2, 1, 1)
-            ax.plot([imu.gyro for imu in imu_vec])
-            ax = fig.add_subplot(2, 1, 2)
-            ax.plot([imu.acc for imu in imu_vec])
-            fig.suptitle(title)
-
-            fig = plt.figure()
-            ax = fig.add_subplot(2, 2, 1)
-            ax.plot([gt.pos for gt in gt_vec])
-            ax = fig.add_subplot(2, 2, 2)
-            ax.plot([gt.vel for gt in gt_vec])
-            ax = fig.add_subplot(2, 2, 3)
-            ax.plot([gt.att for gt in gt_vec])
-            ax = fig.add_subplot(2, 2, 4)
-            ax.plot([gt.ang_vel for gt in gt_vec])
-            fig.suptitle(title)
-
-        if show:
-            plt.show()

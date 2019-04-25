@@ -243,7 +243,7 @@ def load_mat_data(directory):
 
 def interpolate_ts(ref_ts, target_ts, meas_vec, is_quaternion=False):
     """
-    Interpolates a vector to different acquisition times, given the original aquisition times
+    Interpolates a vector to different acquisition times, given the original acquisition times
 
     :param ref_ts: reference timestamp vector
     :param target_ts: target timestamp vector (must be inside the limits of `ref_ts`)
