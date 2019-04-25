@@ -20,6 +20,162 @@ class ExperimentManager:
             "iterate_model_output": self.iterate_model_output
         }
 
+    def run_experiment(self, experiment_func, datasets_and_options):
+
+        experiment_options = datasets_and_options["options"]
+        datasets_and_options.pop("options")
+
+        # Request and save dataset if needed
+        for dataset_key_tags in datasets_and_options.keys():
+            if dataset_key_tags not in self.datasets.keys():
+                self.datasets[dataset_key_tags] = self.dataset_loader_func(dataset_key_tags)
+
+        # Run experiment list
+        if experiment_func in self.available_experiments.keys():
+            self.available_experiments[experiment_func](
+                datasets=[self.datasets[exp_dataset_tag] for exp_dataset_tag in datasets_and_options.keys()],
+                dataset_options=[datasets_and_options[key] for key in datasets_and_options.keys()],
+                experiment_options=experiment_options,
+                experiment_name=experiment_func)
+        else:
+            raise ValueError("This experiment is not available")
+
+    def plot_predictions(self, datasets, dataset_options, experiment_options, experiment_name):
+
+        gt = []
+        predictions = []
+        comparisons = []
+
+        for i, dataset in enumerate(datasets):
+            for option in dataset_options[i]:
+                if option == "predict":
+                    predictions = self.model_loader().predict(dataset, verbose=1)
+                elif option == "compare_prediction":
+                    comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
+                elif option == "ground_truth":
+                    gt = dataset[1]
+
+        fig = self.plot_prediction(ground_truth=gt,
+                                   model_prediction=predictions,
+                                   comparative_prediction=comparisons)
+        self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
+
+    def training_progression(self, datasets, dataset_options, experiment_options, experiment_name):
+
+        gt = []
+        predictions = []
+        comparisons = []
+
+        figs = []
+
+        next_model_num = 0
+        while next_model_num != -1:
+            model, next_model_num = self.model_loader(next_model_num)
+            for i, dataset in enumerate(datasets):
+                for option in dataset_options[i]:
+                    if option == "predict":
+                        predictions = model.predict(dataset, verbose=1)
+                    elif option == "compare_prediction":
+                        comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
+                    elif option == "ground_truth":
+                        gt = dataset[1]
+
+            figs.append(self.plot_prediction(ground_truth=gt,
+                                             model_prediction=predictions,
+                                             comparative_prediction=comparisons))
+
+        self.experiment_plot(figs, experiment_options, experiment_name=experiment_name)
+
+    def iterate_model_output(self, datasets, dataset_options, experiment_options, experiment_name):
+
+        gt = []
+        predictions = []
+        comparisons = []
+
+        max_n_predictions = min([len(datasets[i][0]) for i in range(len(datasets))])
+        n_predictions = None
+        if "iterations" in experiment_options.keys():
+            n_predictions = experiment_options["iterations"]
+            assert n_predictions * self.window_len - 1 < max_n_predictions, \
+                "The maximum number of iterations are {0}".format(max_n_predictions)
+
+        for i, dataset in enumerate(datasets):
+
+            if n_predictions is None:
+                n_predictions = int(np.floor(len(dataset[0]) / self.window_len)) - 1
+
+            for option in dataset_options[i]:
+
+                if option == "predict":
+                    model = self.model_loader()
+                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
+                    model_in = np.expand_dims(dataset[0][0, :, :, :], axis=0)
+                    model_predictions[0, :] = model_in[0, self.window_len:, 0, 0]
+                    progress_bar = Progbar(n_predictions)
+
+                    for it in range(n_predictions):
+                        progress_bar.update(it)
+                        model_out = model.predict(model_in, verbose=0)
+                        model_predictions[it, :] = model_out
+                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, :], axis=0)
+                        model_in[0, self.window_len:, 0, :] = np.transpose(model_out)
+
+                    model_predictions[-1, :] = model.predict(model_in, verbose=0)
+                    progress_bar.update(n_predictions)
+                    predictions = model_predictions
+
+                elif option == "compare_prediction":
+                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
+                    model_in = np.expand_dims(dataset[0][0, :, :, 0], axis=0)
+                    model_predictions[0, :] = model_in[0, self.window_len:, 0]
+                    progress_bar = Progbar(n_predictions)
+
+                    for it in range(n_predictions):
+                        progress_bar.update(it)
+                        model_out = self.alternative_prediction_method(model_in, self.window_len, track_progress=False)
+                        model_predictions[it, :] = model_out
+                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, 0], axis=0)
+                        model_in[0, self.window_len:, 0] = np.squeeze(np.transpose(model_out))
+
+                    model_predictions[-1, :] = self.alternative_prediction_method(model_in, self.window_len, track_progress=False)
+                    progress_bar.update(n_predictions)
+                    comparisons = model_predictions
+
+                elif option == "ground_truth":
+                    gt = dataset[1][:n_predictions * self.window_len, :]
+
+        predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
+        predictions_x_axis[1:] -= 1
+        fig = self.plot_prediction(ground_truth=gt,
+                                   model_prediction=predictions,
+                                   comparative_prediction=comparisons,
+                                   gt_x=np.arange(0, n_predictions * self.window_len),
+                                   model_x=predictions_x_axis,
+                                   comp_x=predictions_x_axis)
+        self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
+
+    @staticmethod
+    def experiment_plot(figures, experiment_general_options, experiment_name):
+        if experiment_general_options["output"] == "save":
+            if isinstance(figures, (tuple, list)) and len(figures) > 1:
+                for i, fig_i in enumerate(figures):
+                    if "append_save_name" in experiment_general_options.keys():
+                        fig_i.savefig('figures/fig_{0}_experiment_{1}_{2}'.format(
+                            experiment_name, experiment_general_options["append_save_name"], i))
+                    else:
+                        fig_i.savefig('figures/fig_{0}_experiment_{1}'.format(experiment_name, i))
+                    plt.close(fig_i)
+            else:
+                if "append_save_name" in experiment_general_options.keys():
+                    figures.savefig('figures/fig_{0}_experiment_{1}'.format(
+                            experiment_name, experiment_general_options["append_save_name"]))
+                else:
+                    figures.savefig('figures/fig_{0}_experiment'.format(experiment_name))
+                plt.close(figures)
+
+        elif experiment_general_options["output"] == "show":
+            plt.show()
+
     @staticmethod
     def plot_prediction(ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None):
 
@@ -135,157 +291,3 @@ class ExperimentManager:
             ax.set_title('attitude (quat)')
 
             return fig
-
-    def run_experiment(self, experiment_func, datasets_and_options):
-
-        experiment_options = datasets_and_options["options"]
-        datasets_and_options.pop("options")
-
-        # Request and save dataset if needed
-        for dataset_key_tags in datasets_and_options.keys():
-            if dataset_key_tags not in self.datasets.keys():
-                self.datasets[dataset_key_tags] = self.dataset_loader_func(dataset_key_tags)
-
-        # Run experiment list
-        if experiment_func in self.available_experiments.keys():
-            self.available_experiments[experiment_func](
-                datasets=[self.datasets[exp_dataset_tag] for exp_dataset_tag in datasets_and_options.keys()],
-                dataset_options=[datasets_and_options[key] for key in datasets_and_options.keys()],
-                experiment_options=experiment_options)
-        else:
-            raise ValueError("This experiment is not available")
-
-    def plot_predictions(self, datasets, dataset_options, experiment_options):
-
-        gt = []
-        predictions = []
-        comparisons = []
-
-        for i, dataset in enumerate(datasets):
-            for option in dataset_options[i]:
-                if option == "predict":
-                    predictions = self.model_loader().predict(dataset, verbose=1)
-                elif option == "compare_prediction":
-                    comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
-                elif option == "ground_truth":
-                    gt = dataset[1]
-
-        fig = self.plot_prediction(ground_truth=gt, model_prediction=predictions, comparative_prediction=comparisons)
-        self.experiment_plot(fig, experiment_options)
-
-    def training_progression(self, datasets, dataset_options, experiment_options):
-
-        gt = []
-        predictions = []
-        comparisons = []
-
-        figs = []
-
-        next_model_num = 0
-        while next_model_num != -1:
-            model, next_model_num = self.model_loader(next_model_num)
-            for i, dataset in enumerate(datasets):
-                for option in dataset_options[i]:
-                    if option == "predict":
-                        predictions = model.predict(dataset, verbose=1)
-                    elif option == "compare_prediction":
-                        comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
-                    elif option == "ground_truth":
-                        gt = dataset[1]
-
-            figs.append(self.plot_prediction(ground_truth=gt,
-                                             model_prediction=predictions,
-                                             comparative_prediction=comparisons))
-
-        self.experiment_plot(figs, experiment_options)
-
-    def iterate_model_output(self, datasets, dataset_options, experiment_options):
-
-        gt = []
-        predictions = []
-        comparisons = []
-
-        max_n_predictions = min([len(datasets[i][0]) for i in range(len(datasets))])
-        n_predictions = None
-        if "iterations" in experiment_options.keys():
-            n_predictions = experiment_options["iterations"]
-            assert n_predictions * self.window_len - 1 < max_n_predictions, \
-                "The maximum number of iterations are {0}".format(max_n_predictions)
-
-        for i, dataset in enumerate(datasets):
-
-            if n_predictions is None:
-                n_predictions = int(np.floor(len(dataset[0]) / self.window_len)) - 1
-
-            for option in dataset_options[i]:
-
-                if option == "predict":
-                    model = self.model_loader()
-                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
-                    model_in = np.expand_dims(dataset[0][0, :, :, :], axis=0)
-                    model_predictions[0, :] = model_in[0, self.window_len:, 0, 0]
-                    progress_bar = Progbar(n_predictions)
-
-                    for it in range(n_predictions):
-                        progress_bar.update(it)
-                        model_out = model.predict(model_in, verbose=0)
-                        model_predictions[it, :] = model_out
-                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, :], axis=0)
-                        model_in[0, self.window_len:, 0, :] = np.transpose(model_out)
-
-                    model_predictions[-1, :] = model.predict(model_in, verbose=0)
-                    progress_bar.update(n_predictions)
-                    predictions = model_predictions
-
-                elif option == "compare_prediction":
-                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
-                    model_in = np.expand_dims(dataset[0][0, :, :, 0], axis=0)
-                    model_predictions[0, :] = model_in[0, self.window_len:, 0]
-                    progress_bar = Progbar(n_predictions)
-
-                    for it in range(n_predictions):
-                        progress_bar.update(it)
-                        model_out = self.alternative_prediction_method(model_in, self.window_len, track_progress=False)
-                        model_predictions[it, :] = model_out
-                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, 0], axis=0)
-                        model_in[0, self.window_len:, 0] = np.squeeze(np.transpose(model_out))
-
-                    model_predictions[-1, :] = self.alternative_prediction_method(model_in, self.window_len, track_progress=False)
-                    progress_bar.update(n_predictions)
-                    comparisons = model_predictions
-
-                elif option == "ground_truth":
-                    gt = dataset[1][:n_predictions * self.window_len, :]
-
-        predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
-        predictions_x_axis[1:] -= 1
-        fig = self.plot_prediction(ground_truth=gt,
-                                   model_prediction=predictions,
-                                   comparative_prediction=comparisons,
-                                   gt_x=np.arange(0, n_predictions * self.window_len),
-                                   model_x=predictions_x_axis,
-                                   comp_x=predictions_x_axis)
-        self.experiment_plot(fig, experiment_options)
-
-    @staticmethod
-    def experiment_plot(figures, experiment_general_options):
-        if experiment_general_options["output"] == "save":
-            if isinstance(figures, (tuple, list)) and len(figures) > 1:
-                for i, fig_i in enumerate(figures):
-                    if "append_save_name" in experiment_general_options.keys():
-                        fig_i.savefig('figures/fig_{0}_{1}_{2}'.format(
-                            "plot_predictions_experiment", experiment_general_options["append_save_name"], i))
-                    else:
-                        fig_i.savefig('figures/fig_{0}_{1}'.format("plot_predictions_experiment", i))
-                    plt.close(fig_i)
-            else:
-                if "append_save_name" in experiment_general_options.keys():
-                    figures.savefig(
-                        'figures/fig_{0}_{1}'.format(
-                            "plot_predictions_experiment", experiment_general_options["append_save_name"]))
-                else:
-                    figures.savefig('figures/fig_{0}'.format("plot_predictions_experiment"))
-                plt.close(figures)
-
-        elif experiment_general_options["output"] == "show":
-            plt.show()

@@ -15,7 +15,7 @@ def window_imu_data(imu_vec, window_len):
         if i < window_len:
             imu_img[window_len - i - 1:window_len, :] = imu_vec[0:i + 1, :]
         else:
-            imu_img = imu_vec[i:i + window_len, :]
+            imu_img = imu_vec[i - window_len + 1:i + 1, :]
 
         imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
 
@@ -94,4 +94,4 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the state at the end of the window
-    return imu_window_with_initial_state, gt[window_len:, :]
+    return imu_window_with_initial_state, gt[:-window_len, :]

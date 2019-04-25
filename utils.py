@@ -156,3 +156,22 @@ def add_text_to_txt_file(text, destiny, file_name, overwrite=False):
         file = open(destiny + file_name, 'w')
         file.write(text)
         file.close()
+
+
+def correct_quaternion_flip(q_vec):
+    """
+    Makes sure that the quaternion is always positive inside a quaternion sequence
+
+    :param q_vec: quaternion sequence (n quaternions)
+    :return: the same quaternion sequence but all quaternions are positive rotations
+    """
+
+    as_numpy = isinstance(q_vec, np.ndarray)
+
+    q_vec = unit_quat(q_vec)
+
+    if as_numpy:
+        q_vec = np.array([q.elements if q.w >= 0 else (-q).elements for q in q_vec])
+    else:
+        q_vec = np.array([q if q.w >= 0 else -q for q in q_vec])
+    return q_vec

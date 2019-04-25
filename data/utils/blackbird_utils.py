@@ -8,7 +8,7 @@ import numpy as np
 import quaternion as q
 
 from data.utils.data_utils import get_file_from_url
-from utils import safe_mkdir_recursive
+from utils import safe_mkdir_recursive, correct_quaternion_flip
 from data.config.blackbird_flags import FLAGS
 from data.inertial_ABCs import IMU, GT, InertialDataset
 
@@ -206,5 +206,14 @@ class BlackbirdDSManager(InertialDataset):
         # Cut away last 5% samples (noisy measurements)
         self.imu_data = self.imu_data[0:int(np.ceil(0.95 * len(self.imu_data)))]
         self.gt_data = self.gt_data[0:int(np.ceil(0.95 * len(self.gt_data)))]
+
+        return self.imu_data, self.gt_data
+
+    def pre_process_data(self, gyro_scale_file, acc_scale_file, filter_freq):
+        super(BlackbirdDSManager, self).pre_process_data(gyro_scale_file, acc_scale_file, filter_freq)
+
+        corrected_quaternion = correct_quaternion_flip(np.stack(self.gt_data[:, 2]))
+        for i in range(len(self.gt_data)):
+            self.gt_data[i, 2] = corrected_quaternion[i, :]
 
         return self.imu_data, self.gt_data

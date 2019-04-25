@@ -72,6 +72,7 @@ class DatasetManager:
             if plot:
                 self.dataset.plot_all_data(title="raw")
 
+            # TODO: export as json/yaml
             add_text_to_txt_file(str(args), self.dataset.get_ds_directory(), self.dataset_conf_file, overwrite=True)
             processed_imu, processed_gt = self.dataset.pre_process_data(self.scaler_gyro_file, self.scaler_acc_file, 10)
 
