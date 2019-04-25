@@ -205,12 +205,22 @@ class ExperimentManager:
         predictions = []
         comparisons = []
 
+        max_n_predictions = min([len(datasets[i][0]) for i in range(len(datasets))])
+        n_predictions = None
+        if "iterations" in experiment_options.keys():
+            n_predictions = experiment_options["iterations"]
+            assert n_predictions * self.window_len - 1 < max_n_predictions, \
+                "The maximum number of iterations are {0}".format(max_n_predictions)
+
         for i, dataset in enumerate(datasets):
+
+            if n_predictions is None:
+                n_predictions = int(np.floor(len(dataset[0]) / self.window_len)) - 1
+
             for option in dataset_options[i]:
 
                 if option == "predict":
                     model = self.model_loader()
-                    n_predictions = int(np.floor(len(dataset[0])/self.window_len)) - 1
                     model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
                     model_in = np.expand_dims(dataset[0][0, :, :, :], axis=0)
                     model_predictions[0, :] = model_in[0, self.window_len:, 0, 0]
@@ -228,7 +238,6 @@ class ExperimentManager:
                     predictions = model_predictions
 
                 elif option == "compare_prediction":
-                    n_predictions = int(np.floor(len(dataset[0])/self.window_len)) - 1
                     model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
                     model_in = np.expand_dims(dataset[0][0, :, :, 0], axis=0)
                     model_predictions[0, :] = model_in[0, self.window_len:, 0]
@@ -246,12 +255,14 @@ class ExperimentManager:
                     comparisons = model_predictions
 
                 elif option == "ground_truth":
-                    gt = dataset[1][self.window_len-1:, :]
+                    gt = dataset[1][:n_predictions * self.window_len, :]
 
-        predictions_x_axis = np.arange(0, len(gt), self.window_len)
+        predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
+        predictions_x_axis[1:] -= 1
         fig = self.plot_prediction(ground_truth=gt,
                                    model_prediction=predictions,
                                    comparative_prediction=comparisons,
+                                   gt_x=np.arange(0, n_predictions * self.window_len),
                                    model_x=predictions_x_axis,
                                    comp_x=predictions_x_axis)
         self.experiment_plot(fig, experiment_options)
