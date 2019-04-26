@@ -95,7 +95,7 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_window_with_initial_state[:, 0:window_len, :, :] = window_imu_data(raw_imu, window_len)[:n_samples, :, :, :]
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
-    # The ground truth data to be predicted is the state at the end of the window
-    gt_so3 = log_mapping(gt[:-window_len, 6:])
+    # The ground truth data to be predicted is the Lie algebra of the state at the end of the window
+    gt_so3 = np.append(gt[:-window_len, :6], log_mapping(gt[:-window_len, 6:]), axis=1)
 
-    return imu_window_with_initial_state, np.append(gt[:-window_len, :], gt_so3, axis=1)
+    return imu_window_with_initial_state, gt_so3

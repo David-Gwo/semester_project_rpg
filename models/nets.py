@@ -5,7 +5,7 @@ from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, 
     BatchNormalization, Concatenate, Reshape
 from tensorflow.python.keras.layers.merge import add
 
-from models.customized_tf_funcs.custom_layers import ForkLayer, ForkLayerIMUInt
+from models.customized_tf_funcs.custom_layers import ForkLayer, ForkLayerIMUInt, ExponentialRemappingLayer
 
 ##########################################
 # ADD HERE YOUR NETWORK                  #
@@ -298,4 +298,5 @@ def imu_integration_net(window_len, input_state_len, output_state_len):
 
     net_out = Dense(output_state_len, name='output_layer')(activation_3)
 
-    return Model(net_in, net_out)
+    state_out = ExponentialRemappingLayer(name='exponential_mapping_layer')(net_out)
+    return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)

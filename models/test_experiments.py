@@ -53,7 +53,7 @@ class ExperimentManager:
                 elif option == "compare_prediction":
                     comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                 elif option == "ground_truth":
-                    gt = dataset[1]
+                    gt = np.append(dataset[1][:, :6], exp_mapping(dataset[1][:, 6:9]), axis=1)
 
         fig = self.plot_prediction(ground_truth=gt,
                                    model_prediction=predictions,
@@ -78,7 +78,7 @@ class ExperimentManager:
                     elif option == "compare_prediction":
                         comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                     elif option == "ground_truth":
-                        gt = dataset[1]
+                        gt = np.append(dataset[1][:, :6], exp_mapping(dataset[1][:, 6:9]), axis=1)
 
             figs.append(self.plot_prediction(ground_truth=gt,
                                              model_prediction=predictions,
@@ -97,7 +97,8 @@ class ExperimentManager:
         if "iterations" in experiment_options.keys():
             n_predictions = experiment_options["iterations"]
             assert n_predictions * self.window_len - 1 < max_n_predictions, \
-                "The maximum number of iterations are {0}".format(max_n_predictions)
+                "The maximum number of iterations are {0} for the current window length of {1}".format(
+                    int(np.floor(max_n_predictions / self.window_len)), self.window_len)
 
         for i, dataset in enumerate(datasets):
 
@@ -108,7 +109,7 @@ class ExperimentManager:
 
                 if option == "predict":
                     model = self.model_loader()
-                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
+                    model_predictions = np.zeros((n_predictions + 1, 10))
                     model_in = np.expand_dims(dataset[0][0, :, :, :], axis=0)
                     model_predictions[0, :] = model_in[0, self.window_len:, 0, 0]
                     progress_bar = Progbar(n_predictions)
@@ -125,7 +126,7 @@ class ExperimentManager:
                     predictions = model_predictions
 
                 elif option == "compare_prediction":
-                    model_predictions = np.zeros((n_predictions + 1, np.shape(dataset[1])[1]))
+                    model_predictions = np.zeros((n_predictions + 1, 10))
                     model_in = np.expand_dims(dataset[0][0, :, :, 0], axis=0)
                     model_predictions[0, :] = model_in[0, self.window_len:, 0]
                     progress_bar = Progbar(n_predictions)
@@ -142,7 +143,8 @@ class ExperimentManager:
                     comparisons = model_predictions
 
                 elif option == "ground_truth":
-                    gt = dataset[1][:n_predictions * self.window_len, :]
+                    gt = np.append(dataset[1][:n_predictions * self.window_len, :6],
+                                   exp_mapping(dataset[1][:n_predictions * self.window_len, 6:9]), axis=1)
 
         predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
         predictions_x_axis[1:] -= 1
@@ -233,24 +235,19 @@ class ExperimentManager:
 
             gt_q = np.array([unit_quat(ground_truth[i, 6:10]).elements for i in gt_x])
             pred_q = np.array([unit_quat(model_prediction[i, 6:10]).elements for i in range(len(model_x))])
-            pred_q_lie = exp_mapping(model_prediction[:, 10:13])
             comp_pred_q = np.array([unit_quat(comparative_prediction[i, 6:10]).elements for i in range(len(comp_x))])
 
             ax1.plot(gt_x, gt_q[:, 0], 'b')
-            ax1.plot(model_x, pred_q[:, 0], 'r')
-            ax1.plot(model_x, pred_q_lie[:, 0], 'xkcd:orange')
+            ax1.plot(model_x, pred_q[:, 0], 'xkcd:orange')
             ax1.plot(comp_x, comp_pred_q[:, 0], 'k')
             ax2.plot(gt_x, gt_q[:, 1], 'b')
-            ax2.plot(model_x, pred_q[:, 1], 'r')
-            ax2.plot(model_x, pred_q_lie[:, 1], 'xkcd:orange')
+            ax2.plot(model_x, pred_q[:, 1], 'xkcd:orange')
             ax2.plot(comp_x, comp_pred_q[:, 1], 'k')
             ax3.plot(gt_x, gt_q[:, 2], 'b')
-            ax3.plot(model_x, pred_q[:, 2], 'r')
-            ax3.plot(model_x, pred_q_lie[:, 2], 'xkcd:orange')
+            ax3.plot(model_x, pred_q[:, 2], 'xkcd:orange')
             ax3.plot(comp_x, comp_pred_q[:, 2], 'k')
             ax4.plot(gt_x, gt_q[:, 3], 'b')
-            ax4.plot(model_x, pred_q[:, 3], 'r')
-            ax4.plot(model_x, pred_q_lie[:, 3], 'xkcd:orange')
+            ax4.plot(model_x, pred_q[:, 3], 'xkcd:orange')
             ax4.plot(comp_x, comp_pred_q[:, 3], 'k')
             ax1.set_title('att_w')
             ax2.set_title('att_x')
@@ -260,8 +257,6 @@ class ExperimentManager:
 
             q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
                         for i in range(len(model_x))]
-            q_pred_lie_e = [np.sin(quaternion_error(ground_truth[i, 6:10], pred_q_lie[i, :]).angle)
-                            for i in range(len(model_x))]
             q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle)
                              for i in range(len(comp_x))]
 
@@ -275,8 +270,7 @@ class ExperimentManager:
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
             ax2.set_title('velocity norm error')
             ax3 = fig4.add_subplot(3, 1, 3)
-            ax3.plot(model_x, q_pred_e, 'r')
-            ax3.plot(model_x, q_pred_lie_e, 'xkcd:orange')
+            ax3.plot(model_x, q_pred_e, 'xkcd:orange')
             ax3.plot(comp_x, q_comp_pred_e, 'k')
             ax3.set_title('attitude norm error')
             fig4.suptitle('Prediction vs manual integration errors')

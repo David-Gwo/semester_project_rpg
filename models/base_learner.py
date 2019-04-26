@@ -11,7 +11,7 @@ from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import imu_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
-from models.customized_tf_funcs.custom_losses import state_loss as loss_fx
+from models.customized_tf_funcs.custom_losses import net_loss_fx, state_loss_fx
 from models.test_experiments import ExperimentManager
 
 #############################################################################
@@ -24,7 +24,8 @@ sys.path.append("../")
 class Learner(object):
     def __init__(self, config):
         self.config = config
-        self.regressor_model = None
+        self.trainable_model = None
+        self.output_model = None
         self.model_name = None
         self.model_version_number = None
         self.last_epoch_number = 0
@@ -42,33 +43,41 @@ class Learner(object):
 
             with tf.GradientTape() as tape:
                 # Forward pass
-                logit = self.regressor_model(tf.cast(x, tf.float32))
+                logit = self.trainable_model(tf.cast(x, tf.float32))
 
                 # External loss calculation
-                loss = loss_fx(y, logit)
+                loss = net_loss_fx(y, logit)
 
                 # Manual loss combination:
-                loss += sum(self.regressor_model.losses)
+                loss += sum(self.trainable_model.losses)
 
             if i % 10 == 0:
                 tf.print("Batch {0} of {1}".format(i, ds_lengths[0]))
                 tf.print("Training loss of batch {0}/{2} is: {1}".format(i, loss, ds_lengths[0]))
 
             # Get gradients
-            gradient = tape.gradient(loss, self.regressor_model.trainable_weights)
+            gradient = tape.gradient(loss, self.trainable_model.trainable_weights)
 
             # Update weights of layer
-            optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
+            optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
-    def build_and_compile_model(self):
-        model = prediction_network(self.config.window_length, 10, self.config.output_size)
+    def build_and_compile_model(self, train=True):
+        trainable_model, output_model = prediction_network(self.config.window_length, 10, self.config.output_size)
 
-        print(model.summary())
-        with tf.name_scope("compile_model"):
-            model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                          loss=loss_fx,
-                          metrics=['mse'])
-        self.regressor_model = model
+        if train:
+            print(trainable_model.summary())
+        else:
+            print(output_model.summary())
+
+        trainable_model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
+                                loss=net_loss_fx,
+                                metrics=['mse'])
+        output_model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
+                             loss=state_loss_fx,
+                             metrics=['mse'])
+
+        self.trainable_model = trainable_model
+        self.output_model = output_model
 
     def get_dataset(self, train, val_split, shuffle, repeat_ds, plot=False, const_batch_size=False, normalize=True,
                     tensorflow_format=True):
@@ -125,7 +134,6 @@ class Learner(object):
 
         # Get training and validation datasets from saved files
         dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True, plot=self.config.plot_ds)
-
         train_ds, validation_ds, ds_lengths = dataset
 
         val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
@@ -154,7 +162,7 @@ class Learner(object):
         #     self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
 
         # Train!
-        self.regressor_model.fit(
+        self.trainable_model.fit(
             train_ds,
             verbose=2,
             epochs=self.config.max_epochs,
@@ -184,7 +192,7 @@ class Learner(object):
         model_version_used = files[model_used_pos]
 
         tf.print("Loading weights from ", recovered_model_dir + '/' + model_version_used)
-        self.regressor_model.load_weights(recovered_model_dir + '/' + model_version_used)
+        self.trainable_model.load_weights(recovered_model_dir + '/' + model_version_used)
 
         # Get last epoch of training of the model
         self.last_epoch_number = int(model_version_used.split(self.config.model_name)[1].split('.')[0].split('_')[1])
@@ -195,7 +203,7 @@ class Learner(object):
             return model_used_pos + 1
 
     def test(self, experiments):
-        self.build_and_compile_model()
+        self.build_and_compile_model(train=False)
         self.experiment_manager = ExperimentManager(window_len=self.config.window_length,
                                                     final_epoch=self.last_epoch_number,
                                                     model_loader_func=self.experiment_model_request,
@@ -213,10 +221,10 @@ class Learner(object):
 
         if requested_model_num is None:
             self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
-            return self.regressor_model
+            return self.output_model
         else:
             new_model_num = self.recover_model_from_checkpoint(mode="test", model_used_pos=requested_model_num)
-            return self.regressor_model, new_model_num
+            return self.output_model, new_model_num
 
     def experiment_dataset_request(self, dataset_tags):
         train = False
