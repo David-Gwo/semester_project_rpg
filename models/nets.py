@@ -259,13 +259,13 @@ def one_step_vel_net(imu_len):
     return model
 
 
-def imu_integration_net(window_len, state_len):
+def imu_integration_net(window_len, input_state_len, output_state_len):
 
     imu_final_channels = 5
 
     conv_kernel_width = min([window_len, 2])
-    net_in = Input((window_len + state_len, 7, 1), name="input_layer")
-    imu_stack, time_diff_imu, state_0 = ForkLayerIMUInt(window_len, state_len, name="forking_layer")(net_in)
+    net_in = Input((window_len + input_state_len, 7, 1), name="input_layer")
+    imu_stack, time_diff_imu, state_0 = ForkLayerIMUInt(window_len, input_state_len, name="forking_layer")(net_in)
 
     imu_conv_1 = Conv2D(filters=15, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='same',
                         activation='relu', name='imu_conv_layer_1')(imu_stack)
@@ -288,17 +288,14 @@ def imu_integration_net(window_len, state_len):
     stacked = Concatenate(name='data_concatenating_layer')([flatten_conv_imu, flatten_state_0])
 
     dense_1 = Dense(400, name='dense_layer_1')(stacked)
-    # b_norm_1 = BatchNormalization(name='b_norm_1')(dense_1)
     activation_1 = Activation('relu', name='activation_1')(dense_1)
 
     dense_2 = Dense(200, name='dense_layer_2')(activation_1)
-    # b_norm_2 = BatchNormalization(name='b_norm_2')(dense_2)
     activation_2 = Activation('relu', name='activation_2')(dense_2)
 
     dense_3 = Dense(100, name='dense_layer_3')(activation_2)
-    # b_norm_3 = BatchNormalization(name='b_norm_2')(dense_3)
     activation_3 = Activation('relu', name='activation_3')(dense_3)
 
-    net_out = Dense(state_len, name='output_layer')(activation_3)
+    net_out = Dense(output_state_len, name='output_layer')(activation_3)
 
     return Model(net_in, net_out)

@@ -47,6 +47,7 @@ class DatasetManager:
                     shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False,
                     tensorflow_format=True):
         """
+        Generates datasets for training or testing
 
         :param dataset_type: Type of dataset to be generated
         :param args: extra arguments for dataset generation
@@ -202,13 +203,13 @@ class DatasetManager:
         val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec))
 
         if shuffle:
-            main_ds.shuffle(batch_size, seed=seed)
+            main_ds = main_ds.shuffle(batch_size, seed=seed)
 
         main_ds = main_ds.batch(batch_size, drop_remainder=full_batches)
-        val_ds.batch(batch_size, drop_remainder=full_batches)
+        val_ds = val_ds.batch(batch_size, drop_remainder=full_batches)
 
         if repeat_main_ds:
-            main_ds.repeat()
+            main_ds = main_ds.repeat()
 
         if validation_split:
             return main_ds, val_ds, (main_ds_len, val_ds_len)

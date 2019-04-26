@@ -10,7 +10,7 @@ from tensorflow.python.keras.optimizers import Adam
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import imu_integration_net as prediction_network
-from models.customized_tf_funcs.custom_callback_fx import CustomModelCheckpoint
+from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import state_loss as loss_fx
 from models.test_experiments import ExperimentManager
 
@@ -61,7 +61,7 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.regressor_model.trainable_weights))
 
     def build_and_compile_model(self):
-        model = prediction_network(self.config.window_length, 10)
+        model = prediction_network(self.config.window_length, 10, self.config.output_size)
 
         print(model.summary())
         with tf.name_scope("compile_model"):
@@ -124,7 +124,7 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True)
+        dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True, plot=self.config.plot_ds)
 
         train_ds, validation_ds, ds_lengths = dataset
 
@@ -144,7 +144,9 @@ class Learner(object):
             CustomModelCheckpoint(
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
-                save_weights_only=True, verbose=1, period=self.config.save_freq,
+                save_weights_only=True,
+                verbose=1,
+                period=self.config.save_freq,
                 extra_epoch_number=self.last_epoch_number + 1),
         ]
 

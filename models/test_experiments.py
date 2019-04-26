@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.algebra import quaternion_error, unit_quat, imu_integration
+from utils.algebra import quaternion_error, unit_quat, imu_integration, exp_mapping
 from tensorflow.python.keras.utils import Progbar
 
 
@@ -231,21 +231,26 @@ class ExperimentManager:
             ax3 = fig3.add_subplot(4, 1, 3)
             ax4 = fig3.add_subplot(4, 1, 4)
 
-            gt_q = np.array([unit_quat(ground_truth[i, 6:]).elements for i in gt_x])
-            pred_q = np.array([unit_quat(model_prediction[i, 6:]).elements for i in range(len(model_x))])
-            comp_pred_q = np.array([unit_quat(comparative_prediction[i, 6:]).elements for i in range(len(comp_x))])
+            gt_q = np.array([unit_quat(ground_truth[i, 6:10]).elements for i in gt_x])
+            pred_q = np.array([unit_quat(model_prediction[i, 6:10]).elements for i in range(len(model_x))])
+            pred_q_lie = exp_mapping(model_prediction[:, 10:13])
+            comp_pred_q = np.array([unit_quat(comparative_prediction[i, 6:10]).elements for i in range(len(comp_x))])
 
             ax1.plot(gt_x, gt_q[:, 0], 'b')
             ax1.plot(model_x, pred_q[:, 0], 'r')
+            ax1.plot(model_x, pred_q_lie[:, 0], 'xkcd:orange')
             ax1.plot(comp_x, comp_pred_q[:, 0], 'k')
             ax2.plot(gt_x, gt_q[:, 1], 'b')
             ax2.plot(model_x, pred_q[:, 1], 'r')
+            ax2.plot(model_x, pred_q_lie[:, 1], 'xkcd:orange')
             ax2.plot(comp_x, comp_pred_q[:, 1], 'k')
             ax3.plot(gt_x, gt_q[:, 2], 'b')
             ax3.plot(model_x, pred_q[:, 2], 'r')
+            ax3.plot(model_x, pred_q_lie[:, 2], 'xkcd:orange')
             ax3.plot(comp_x, comp_pred_q[:, 2], 'k')
             ax4.plot(gt_x, gt_q[:, 3], 'b')
             ax4.plot(model_x, pred_q[:, 3], 'r')
+            ax4.plot(model_x, pred_q_lie[:, 3], 'xkcd:orange')
             ax4.plot(comp_x, comp_pred_q[:, 3], 'k')
             ax1.set_title('att_w')
             ax2.set_title('att_x')
@@ -253,9 +258,11 @@ class ExperimentManager:
             ax4.set_title('att_z')
             fig3.suptitle('Attitude predictions')
 
-            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], model_prediction[i, 6:]).angle)
+            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
                         for i in range(len(model_x))]
-            q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:], comparative_prediction[i, 6:]).angle)
+            q_pred_lie_e = [np.sin(quaternion_error(ground_truth[i, 6:10], pred_q_lie[i, :]).angle)
+                            for i in range(len(model_x))]
+            q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle)
                              for i in range(len(comp_x))]
 
             fig4 = plt.figure()
@@ -269,6 +276,7 @@ class ExperimentManager:
             ax2.set_title('velocity norm error')
             ax3 = fig4.add_subplot(3, 1, 3)
             ax3.plot(model_x, q_pred_e, 'r')
+            ax3.plot(model_x, q_pred_lie_e, 'xkcd:orange')
             ax3.plot(comp_x, q_comp_pred_e, 'k')
             ax3.set_title('attitude norm error')
             fig4.suptitle('Prediction vs manual integration errors')
