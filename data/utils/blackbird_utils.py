@@ -107,7 +107,7 @@ class BlackbirdDSManager(InertialDataset):
 
     def convert_to_csv(self, file_name):
         print("Transforming bag file to csv...")
-        subprocess.call("./{0} {1} {2}".format(self.bag2csv_script, file_name, self.ds_flags.blackbird_topics), shell=True)
+        subprocess.call("./{0} {1} {2}".format(self.bag2csv_script, file_name, self.ds_flags.rosbag_topics), shell=True)
         print("Done")
 
     def get_dataset_version(self):

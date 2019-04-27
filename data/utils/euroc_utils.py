@@ -1,104 +1,11 @@
 import csv
 import yaml
 import numpy as np
+import gflags
+import sys
 
-from data.inertial_ABCs import IMU, GT
-
-# TODO: ADAPT TO NEW inertial_dataset_manager.py
-
-
-def read_euroc_dataset(euroc_dir):
-    imu_file = euroc_dir + 'mav0/imu0/data.csv'
-    imu_yaml_file = euroc_dir + 'mav0/imu0/sensor.yaml'
-    ground_truth_file = euroc_dir + 'mav0/state_groundtruth_estimate0/data.csv'
-
-    imu_yaml_data = dict()
-    raw_imu_data = []
-    ground_truth_data = []
-
-    try:
-        # Read IMU data
-        with open(imu_file, 'rt') as csv_file:
-            header_line = 1
-            csv_reader = csv.reader(csv_file, delimiter=',')
-
-            for row in csv_reader:
-                if header_line:
-                    header_line = 0
-                    continue
-
-                imu = IMU()
-                imu.read(row)
-                raw_imu_data.append(imu)
-
-        # Read IMU sensor yaml file
-        with open(imu_yaml_file, 'r') as stream:
-            imu_yaml_data = yaml.load(stream)
-
-        # Read ground truth data
-        with open(ground_truth_file, 'rt') as csv_file:
-            header_line = 1
-            csv_reader = csv.reader(csv_file, delimiter=',')
-
-            for row in csv_reader:
-                if header_line:
-                    header_line = 0
-                    continue
-
-                gt = GT()
-                gt.read(row)
-                ground_truth_data.append(gt)
-
-    except IOError:
-        print("Dataset file not found")
-
-    except yaml.YAMLError as exc:
-        print(exc)
-
-    return [imu_yaml_data, raw_imu_data, ground_truth_data]
-
-
-# TODO: fix fix fix fix
-def load_euroc_dataset(euroc_dir, batch_size, imu_seq_len, euroc_train, euroc_test, processed_ds_available,
-                       trained_model_dir):
-    """
-    Read, interpolate, pre-process and generate euroc dataset for speed regression in tensorflow.
-
-    :param euroc_dir: root directory of the EuRoC dataset
-    :param batch_size: mini-batch size
-    :param imu_seq_len: Number of IMU measurements in the x vectors. Is a function of the sampling frequency of the IMU
-    :param euroc_train: Name of the file where to store the preprocessed euroc training dataset
-    :param euroc_test: Name of the file where to store the preprocessed euroc testing dataset
-    :param processed_ds_available: Whether there is already a processed dataset file available to load from
-    :param trained_model_dir: Name of the directory where trained model will be stored
-    :return: the tf-compatible training and validation datasets, and their respective lengths
-    """
-
-    if not processed_ds_available:
-        imu_yaml_data, raw_imu_data, ground_truth_data = read_euroc_dataset(euroc_dir)
-
-        raw_imu_data, gt_interp = interpolate_ground_truth(raw_imu_data, ground_truth_data)
-
-        processed_imu, processed_v = pre_process_data(raw_imu_data, gt_v_interp, euroc_dir)
-
-        generate_dataset(processed_imu, processed_v, euroc_dir, euroc_train, euroc_test, imu_seq_len)
-
-    add_scaler_ref_to_training_dir(euroc_dir, trained_model_dir)
-
-    return generate_tf_imu_train_ds(euroc_dir, euroc_train, batch_size, trained_model_dir)
-
-
-def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):
-    # TODO: remove this function
-    # Add more flat region so avoid model from learning average value
-    flat_region = filt_imu_vec[6000:7000, :, :]
-    flat_region_v = filt_gt_v_interp[6000:7000, :]
-    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
-    flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
-    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
-    filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
-
-    return filt_imu_vec, filt_gt_v_interp
+from data.inertial_ABCs import IMU, GT, InertialDataset
+from data.config.euroc_flags import FLAGS
 
 
 class EurocIMU(IMU):
@@ -129,20 +36,99 @@ class EurocGT(GT):
         self.ang_vel = data[11:14]
         self.acc = data[14:17]
 
-    def integrate(self, gt_old):
-        """
-        Integrates position and attitude to obtain velocity and angular velocity. Saves integrated values to current
-        BBGT object
 
-        :param gt_old: BBGT from previous timestamp
-        """
-        # TODO: review angular velocity integration -> https://www.ashwinnarayan.com/post/how-to-integrate-quaternions/
+class EurocDSManager(InertialDataset):
+    def __init__(self, *args):
+        super(EurocDSManager, self).__init__()
 
-        dt = (self.timestamp - gt_old.timestamp) * 10e-6
-        self.vel = (self.pos - gt_old.pos) / dt
-        att_q = q.quaternion(self.att[0], self.att[1], self.att[2], self.att[3])
-        att = q.as_euler_angles(att_q)
-        old_att_q = q.quaternion(gt_old.att[0], gt_old.att[1], gt_old.att[2], gt_old.att[3])
-        old_att = q.as_euler_angles(old_att_q)
-        self.ang_vel = (att - old_att) / dt
+        self.sampling_freq = 200
 
+        self.imu_data_file = 'mav0/imu0/data.csv'
+        self.sensor_yaml_file = 'mav0/imu0/sensor.yaml'
+        self.gt_data_file = 'mav0/state_groundtruth_estimate0/data.csv'
+
+        self.ds_flags = FLAGS
+
+        try:
+            _ = FLAGS(args)  # parse flags
+        except gflags.FlagsError:
+            print('Usage: %s ARGS\\n%s' % (sys.argv[0], FLAGS))
+            sys.exit(1)
+
+        self.ds_local_dir = "{0}{1}/".format(self.ds_flags.euroc_local_dir, self.ds_flags.dataset_version)
+
+    def read_euroc_data(self):
+
+        imu_file = "{0}{1}".format(self.ds_local_dir, self.imu_data_file)
+        imu_yaml_file = "{0}{1}".format(self.ds_local_dir, self.sensor_yaml_file)
+        ground_truth_file = "{0}{1}".format(self.ds_local_dir, self.gt_data_file)
+
+        imu_yaml_data = dict()
+        raw_imu_data = []
+        ground_truth_data = []
+
+        try:
+            # Read IMU data
+            with open(imu_file, 'rt') as csv_file:
+                header_line = 1
+                csv_reader = csv.reader(csv_file, delimiter=',')
+
+                for row in csv_reader:
+                    if header_line:
+                        header_line = 0
+                        continue
+
+                    imu = EurocIMU()
+                    imu.read(row)
+                    raw_imu_data.append(imu)
+
+            # Read IMU sensor yaml file
+            with open(imu_yaml_file, 'r') as stream:
+                imu_yaml_data = yaml.load(stream)
+
+            # Read ground truth data
+            with open(ground_truth_file, 'rt') as csv_file:
+                header_line = 1
+                csv_reader = csv.reader(csv_file, delimiter=',')
+
+                for row in csv_reader:
+                    if header_line:
+                        header_line = 0
+                        continue
+
+                    gt = EurocGT()
+                    gt.read(row)
+                    ground_truth_data.append(gt)
+
+        except IOError:
+            print("Dataset file not found")
+
+        except yaml.YAMLError as exc:
+            print(exc)
+
+        self.imu_data = raw_imu_data
+        self.gt_data = ground_truth_data
+
+    def get_raw_ds(self):
+
+        self.read_euroc_data()
+        self.interpolate_ground_truth()
+
+        # Cut away last 1% samples (noisy measurements)
+        self.imu_data = self.imu_data[0:int(np.ceil(0.99 * len(self.imu_data)))]
+        self.gt_data = self.gt_data[0:int(np.ceil(0.99 * len(self.gt_data)))]
+
+        return self.imu_data, self.gt_data
+
+
+def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):
+    # TODO: remove this function
+    # Add more flat region so avoid model from learning average value
+    flat_region = filt_imu_vec[6000:7000, :, :]
+    flat_region_v = filt_gt_v_interp[6000:7000, :]
+    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
+    flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
+    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
+    filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
+
+    return filt_imu_vec, filt_gt_v_interp

@@ -5,6 +5,7 @@ from sklearn.externals import joblib
 from data.imu_dataset_generators import windowed_imu_integration_dataset, imu_img_dataset
 from data.utils.data_utils import save_train_and_test_datasets, load_mat_data
 from data.utils.blackbird_utils import BlackbirdDSManager
+from data.utils.euroc_utils import EurocDSManager
 from utils.directories import add_text_to_txt_file
 
 
@@ -33,13 +34,12 @@ class DatasetManager:
         self.scaler_dir_file = SCALER_DIR_FILE
         self.dataset_conf_file = DATASET_CONF_PARAMS_FILE
 
-        self.dataset_type = None
+        self.dataset_formatting = None
 
         if dataset_name == 'blackbird':
-            self.dataset = BlackbirdDSManager(self)
+            self.dataset = BlackbirdDSManager()
         elif dataset_name == 'euroc':
-            # TODO: implement!
-            raise NotImplemented()
+            self.dataset = EurocDSManager()
         else:
             raise NameError("Invalid dataset name")
 
@@ -65,7 +65,7 @@ class DatasetManager:
         :return: the requested dataset/datasets
         """
 
-        self.dataset_type = dataset_type
+        self.dataset_formatting = dataset_type
 
         if not self.is_dataset_ready(args) or force_remake:
 
@@ -110,7 +110,7 @@ class DatasetManager:
 
         ds_dir = self.dataset.get_ds_directory()
 
-        if self.dataset_type == "windowed_imu_integration":
+        if self.dataset_formatting == "windowed_imu_integration":
             train_data_tensor, gt_tensor = windowed_imu_integration_dataset(x_data, y_data, args)
         else:
             train_data_tensor, gt_tensor = imu_img_dataset(x_data, y_data, args)

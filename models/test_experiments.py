@@ -66,10 +66,10 @@ class ExperimentManager:
         predictions = []
         comparisons = []
 
-        figs = []
-
+        j = 0
         next_model_num = 0
         while next_model_num != -1:
+            figs = []
             model, next_model_num = self.model_loader(next_model_num)
             for i, dataset in enumerate(datasets):
                 for option in dataset_options[i]:
@@ -83,8 +83,8 @@ class ExperimentManager:
             figs.append(self.plot_prediction(ground_truth=gt,
                                              model_prediction=predictions,
                                              comparative_prediction=comparisons))
-
-        self.experiment_plot(figs, experiment_options, experiment_name=experiment_name)
+            j += 1
+            self.experiment_plot(figs[0], experiment_options, experiment_name=experiment_name, iteration=str(j))
 
     def iterate_model_output(self, datasets, dataset_options, experiment_options, experiment_name):
 
@@ -157,22 +157,22 @@ class ExperimentManager:
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     @staticmethod
-    def experiment_plot(figures, experiment_general_options, experiment_name):
+    def experiment_plot(figures, experiment_general_options, experiment_name, iteration=''):
         if experiment_general_options["output"] == "save":
-            if isinstance(figures, (tuple, list)) and len(figures) > 1:
+            if isinstance(figures, (tuple, list)):
                 for i, fig_i in enumerate(figures):
                     if "append_save_name" in experiment_general_options.keys():
-                        fig_i.savefig('figures/fig_{0}_experiment_{1}_{2}'.format(
-                            experiment_name, experiment_general_options["append_save_name"], i))
+                        fig_i.savefig('figures/fig_{0}_experiment_{1}{3}_{2}'.format(
+                            experiment_name, experiment_general_options["append_save_name"], i, '_' + iteration))
                     else:
-                        fig_i.savefig('figures/fig_{0}_experiment_{1}'.format(experiment_name, i))
+                        fig_i.savefig('figures/fig_{0}_experiment{2}_{1}'.format(experiment_name, i, '_' + iteration))
                     plt.close(fig_i)
             else:
                 if "append_save_name" in experiment_general_options.keys():
-                    figures.savefig('figures/fig_{0}_experiment_{1}'.format(
-                            experiment_name, experiment_general_options["append_save_name"]))
+                    figures.savefig('figures/fig_{0}_experiment_{1}{2}'.format(
+                            experiment_name, experiment_general_options["append_save_name"], '_' + iteration))
                 else:
-                    figures.savefig('figures/fig_{0}_experiment'.format(experiment_name))
+                    figures.savefig('figures/fig_{0}_experiment{1}'.format(experiment_name, '_' + iteration))
                 plt.close(figures)
 
         elif experiment_general_options["output"] == "show":
@@ -188,108 +188,99 @@ class ExperimentManager:
         if comp_x is None:
             comp_x = range(len(comparative_prediction))
 
+        fig1 = plt.figure()
+        ax1 = fig1.add_subplot(3, 1, 1)
+        ax2 = fig1.add_subplot(3, 1, 2)
+        ax3 = fig1.add_subplot(3, 1, 3)
+
         if isinstance(comparative_prediction, np.ndarray):
-            fig1 = plt.figure()
-            ax1 = fig1.add_subplot(3, 1, 1)
-            ax2 = fig1.add_subplot(3, 1, 2)
-            ax3 = fig1.add_subplot(3, 1, 3)
-
-            ax1.plot(gt_x, ground_truth[:, 0], 'b')
-            ax1.plot(model_x, model_prediction[:, 0], 'r')
             ax1.plot(comp_x, comparative_prediction[:, 0], 'k')
-            ax2.plot(gt_x, ground_truth[:, 1], 'b')
-            ax2.plot(model_x, model_prediction[:, 1], 'r')
             ax2.plot(comp_x, comparative_prediction[:, 1], 'k')
-            ax3.plot(gt_x, ground_truth[:, 2], 'b')
-            ax3.plot(model_x, model_prediction[:, 2], 'r')
             ax3.plot(comp_x, comparative_prediction[:, 2], 'k')
-            ax1.set_title('pos_x')
-            ax2.set_title('pos_y')
-            ax3.set_title('pos_z')
-            fig1.suptitle('Position predictions')
 
-            fig2 = plt.figure()
-            ax1 = fig2.add_subplot(3, 1, 1)
-            ax2 = fig2.add_subplot(3, 1, 2)
-            ax3 = fig2.add_subplot(3, 1, 3)
+        ax1.plot(gt_x, ground_truth[:, 0], 'b')
+        ax1.plot(model_x, model_prediction[:, 0], 'r')
+        ax2.plot(gt_x, ground_truth[:, 1], 'b')
+        ax2.plot(model_x, model_prediction[:, 1], 'r')
+        ax3.plot(gt_x, ground_truth[:, 2], 'b')
+        ax3.plot(model_x, model_prediction[:, 2], 'r')
+        ax1.set_title('pos_x')
+        ax2.set_title('pos_y')
+        ax3.set_title('pos_z')
+        fig1.suptitle('Position predictions')
 
-            ax1.plot(gt_x, ground_truth[:, 3], 'b')
-            ax1.plot(model_x, model_prediction[:, 3], 'r')
+        fig2 = plt.figure()
+        ax1 = fig2.add_subplot(3, 1, 1)
+        ax2 = fig2.add_subplot(3, 1, 2)
+        ax3 = fig2.add_subplot(3, 1, 3)
+
+        if isinstance(comparative_prediction, np.ndarray):
             ax1.plot(comp_x, comparative_prediction[:, 3], 'k')
-            ax2.plot(gt_x, ground_truth[:, 4], 'b')
-            ax2.plot(model_x, model_prediction[:, 4], 'r')
             ax2.plot(comp_x, comparative_prediction[:, 4], 'k')
-            ax3.plot(gt_x, ground_truth[:, 5], 'b')
-            ax3.plot(model_x, model_prediction[:, 5], 'r')
             ax3.plot(comp_x, comparative_prediction[:, 5], 'k')
-            ax1.set_title('vel_x')
-            ax2.set_title('vel_y')
-            ax3.set_title('vel_z')
-            fig2.suptitle('Velocity predictions')
 
-            fig3 = plt.figure()
-            ax1 = fig3.add_subplot(4, 1, 1)
-            ax2 = fig3.add_subplot(4, 1, 2)
-            ax3 = fig3.add_subplot(4, 1, 3)
-            ax4 = fig3.add_subplot(4, 1, 4)
+        ax1.plot(gt_x, ground_truth[:, 3], 'b')
+        ax1.plot(model_x, model_prediction[:, 3], 'r')
+        ax2.plot(gt_x, ground_truth[:, 4], 'b')
+        ax2.plot(model_x, model_prediction[:, 4], 'r')
+        ax3.plot(gt_x, ground_truth[:, 5], 'b')
+        ax3.plot(model_x, model_prediction[:, 5], 'r')
+        ax1.set_title('vel_x')
+        ax2.set_title('vel_y')
+        ax3.set_title('vel_z')
+        fig2.suptitle('Velocity predictions')
 
-            gt_q = np.array([unit_quat(ground_truth[i, 6:10]).elements for i in gt_x])
-            pred_q = np.array([unit_quat(model_prediction[i, 6:10]).elements for i in range(len(model_x))])
+        fig3 = plt.figure()
+        ax1 = fig3.add_subplot(4, 1, 1)
+        ax2 = fig3.add_subplot(4, 1, 2)
+        ax3 = fig3.add_subplot(4, 1, 3)
+        ax4 = fig3.add_subplot(4, 1, 4)
+
+        gt_q = np.array([unit_quat(ground_truth[i, 6:10]).elements for i in gt_x])
+        pred_q = np.array([unit_quat(model_prediction[i, 6:10]).elements for i in range(len(model_x))])
+
+        if isinstance(comparative_prediction, np.ndarray):
             comp_pred_q = np.array([unit_quat(comparative_prediction[i, 6:10]).elements for i in range(len(comp_x))])
-
-            ax1.plot(gt_x, gt_q[:, 0], 'b')
-            ax1.plot(model_x, pred_q[:, 0], 'xkcd:orange')
             ax1.plot(comp_x, comp_pred_q[:, 0], 'k')
-            ax2.plot(gt_x, gt_q[:, 1], 'b')
-            ax2.plot(model_x, pred_q[:, 1], 'xkcd:orange')
             ax2.plot(comp_x, comp_pred_q[:, 1], 'k')
-            ax3.plot(gt_x, gt_q[:, 2], 'b')
-            ax3.plot(model_x, pred_q[:, 2], 'xkcd:orange')
             ax3.plot(comp_x, comp_pred_q[:, 2], 'k')
-            ax4.plot(gt_x, gt_q[:, 3], 'b')
-            ax4.plot(model_x, pred_q[:, 3], 'xkcd:orange')
             ax4.plot(comp_x, comp_pred_q[:, 3], 'k')
-            ax1.set_title('att_w')
-            ax2.set_title('att_x')
-            ax3.set_title('att_y')
-            ax4.set_title('att_z')
-            fig3.suptitle('Attitude predictions')
 
-            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
-                        for i in range(len(model_x))]
+        ax1.plot(gt_x, gt_q[:, 0], 'b')
+        ax1.plot(model_x, pred_q[:, 0], 'xkcd:orange')
+        ax2.plot(gt_x, gt_q[:, 1], 'b')
+        ax2.plot(model_x, pred_q[:, 1], 'xkcd:orange')
+        ax3.plot(gt_x, gt_q[:, 2], 'b')
+        ax3.plot(model_x, pred_q[:, 2], 'xkcd:orange')
+        ax4.plot(gt_x, gt_q[:, 3], 'b')
+        ax4.plot(model_x, pred_q[:, 3], 'xkcd:orange')
+        ax1.set_title('att_w')
+        ax2.set_title('att_x')
+        ax3.set_title('att_y')
+        ax4.set_title('att_z')
+        fig3.suptitle('Attitude predictions')
+
+        fig4 = plt.figure()
+        ax1 = fig4.add_subplot(3, 1, 1)
+        ax2 = fig4.add_subplot(3, 1, 2)
+        ax3 = fig4.add_subplot(3, 1, 3)
+
+        q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
+                    for i in range(len(model_x))]
+
+        if isinstance(comparative_prediction, np.ndarray):
             q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle)
                              for i in range(len(comp_x))]
-
-            fig4 = plt.figure()
-            ax1 = fig4.add_subplot(3, 1, 1)
-            ax1.plot(model_x, np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1), 'r')
             ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
-            ax1.set_title('position norm error')
-            ax2 = fig4.add_subplot(3, 1, 2)
-            ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
-            ax2.set_title('velocity norm error')
-            ax3 = fig4.add_subplot(3, 1, 3)
-            ax3.plot(model_x, q_pred_e, 'xkcd:orange')
             ax3.plot(comp_x, q_comp_pred_e, 'k')
-            ax3.set_title('attitude norm error')
-            fig4.suptitle('Prediction vs manual integration errors')
 
-            return fig1, fig2, fig3, fig4
+        ax1.plot(model_x, np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1), 'r')
+        ax1.set_title('position norm error')
+        ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
+        ax2.set_title('velocity norm error')
+        ax3.plot(model_x, q_pred_e, 'xkcd:orange')
+        ax3.set_title('attitude norm error')
+        fig4.suptitle('Prediction vs manual integration errors')
 
-        else:
-            fig = plt.figure()
-            ax = fig.add_subplot(3, 1, 1)
-            ax.plot(gt_x, ground_truth[:, 0:3], 'b')
-            ax.plot(model_x, model_prediction[:, 0:3], 'r')
-            ax.set_title('position')
-            ax = fig.add_subplot(3, 1, 2)
-            ax.plot(gt_x, ground_truth[:, 3:6], 'b')
-            ax.plot(model_x, model_prediction[:, 3:6], 'r')
-            ax.set_title('velocity')
-            ax = fig.add_subplot(3, 1, 3)
-            ax.plot(gt_x, ground_truth[:, 6:10], 'b')
-            ax.plot(model_x, model_prediction[:, 6:10], 'r')
-            ax.set_title('attitude (quat)')
-
-            return fig
+        return fig1, fig2, fig3, fig4

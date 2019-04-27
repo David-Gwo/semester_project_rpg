@@ -124,16 +124,18 @@ class InertialDataset(ABC):
         imu_timestamps = np.array([imu_meas.timestamp for imu_meas in x_data])
         gt_unroll = np.array([(gt_meas.unroll()) for gt_meas in self.gt_data])
 
-        gt_pos = np.stack(gt_unroll[:, 0])
-        gt_vel = np.stack(gt_unroll[:, 1])
-        gt_att = np.stack(gt_unroll[:, 2])
-        gt_ang_vel = np.stack(gt_unroll[:, 3])
-        gt_acc = np.stack(gt_unroll[:, 4])
         gt_timestamps = gt_unroll[:, 5]
 
         # Only keep imu data that is within the ground truth time span
         x_data = x_data[(imu_timestamps > gt_timestamps[0]) * (imu_timestamps < gt_timestamps[-1])]
         imu_timestamps = np.array([imu_meas.timestamp for imu_meas in x_data])
+        self.imu_data = x_data
+
+        gt_pos = np.stack(gt_unroll[:, 0])
+        gt_vel = np.stack(gt_unroll[:, 1])
+        gt_att = np.stack(gt_unroll[:, 2])
+        gt_ang_vel = np.stack(gt_unroll[:, 3])
+        gt_acc = np.stack(gt_unroll[:, 4])
 
         # Interpolate Ground truth to match IMU time acquisitions
         gt_pos_interp = interpolate_ts(gt_timestamps, imu_timestamps, gt_pos)
@@ -164,38 +166,50 @@ class InertialDataset(ABC):
             fig = plt.figure()
             ax = fig.add_subplot(2, 1, 1)
             ax.plot(np.stack(self.imu_data[:, 0]))
+            ax.set_title("IMU: gyroscope")
             ax = fig.add_subplot(2, 1, 2)
             ax.plot(np.stack(self.imu_data[:, 1]))
+            ax.set_title("IMU: accelerometer")
             fig.suptitle(title)
 
             fig = plt.figure()
             ax = fig.add_subplot(2, 2, 1)
             ax.plot(np.stack(self.gt_data[:, 0]))
+            ax.set_title("GT: position")
             ax = fig.add_subplot(2, 2, 2)
             ax.plot(np.stack(self.gt_data[:, 1]))
+            ax.set_title("GT: velocity")
             ax = fig.add_subplot(2, 2, 3)
             ax.plot(np.stack(self.gt_data[:, 2]))
+            ax.set_title("GT: attitude")
             ax = fig.add_subplot(2, 2, 4)
             ax.plot(np.stack(self.gt_data[:, 3]))
+            ax.set_title("GT: angular velocity")
             fig.suptitle(title)
 
         else:
             fig = plt.figure()
             ax = fig.add_subplot(2, 1, 1)
             ax.plot([imu.gyro for imu in self.imu_data])
+            ax.set_title("IMU: gyroscope")
             ax = fig.add_subplot(2, 1, 2)
             ax.plot([imu.acc for imu in self.imu_data])
+            ax.set_title("IMU: accelerometer")
             fig.suptitle(title)
 
             fig = plt.figure()
             ax = fig.add_subplot(2, 2, 1)
             ax.plot([gt.pos for gt in self.gt_data])
+            ax.set_title("GT: position")
             ax = fig.add_subplot(2, 2, 2)
             ax.plot([gt.vel for gt in self.gt_data])
+            ax.set_title("GT: velocity")
             ax = fig.add_subplot(2, 2, 3)
             ax.plot([gt.att for gt in self.gt_data])
+            ax.set_title("GT: attitude")
             ax = fig.add_subplot(2, 2, 4)
             ax.plot([gt.ang_vel for gt in self.gt_data])
+            ax.set_title("GT: angular velocity")
             fig.suptitle(title)
 
         if show:

@@ -11,20 +11,20 @@ from common_flags import FLAGS
 
 def define_test_experiments():
     experiments_dict = {
-        # "plot_predictions": {
-        #     "ds_testing": ["predict"],
-        #     "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
-        #     "options": {
-        #         "output": "show"
-        #     }
-        # },
-        "iterate_model_output": {
-            "ds_testing_non_tensorflow": ["predict"],
-            "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
+        "plot_predictions": {
+            "ds_training": ["predict"],
+            "ds_training_non_tensorflow_unnormalized": ["ground_truth"],
             "options": {
-                "output": "show",
+                "output": "show"
             }
         },
+        # "iterate_model_output": {
+        #     "ds_testing_non_tensorflow": ["predict"],
+        #     "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
+        #     "options": {
+        #         "output": "show",
+        #     }
+        # },
         # "training_progression": {
         #     "ds_training": ["predict"],
         #     "ds_training_non_tensorflow_unnormalized": ["ground_truth"],
