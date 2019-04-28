@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.algebra import quaternion_error, unit_quat, imu_integration, exp_mapping
+from utils.algebra import quaternion_error, unit_quat, imu_integration, log_mapping
 from utils.visualization import Dynamic3DTrajectory
 from tensorflow.python.keras.utils import Progbar
 
@@ -59,7 +59,7 @@ class ExperimentManager:
                 elif option == "compare_prediction":
                     comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                 elif option == "ground_truth":
-                    gt = np.append(dataset[1][:, :6], exp_mapping(dataset[1][:, 6:9]), axis=1)
+                    gt = dataset[1][:, :9]
 
         fig = self.plot_prediction(ground_truth=gt,
                                    model_prediction=predictions,
@@ -86,13 +86,13 @@ class ExperimentManager:
                     elif option == "compare_prediction":
                         comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                     elif option == "ground_truth":
-                        gt = np.append(dataset[1][:, :6], exp_mapping(dataset[1][:, 6:9]), axis=1)
+                        gt = dataset[1][:, :9]
 
             figs.append(self.plot_prediction(ground_truth=gt,
                                              model_prediction=predictions,
-                                             comparative_prediction=comparisons),
+                                             comparative_prediction=comparisons,
                                              dynamic_plot=experiment_options["dynamic_plot"],
-                                             sparsing_factor=experiment_options["sparsing_factor"])
+                                             sparsing_factor=experiment_options["sparsing_factor"]))
             j += 1
             self.experiment_plot(figs[0], experiment_options, experiment_name=experiment_name, iteration=str(j))
 
@@ -153,8 +153,7 @@ class ExperimentManager:
                     comparisons = model_predictions
 
                 elif option == "ground_truth":
-                    gt = np.append(dataset[1][:n_predictions * self.window_len, :6],
-                                   exp_mapping(dataset[1][:n_predictions * self.window_len, 6:9]), axis=1)
+                    gt = dataset[1][:n_predictions * self.window_len, :9]
 
         predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
         predictions_x_axis[1:] -= 1
@@ -249,33 +248,30 @@ class ExperimentManager:
         fig2.suptitle('Velocity predictions')
 
         fig3 = plt.figure()
-        ax1 = fig3.add_subplot(4, 1, 1)
-        ax2 = fig3.add_subplot(4, 1, 2)
-        ax3 = fig3.add_subplot(4, 1, 3)
-        ax4 = fig3.add_subplot(4, 1, 4)
-
-        gt_q = np.array([unit_quat(ground_truth[i, 6:10]).elements for i in gt_x])
-        pred_q = np.array([unit_quat(model_prediction[i, 6:10]).elements for i in range(len(model_x))])
+        ax1 = fig3.add_subplot(3, 1, 1)
+        ax2 = fig3.add_subplot(3, 1, 2)
+        ax3 = fig3.add_subplot(3, 1, 3)
 
         if isinstance(comparative_prediction, np.ndarray):
-            comp_pred_q = np.array([unit_quat(comparative_prediction[i, 6:10]).elements for i in range(len(comp_x))])
+            comp_pred_q = log_mapping([comparative_prediction[i, 6:10] for i in range(len(comp_x))])
             ax1.plot(comp_x, comp_pred_q[:, 0], 'k')
             ax2.plot(comp_x, comp_pred_q[:, 1], 'k')
             ax3.plot(comp_x, comp_pred_q[:, 2], 'k')
-            ax4.plot(comp_x, comp_pred_q[:, 3], 'k')
 
-        ax1.plot(gt_x, gt_q[:, 0], 'b')
-        ax1.plot(model_x, pred_q[:, 0], 'xkcd:orange')
-        ax2.plot(gt_x, gt_q[:, 1], 'b')
-        ax2.plot(model_x, pred_q[:, 1], 'xkcd:orange')
-        ax3.plot(gt_x, gt_q[:, 2], 'b')
-        ax3.plot(model_x, pred_q[:, 2], 'xkcd:orange')
-        ax4.plot(gt_x, gt_q[:, 3], 'b')
-        ax4.plot(model_x, pred_q[:, 3], 'xkcd:orange')
-        ax1.set_title('att_w')
-        ax2.set_title('att_x')
-        ax3.set_title('att_y')
-        ax4.set_title('att_z')
+            q_comp_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - comp_pred_q, axis=1)
+
+        else:
+            q_comp_pred_e = None
+
+        ax1.plot(gt_x, ground_truth[:, 6], 'b')
+        ax1.plot(model_x, model_prediction[:, 6], 'xkcd:orange')
+        ax2.plot(gt_x, ground_truth[:, 1], 'b')
+        ax2.plot(model_x, model_prediction[:, 7], 'xkcd:orange')
+        ax3.plot(gt_x, ground_truth[:, 2], 'b')
+        ax3.plot(model_x, model_prediction[:, 8], 'xkcd:orange')
+        ax1.set_title('lie x')
+        ax2.set_title('lie y')
+        ax3.set_title('lie z')
         fig3.suptitle('Attitude predictions')
 
         fig4 = plt.figure()
@@ -283,12 +279,7 @@ class ExperimentManager:
         ax2 = fig4.add_subplot(3, 1, 2)
         ax3 = fig4.add_subplot(3, 1, 3)
 
-        q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
-                    for i in range(len(model_x))]
-
         if isinstance(comparative_prediction, np.ndarray):
-            q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle)
-                             for i in range(len(comp_x))]
             ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
             ax3.plot(comp_x, q_comp_pred_e, 'k')
@@ -297,7 +288,7 @@ class ExperimentManager:
         ax1.set_title('position norm error')
         ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
         ax2.set_title('velocity norm error')
-        ax3.plot(model_x, q_pred_e, 'xkcd:orange')
+        ax3.plot(model_x, np.linalg.norm(ground_truth[model_x, 6:9] - model_prediction[:, 6:9], axis=1), 'xkcd:orange')
         ax3.set_title('attitude norm error')
         fig4.suptitle('Prediction vs manual integration errors')
 
