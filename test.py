@@ -19,10 +19,12 @@ def define_test_experiments():
             }
         },
         # "iterate_model_output": {
-        #     "ds_testing_non_tensorflow": ["predict"],
-        #     "ds_testing_non_tensorflow_unnormalized": ["compare_prediction", "ground_truth"],
+        #     "ds_training_non_tensorflow": ["predict"],
+        #     "ds_training_non_tensorflow_unnormalized": ["ground_truth"],
         #     "options": {
         #         "output": "show",
+        #         "dynamic_plot": True,
+        #         "sparsing_factor": 0
         #     }
         # },
         # "training_progression": {

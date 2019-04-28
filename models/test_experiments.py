@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from utils.algebra import quaternion_error, unit_quat, imu_integration, exp_mapping
+from utils.visualization import Dynamic3DTrajectory
 from tensorflow.python.keras.utils import Progbar
 
 
@@ -24,6 +25,11 @@ class ExperimentManager:
 
         experiment_options = datasets_and_options["options"]
         datasets_and_options.pop("options")
+
+        if "dynamic_plot" not in experiment_options.keys():
+            experiment_options["dynamic_plot"] = False
+        if "sparsing_factor" not in experiment_options.keys():
+            experiment_options["sparsing_factor"] = 0
 
         # Request and save dataset if needed
         for dataset_key_tags in datasets_and_options.keys():
@@ -57,7 +63,9 @@ class ExperimentManager:
 
         fig = self.plot_prediction(ground_truth=gt,
                                    model_prediction=predictions,
-                                   comparative_prediction=comparisons)
+                                   comparative_prediction=comparisons,
+                                   dynamic_plot=experiment_options["dynamic_plot"],
+                                   sparsing_factor=experiment_options["sparsing_factor"])
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     def training_progression(self, datasets, dataset_options, experiment_options, experiment_name):
@@ -82,7 +90,9 @@ class ExperimentManager:
 
             figs.append(self.plot_prediction(ground_truth=gt,
                                              model_prediction=predictions,
-                                             comparative_prediction=comparisons))
+                                             comparative_prediction=comparisons),
+                                             dynamic_plot=experiment_options["dynamic_plot"],
+                                             sparsing_factor=experiment_options["sparsing_factor"])
             j += 1
             self.experiment_plot(figs[0], experiment_options, experiment_name=experiment_name, iteration=str(j))
 
@@ -153,7 +163,9 @@ class ExperimentManager:
                                    comparative_prediction=comparisons,
                                    gt_x=np.arange(0, n_predictions * self.window_len),
                                    model_x=predictions_x_axis,
-                                   comp_x=predictions_x_axis)
+                                   comp_x=predictions_x_axis,
+                                   dynamic_plot=experiment_options["dynamic_plot"],
+                                   sparsing_factor=experiment_options["sparsing_factor"])
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     @staticmethod
@@ -179,7 +191,8 @@ class ExperimentManager:
             plt.show()
 
     @staticmethod
-    def plot_prediction(ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None):
+    def plot_prediction(ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None,
+                        dynamic_plot=False, sparsing_factor=0):
 
         if gt_x is None:
             gt_x = range(len(ground_truth))
@@ -187,6 +200,11 @@ class ExperimentManager:
             model_x = range(len(model_prediction))
         if comp_x is None:
             comp_x = range(len(comparative_prediction))
+
+        if dynamic_plot:
+            dynamic_plot = Dynamic3DTrajectory([ground_truth[model_x, 0:3], model_prediction[:, 0:3]], sparsing_factor)
+            dynamic_fig = dynamic_plot()
+            plt.close(dynamic_fig)
 
         fig1 = plt.figure()
         ax1 = fig1.add_subplot(3, 1, 1)
