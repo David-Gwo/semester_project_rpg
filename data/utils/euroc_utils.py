@@ -55,7 +55,9 @@ class EurocDSManager(InertialDataset):
             print('Usage: %s ARGS\\n%s' % (sys.argv[0], FLAGS))
             sys.exit(1)
 
-        self.ds_local_dir = "{0}{1}/".format(self.ds_flags.euroc_local_dir, self.ds_flags.dataset_version)
+        self.euroc_local_dir = './data/dataset/EuRoC_dataset/'
+
+        self.ds_local_dir = "{0}{1}/".format(self.euroc_local_dir, self.ds_flags.dataset_version)
 
     def read_euroc_data(self):
 

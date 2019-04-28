@@ -77,6 +77,10 @@ class BlackbirdDSManager(InertialDataset):
         self.csv_imu_file_name = "data/_slash_blackbird_slash_imu.csv"
         self.bag2csv_script = "./data/utils/convert_bag_to_csv.sh"
 
+        self.blackbird_local_dir = './data/dataset/blackbird_dataset/'
+        self.blackbird_url = 'http://blackbird-dataset.mit.edu/BlackbirdDatasetData'
+        self.rosbag_topics = '/blackbird/imu'
+
         try:
             _ = FLAGS(args)  # parse flags
         except gflags.FlagsError:
@@ -84,7 +88,7 @@ class BlackbirdDSManager(InertialDataset):
             sys.exit(1)
 
         self.ds_version = self.get_dataset_version()
-        self.ds_local_dir = "{0}{1}/".format(self.ds_flags.blackbird_local_dir, self.ds_version)
+        self.ds_local_dir = "{0}{1}/".format(self.blackbird_local_dir, self.ds_version)
 
     @staticmethod
     def encode_max_speed(max_speed):
@@ -107,7 +111,7 @@ class BlackbirdDSManager(InertialDataset):
 
     def convert_to_csv(self, file_name):
         print("\nTransforming bag file to csv...")
-        subprocess.call("./{0} {1} {2}".format(self.bag2csv_script, file_name, self.ds_flags.rosbag_topics), shell=True)
+        subprocess.call("./{0} {1} {2}".format(self.bag2csv_script, file_name, self.rosbag_topics), shell=True)
 
     def get_dataset_version(self):
 
@@ -134,7 +138,7 @@ class BlackbirdDSManager(InertialDataset):
         max_speed = self.encode_max_speed(self.ds_flags.max_speed)
 
         # root url of github repo
-        root = "{0}/{1}/".format(self.ds_flags.blackbird_url, self.ds_version)
+        root = "{0}/{1}/".format(self.blackbird_url, self.ds_version)
         data_file = "{0}_{1}.bag".format(self.ds_flags.trajectory_name, max_speed)
         poses_file = "{0}_{1}_poses.csv".format(self.ds_flags.trajectory_name, max_speed)
 
