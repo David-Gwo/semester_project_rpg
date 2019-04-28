@@ -18,6 +18,7 @@ class Dynamic3DTrajectory:
         else:
             sparse_data = np.arange(0, self.data_len, sparsing_factor)
 
+        self.sparsed_data = self.data[:, sparse_data, :]
         self.colors = plt.cm.jet(np.linspace(0, 1, self.n_lines))
 
         self.max_buffer_size = 300
@@ -80,7 +81,7 @@ class Dynamic3DTrajectory:
 
     def animate(self, i):
         i = (2 * i) % self.data.shape[1]
-        for j, (line, xi) in enumerate(zip(self.lines[:self.n_lines], self.data)):
+        for j, (line, xi) in enumerate(zip(self.lines[:self.n_lines], self.sparsed_data)):
             x, y, z = xi[:i].T
 
             if len(x) > self.max_buffer_size:

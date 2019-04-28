@@ -67,7 +67,7 @@ class BlackbirdDSManager(InertialDataset):
         # Accepted Blackbird parameters
         self.valid_yaw_types = ["yawConstant", "yawForward"]
         self.valid_trajectory_names = \
-            ["3dFigure8", "ampersand", "bentDice", "cameraCalibration", "clover", "dice", "figure8", "halfMoon",
+            ["3dFigure8", "ampersand", "bentDice", "clover", "dice", "figure8", "halfMoon",
              "mouse", "oval", "patrick", "picasso", "sid", "sphinx", "star", "thrice", "tiltedThrice", "winter"]
         self.valid_max_speeds = [0.5, 1, 2, 3, 4, 5, 6, 7]
 
@@ -75,7 +75,7 @@ class BlackbirdDSManager(InertialDataset):
         self.gt_file_name = "poses.csv"
         self.data_file_name = "data.bag"
         self.csv_imu_file_name = "data/_slash_blackbird_slash_imu.csv"
-        self.bag2csv_script = "./data/convert_bag_to_csv.sh"
+        self.bag2csv_script = "./data/utils/convert_bag_to_csv.sh"
 
         try:
             _ = FLAGS(args)  # parse flags
@@ -106,9 +106,8 @@ class BlackbirdDSManager(InertialDataset):
             return "maxSpeed7p0"
 
     def convert_to_csv(self, file_name):
-        print("Transforming bag file to csv...")
+        print("\nTransforming bag file to csv...")
         subprocess.call("./{0} {1} {2}".format(self.bag2csv_script, file_name, self.ds_flags.rosbag_topics), shell=True)
-        print("Done")
 
     def get_dataset_version(self):
 

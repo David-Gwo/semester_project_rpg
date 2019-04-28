@@ -48,7 +48,7 @@ def get_mnist_datasets(img_h, img_w, batch_s):
 
 def get_file_from_url(file_name, link):
     with open(file_name, "wb") as f:
-        print("Downloading %s" % file_name)
+        print("\nDownloading %s" % file_name)
         response = requests.get(link, stream=True)
         total_length = response.headers.get('content-length')
 

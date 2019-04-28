@@ -81,7 +81,7 @@ class DatasetManager:
                 self.dataset.plot_all_data(title="filtered", from_numpy=True, show=True)
 
             # Generate the training and testing datasets
-            self.generate_dataset(processed_imu, processed_gt, args, split_percentage, shuffle=shuffle)
+            self.save_dataset_to_files(processed_imu, processed_gt, args, split_percentage, shuffle=shuffle)
 
         if train:
             add_text_to_txt_file(self.dataset.get_ds_directory(), self.training_dir, self.scaler_dir_file)
@@ -97,7 +97,7 @@ class DatasetManager:
                                    repeat_main_ds=repeat_ds,
                                    tensorflow_format=tensorflow_format)
 
-    def generate_dataset(self, x_data, y_data, args, test_split, shuffle):
+    def save_dataset_to_files(self, x_data, y_data, args, test_split, shuffle):
         """
         Generates training and testing datasets, and saves a copy of them
 

@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from utils.algebra import quaternion_error, unit_quat, imu_integration, log_mapping
+from utils.algebra import imu_integration, log_mapping
 from utils.visualization import Dynamic3DTrajectory
 from tensorflow.python.keras.utils import Progbar
+from mpl_toolkits.mplot3d import axes3d
 
 
 class ExperimentManager:
@@ -200,10 +201,18 @@ class ExperimentManager:
         if comp_x is None:
             comp_x = range(len(comparative_prediction))
 
+        figs = []
+
         if dynamic_plot:
             dynamic_plot = Dynamic3DTrajectory([ground_truth[model_x, 0:3], model_prediction[:, 0:3]], sparsing_factor)
             dynamic_fig = dynamic_plot()
-            plt.close(dynamic_fig)
+
+            fig3d = plt.figure()
+            ax = axes3d.Axes3D(fig3d)
+            ax.plot(ground_truth[:, 0], ground_truth[:, 1], ground_truth[:, 2], '-', color='b')
+            ax.plot(model_prediction[:, 0], model_prediction[:, 1], model_prediction[:, 2], '-', color='r')
+
+            figs.append(fig3d)
 
         fig1 = plt.figure()
         ax1 = fig1.add_subplot(3, 1, 1)
@@ -265,9 +274,9 @@ class ExperimentManager:
 
         ax1.plot(gt_x, ground_truth[:, 6], 'b')
         ax1.plot(model_x, model_prediction[:, 6], 'xkcd:orange')
-        ax2.plot(gt_x, ground_truth[:, 1], 'b')
+        ax2.plot(gt_x, ground_truth[:, 7], 'b')
         ax2.plot(model_x, model_prediction[:, 7], 'xkcd:orange')
-        ax3.plot(gt_x, ground_truth[:, 2], 'b')
+        ax3.plot(gt_x, ground_truth[:, 8], 'b')
         ax3.plot(model_x, model_prediction[:, 8], 'xkcd:orange')
         ax1.set_title('lie x')
         ax2.set_title('lie y')
@@ -292,4 +301,5 @@ class ExperimentManager:
         ax3.set_title('attitude norm error')
         fig4.suptitle('Prediction vs manual integration errors')
 
-        return fig1, fig2, fig3, fig4
+        figs.append([fig1, fig2, fig3, fig4])
+        return tuple(figs)
