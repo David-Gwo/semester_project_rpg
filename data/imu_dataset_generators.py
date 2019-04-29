@@ -1,5 +1,6 @@
 import numpy as np
-from utils.algebra import log_mapping
+from utils.algebra import log_mapping, quaternion_error, exp_mapping
+from pyquaternion import Quaternion
 
 
 def window_imu_data(imu_vec, window_len):
@@ -96,6 +97,14 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the Lie algebra of the state at the end of the window
-    gt_so3 = np.append(gt[1:-window_len+1, :6], log_mapping(gt[1:-window_len+1, 6:]), axis=1)
+    gt_set = np.concatenate((gt[1:-window_len+1, :6], gt[1:-window_len+1, 6:]), axis=1)
 
-    return imu_window_with_initial_state, gt_so3
+    # Also generate a ground truth vector with the differences between initial and final state (using Lie algebra att.)
+    diff_gt = np.zeros((n_samples, np.shape(gt_set)[1]-1))
+    diff_gt[:, :6] = gt_set[:, :6] - imu_window_with_initial_state[:, window_len:window_len+6, 0, 0]
+    diff_gt[:, 6:] = log_mapping(np.array([q.elements for q in quaternion_error(
+        imu_window_with_initial_state[:, window_len+6:, 0, 0], gt_set[:, 6:])]))
+
+    gt_set = np.append(gt_set, diff_gt, axis=1)
+
+    return imu_window_with_initial_state, gt_set

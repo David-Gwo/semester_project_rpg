@@ -15,10 +15,10 @@ gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer"
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 20, "Maximum number of training epochs")
 
-gflags.DEFINE_string("model_name", "imu_int_50_depth", "Name for the deep model")
+gflags.DEFINE_string("model_name", "imu_int_50_double_loss", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
 gflags.DEFINE_integer('window_length', 50, 'The number of past samples used to predict next velocity value')
-gflags.DEFINE_integer('output_size', 9, 'The output size at the end of the deep model')
+gflags.DEFINE_integer('output_size', 10, 'The output size at the end of the deep model')
 
 ###############################################################
 # MAKE SURE TO CONFIG THIS PARAMETER SUCH THAT YOUR GPU USAGE #
@@ -36,12 +36,12 @@ gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-p
 gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')
 
 # Log parameters
-gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
-gflags.DEFINE_integer("resume_train_model_number", 4, "Which model number to resume training")
+gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
+gflags.DEFINE_integer("resume_train_model_number", 5, "Which model number to resume training")
 gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
-gflags.DEFINE_integer("save_freq", 5, "Save the latest model every save_freq epochs")
+gflags.DEFINE_integer("save_freq", 20, "Save the latest model every save_freq epochs")
 
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
-gflags.DEFINE_integer("test_model_number", 4, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")

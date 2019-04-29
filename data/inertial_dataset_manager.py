@@ -160,7 +160,13 @@ class DatasetManager:
         else:
             filename = self.dataset.get_ds_directory() + self.test_data_file
 
-        imu_tensor, gt_tensor = load_mat_data(filename)
+        x_tensor, y_tensor = load_mat_data(filename)
+
+        imu_tensor = x_tensor[:, :args[0], :, :]
+        state_in = x_tensor[:, args[0]:, 0, 0]
+
+        gt_tensor = y_tensor[:, :10]
+        diff_gt_tensor = y_tensor[:, 10:]
 
         if normalize:
             file = open(self.training_dir + self.scaler_dir_file, "r")
@@ -187,20 +193,36 @@ class DatasetManager:
         else:
             val_ds_indexes = range(total_ds_len - val_ds_len, total_ds_len)
 
+        val_ds_state_in = state_in[val_ds_indexes]
         val_ds_imu_vec = imu_tensor[val_ds_indexes]
-        val_ds_v_vec = gt_tensor[val_ds_indexes]
+        val_ds_state_out = gt_tensor[val_ds_indexes]
+        val_ds_diff_gt = diff_gt_tensor[val_ds_indexes]
 
+        state_in = np.delete(state_in, val_ds_indexes, axis=0)
         imu_tensor = np.delete(imu_tensor, val_ds_indexes, axis=0)
         gt_tensor = np.delete(gt_tensor, val_ds_indexes, axis=0)
+        diff_gt_tensor = np.delete(diff_gt_tensor, val_ds_indexes, axis=0)
 
         if not tensorflow_format:
             if validation_split:
-                return (imu_tensor, gt_tensor), (val_ds_imu_vec, val_ds_v_vec), (main_ds_len, val_ds_len)
+                return ((imu_tensor, state_in), (gt_tensor, diff_gt_tensor)), \
+                       ((val_ds_imu_vec, val_ds_state_in), (val_ds_state_out, val_ds_diff_gt)), \
+                       (main_ds_len, val_ds_len)
             else:
-                return (imu_tensor, gt_tensor), main_ds_len
+                return (imu_tensor, state_in), (gt_tensor, diff_gt_tensor), main_ds_len
 
-        main_ds = tf.data.Dataset.from_tensor_slices((imu_tensor, gt_tensor))
-        val_ds = tf.data.Dataset.from_tensor_slices((val_ds_imu_vec, val_ds_v_vec))
+        main_ds = tf.data.Dataset.from_tensor_slices(
+            ({"imu_img_input": imu_tensor,
+              "state_input": state_in},
+             {"state_output": gt_tensor,
+              "diff_output": diff_gt_tensor})
+        )
+        val_ds = tf.data.Dataset.from_tensor_slices(
+            ({"imu_img_input": val_ds_imu_vec,
+              "state_input": val_ds_state_in},
+             {"state_output": val_ds_state_out,
+              "diff_output": val_ds_diff_gt})
+        )
 
         if shuffle:
             main_ds = main_ds.shuffle(batch_size, seed=seed)

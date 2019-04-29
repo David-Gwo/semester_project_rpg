@@ -1,7 +1,7 @@
 import numpy as np
 from pyquaternion import Quaternion
 from tensorflow.python.keras.utils import Progbar
-
+import tensorflow as tf
 
 def imu_integration(imu_data, window_len, track_progress=True):
 
@@ -58,7 +58,7 @@ def imu_integration(imu_data, window_len, track_progress=True):
     return out
 
 
-def rotate_quat(q1, q2):
+def inv_rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
@@ -84,14 +84,14 @@ def quaternion_error(quat_1, quat_2, normalize=True):
 
     if len(np.shape(quat_1)) == len(np.shape(quat_1)) == 2:
         if normalize:
-            q_pred_e = [rotate_quat(unit_quat(quat_1[i]), unit_quat(quat_2[i])) for i in range(len(quat_1))]
+            q_pred_e = [inv_rotate_quat(unit_quat(quat_1[i]), unit_quat(quat_2[i])) for i in range(len(quat_1))]
         else:
-            q_pred_e = [rotate_quat(Quaternion(quat_1[i]), Quaternion(quat_2[i])) for i in range(len(quat_1))]
+            q_pred_e = [inv_rotate_quat(Quaternion(quat_1[i]), Quaternion(quat_2[i])) for i in range(len(quat_1))]
     elif len(np.shape(quat_1)) == len(np.shape(quat_1)) == 1:
         if normalize:
-            q_pred_e = rotate_quat(unit_quat(quat_1), unit_quat(quat_2))
+            q_pred_e = inv_rotate_quat(unit_quat(quat_1), unit_quat(quat_2))
         else:
-            q_pred_e = rotate_quat(Quaternion(quat_1), Quaternion(quat_2))
+            q_pred_e = inv_rotate_quat(Quaternion(quat_1), Quaternion(quat_2))
     else:
         raise TypeError("quat_1 and quat_2 must be the same dimensions")
 
@@ -144,4 +144,33 @@ def exp_mapping(w_vec):
          for w in w_vec])
 
     return q_vec
+
+
+def apply_state_diff(state, diff):
+    """
+    Applies a state differential to a state vector. State must have 10 dimensions (3 for position, 3 for velocity and 4
+    for attitude quaternion), and can be a single vector or an array of them, along axis 0
+
+    :param state: 10-dimensional initial state
+    :param diff: 10-dimensional state differential
+
+    :return: the new 10-dimensional state
+    """
+
+    assert np.shape(diff) == np.shape(state), "The state and the diff must be the same shape"
+
+    state_out = None
+
+    if len(np.shape(diff)) == 2:
+        assert np.shape(diff)[1] == 10, "The state must be of length 10 (3 pos + 3 vel + 4 quaternion)"
+        state_out = state[:, :6] + diff[:, :6]
+        new_att = np.array([(q1 * q2).elements for q1, q2 in zip(unit_quat(diff[:, 6:]), unit_quat(state[:, 6:]))])
+        state_out = tf.concat((state_out, new_att), axis=1)
+
+    elif len(np.shape(diff)) == 1:
+        assert len(diff) == 10, "The state must be of length 10 (3 pos + 3 vel + 4 quaternion)"
+        state_out = state[:6] + diff[:6]
+        state_out = tf.concat((state_out, np.array((unit_quat(diff[6:])*unit_quat(state[6.])).elements)))
+
+    return state_out
 

@@ -1,15 +1,16 @@
 import tensorflow as tf
 from tensorflow.python.keras.losses import mean_squared_error
+from utils.algebra import quaternion_error
+import numpy as np
 
 
 def l1_loss(y_true, y_pred):
     return tf.reduce_sum(tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)), axis=1)
 
 
-def net_loss_fx(y_true, y_pred):
+def so3_loss_func(y_true, y_pred):
 
-    pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + \
-                      l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
+    pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
     att_contrib = 0
     try:
         att_contrib += mean_squared_error(y_true[:, 6:9], y_pred[:, 6:9])
@@ -19,16 +20,12 @@ def net_loss_fx(y_true, y_pred):
     return pos_vel_contrib + att_contrib
 
 
-def state_loss_fx(_, y_pred):
-    """
-    Dummy loss function
+def state_loss(y_true, y_pred):
 
-    :param _:
-    :param y_pred:
-    :return:
-    """
+    pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
+    try:
+        att_contrib = [np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:])]
+    except TypeError:
+        att_contrib = pos_vel_contrib
 
-    if not y_pred.shape[0]:
-        return y_pred
-
-    return tf.zeros(y_pred.shape)
+    return pos_vel_contrib + att_contrib

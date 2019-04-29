@@ -9,9 +9,9 @@ from tensorflow.python.keras.optimizers import Adam
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
-from models.nets import imu_integration_net as prediction_network
+from models.nets import split_imu_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
-from models.customized_tf_funcs.custom_losses import net_loss_fx, state_loss_fx
+from models.customized_tf_funcs.custom_losses import so3_loss_func, state_loss
 from models.test_experiments import ExperimentManager
 
 #############################################################################
@@ -25,7 +25,6 @@ class Learner(object):
     def __init__(self, config):
         self.config = config
         self.trainable_model = None
-        self.output_model = None
         self.model_name = None
         self.model_version_number = None
         self.last_epoch_number = 0
@@ -41,12 +40,17 @@ class Learner(object):
             if i % 100 == 0:
                 self.last_epoch_number = epoch
 
+            if isinstance(x, dict):
+                x = [tf.cast(x_in, tf.float32) for x_in in x.values()]
+            else:
+                x = tf.cast(x, tf.float32)
+
             with tf.GradientTape() as tape:
                 # Forward pass
-                logit = self.trainable_model(tf.cast(x, tf.float32))
+                logit = self.trainable_model(x)
 
                 # External loss calculation
-                loss = net_loss_fx(y, logit)
+                loss = so3_loss_func(y, logit)
 
                 # Manual loss combination:
                 loss += sum(self.trainable_model.losses)
@@ -61,23 +65,21 @@ class Learner(object):
             # Update weights of layer
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
-    def build_and_compile_model(self, train=True):
-        trainable_model, output_model = prediction_network(self.config.window_length, 10, self.config.output_size)
+    def build_and_compile_model(self):
+        trainable_model = prediction_network(
+            window_len=self.config.window_length,
+            input_state_len=self.config.output_size,
+            diff_state_len=9,
+            output_state_len=self.config.output_size)
 
-        if train:
-            print(trainable_model.summary())
-        else:
-            print(output_model.summary())
+        print(trainable_model.summary())
 
-        trainable_model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                                loss=net_loss_fx,
-                                metrics=['mse'])
-        output_model.compile(optimizer=Adam(self.config.learning_rate, self.config.beta1),
-                             loss=state_loss_fx,
-                             metrics=['mse'])
+        trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
+                                loss={
+                                    "diff_output": so3_loss_func,
+                                    "state_output": state_loss})
 
         self.trainable_model = trainable_model
-        self.output_model = output_model
 
     def get_dataset(self, train, val_split, shuffle, repeat_ds, plot=False, const_batch_size=False, normalize=True,
                     tensorflow_format=True):
@@ -203,7 +205,7 @@ class Learner(object):
             return model_used_pos + 1
 
     def test(self, experiments):
-        self.build_and_compile_model(train=False)
+        self.build_and_compile_model()
         self.experiment_manager = ExperimentManager(window_len=self.config.window_length,
                                                     final_epoch=self.last_epoch_number,
                                                     model_loader_func=self.experiment_model_request,
@@ -221,10 +223,10 @@ class Learner(object):
 
         if requested_model_num is None:
             self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
-            return self.output_model
+            return self.trainable_model
         else:
             new_model_num = self.recover_model_from_checkpoint(mode="test", model_used_pos=requested_model_num)
-            return self.output_model, new_model_num
+            return self.trainable_model, new_model_num
 
     def experiment_dataset_request(self, dataset_tags):
         train = False
