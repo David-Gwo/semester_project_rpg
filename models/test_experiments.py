@@ -190,8 +190,7 @@ class ExperimentManager:
         elif experiment_general_options["output"] == "show":
             plt.show()
 
-    @staticmethod
-    def plot_prediction(ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None,
+    def plot_prediction(self, ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None,
                         dynamic_plot=False, sparsing_factor=0):
 
         if gt_x is None:
@@ -204,15 +203,22 @@ class ExperimentManager:
         figs = []
 
         if dynamic_plot:
-            dynamic_plot = Dynamic3DTrajectory([ground_truth[model_x, 0:3], model_prediction[:, 0:3]], sparsing_factor)
+            if len(ground_truth) != len(model_prediction):
+                tiled_prediction = np.zeros(ground_truth[:, 0:3].shape)
+                for i in np.arange(len(model_prediction) - 1, 0, -1) - 1:
+                    tiled_prediction[i * self.window_len:(i + 1) * self.window_len, :] = model_prediction[i, 0:3]
+            else:
+                tiled_prediction = model_prediction[:, 0:3]
+
+            dynamic_plot = Dynamic3DTrajectory([ground_truth[:, 0:3], tiled_prediction], sparsing_factor)
             dynamic_fig = dynamic_plot()
 
-            fig3d = plt.figure()
-            ax = axes3d.Axes3D(fig3d)
-            ax.plot(ground_truth[:, 0], ground_truth[:, 1], ground_truth[:, 2], '-', color='b')
-            ax.plot(model_prediction[:, 0], model_prediction[:, 1], model_prediction[:, 2], '-', color='r')
+        fig3d = plt.figure()
+        ax = axes3d.Axes3D(fig3d)
+        ax.plot(ground_truth[:, 0], ground_truth[:, 1], ground_truth[:, 2], '-', color='b')
+        ax.plot(model_prediction[:, 0], model_prediction[:, 1], model_prediction[:, 2], '-', color='r')
 
-            figs.append(fig3d)
+        figs.append(fig3d)
 
         fig1 = plt.figure()
         ax1 = fig1.add_subplot(3, 1, 1)

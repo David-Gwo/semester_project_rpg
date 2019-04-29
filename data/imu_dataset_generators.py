@@ -85,7 +85,7 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     kept_channels = np.shape(gt)[1]
 
     # Copy the first row window_len times at the beginning of the dataset
-    gt_augmented = np.append(np.ones((window_len, 1))*np.expand_dims(gt[0, :], axis=0), gt, axis=0)
+    gt_augmented = np.append(np.ones((window_len, 1))*np.expand_dims(gt[0, :], axis=0), gt[1:, :], axis=0)
 
     # Add the initial state of the window at the beginning of each training sequence
     zero_padded_gt = np.zeros((n_samples, (imu_channels + 1) * kept_channels))
@@ -96,6 +96,6 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the Lie algebra of the state at the end of the window
-    gt_so3 = np.append(gt[:-window_len, :6], log_mapping(gt[:-window_len, 6:]), axis=1)
+    gt_so3 = np.append(gt[1:-window_len+1, :6], log_mapping(gt[1:-window_len+1, 6:]), axis=1)
 
     return imu_window_with_initial_state, gt_so3
