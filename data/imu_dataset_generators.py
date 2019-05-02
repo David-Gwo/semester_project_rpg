@@ -1,5 +1,6 @@
 import numpy as np
-from utils.algebra import log_mapping, quaternion_error, exp_mapping
+from utils.algebra import log_mapping, quaternion_error, exp_mapping, rotate_vec
+from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
 
 
@@ -7,7 +8,7 @@ def window_imu_data(imu_vec, window_len):
 
     window_channels = np.shape(imu_vec)[1]
 
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x 6)
+    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_chanels)
     imu_img_tensor = np.zeros((len(imu_vec), window_len, window_channels, 1))
 
     for i in range(len(imu_vec) - window_len):
@@ -81,30 +82,55 @@ def windowed_imu_integration_dataset(raw_imu, gt, args):
     imu_channels = np.shape(raw_imu)[1] - 1
     n_samples = len(raw_imu) - window_len
 
-    # Keep only position, attitude, velocity information (remove angular velocity, acceleration and timestamp)
+    # Keep only position, velocity, attitude information (remove angular velocity, acceleration and timestamp)
     gt = np.delete(gt, np.s_[10:17], axis=1)
     kept_channels = np.shape(gt)[1]
 
     # Copy the first row window_len times at the beginning of the dataset
     gt_augmented = np.append(np.ones((window_len, 1))*np.expand_dims(gt[0, :], axis=0), gt[1:, :], axis=0)
 
-    # Add the initial state of the window at the beginning of each training sequence
+    # Pre-compute the initial states for every window (the first w initial states will be the same)
     zero_padded_gt = np.zeros((n_samples, (imu_channels + 1) * kept_channels))
     zero_padded_gt[:, :kept_channels] = gt_augmented[:n_samples, :]
     zero_padded_gt = zero_padded_gt.reshape((n_samples, kept_channels, imu_channels + 1, 1), order='F')
+
     imu_window_with_initial_state = np.zeros((n_samples, window_len + kept_channels, imu_channels + 1, 1))
+
+    # Add window imu data in the first window_len values
     imu_window_with_initial_state[:, 0:window_len, :, :] = window_imu_data(raw_imu, window_len)[:n_samples, :, :, :]
+    # Add the inital states in the next remaining values (10)
     imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
 
     # The ground truth data to be predicted is the Lie algebra of the state at the end of the window
     gt_set = np.concatenate((gt[1:-window_len+1, :6], gt[1:-window_len+1, 6:]), axis=1)
 
-    # Also generate a ground truth vector with the differences between initial and final state (using Lie algebra att.)
-    diff_gt = np.zeros((n_samples, np.shape(gt_set)[1]-1))
-    diff_gt[:, :6] = gt_set[:, :6] - imu_window_with_initial_state[:, window_len:window_len+6, 0, 0]
-    diff_gt[:, 6:] = log_mapping(np.array([q.elements for q in quaternion_error(
-        imu_window_with_initial_state[:, window_len+6:, 0, 0], gt_set[:, 6:])]))
+    # Define the pre-integrated rotation, velocity and position vectors
+    pre_int_R = np.zeros((n_samples, window_len, 3))
+    pre_int_v = np.zeros((n_samples, window_len, 3))
+    pre_int_p = np.zeros((n_samples, window_len, 3))
 
-    gt_set = np.append(gt_set, diff_gt, axis=1)
+    print("Generating dataset. This may take a while...")
+    prog_bar = Progbar(n_samples)
+
+    for i in range(n_samples):
+        pi = np.tile(gt_augmented[i, 0:3], [window_len, 1])
+        vi = np.tile(gt_augmented[i, 3:6], [window_len, 1])
+        qi = np.tile(gt_augmented[i, 6:], [window_len, 1])
+
+        cum_dt_vec = np.cumsum(imu_window_with_initial_state[i, 0:window_len, -1, 0])
+
+        pre_int_R[i, :, :] = log_mapping(
+            np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i+window_len, 6:])]))
+
+        v = np.expand_dims(cum_dt_vec * 9.81, axis=1)*np.array([0, 0, 1])
+        pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi + v, qi)
+
+        p = -np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi) + np.expand_dims(cum_dt_vec ** 2 * 9.81, axis=1)*np.array([0, 0, 1])
+        pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi + p, qi)
+
+        prog_bar.update(i)
+
+    gt_set = np.expand_dims(gt_set, axis=2) * np.reshape(np.array([1, 0, 0]), [1, 1, 3])
+    gt_set = np.concatenate([gt_set, pre_int_R, pre_int_v, pre_int_p], axis=1)
 
     return imu_window_with_initial_state, gt_set

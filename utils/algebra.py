@@ -62,6 +62,22 @@ def inv_rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
+def rotate_vec(v, q):
+    if len(np.shape(v)) == 2:
+        if len(np.shape(q)) == 2:
+            return np.array([Quaternion(q_i).unit.rotate(v_i) for q_i, v_i in zip(q, v)])
+        elif len(np.shape(q)) == 1 and len(q) == len(v):
+            np.array([Quaternion(q).unit.rotate(v_i) for v_i in v])
+        else:
+            TypeError("If the vector is a matrix, there must only be 1 quaternion, "
+                      "or exactly as many quaternions as vectors")
+
+    elif len(np.shape(v)) == 1:
+        return Quaternion(q).unit.rotate(v)
+    else:
+        TypeError("If there is only a vector, there must only be one quaternion")
+
+
 def unit_quat(q):
     if len(np.shape(q)) == 2:
         return [Quaternion(q_i).unit for q_i in q]
@@ -125,7 +141,8 @@ def log_mapping(q_vec):
     :return: the Lie algebra so3 of the quaternion or array of quaternions
     """
 
-    w = np.array([2 * np.arccos(q.w) / np.linalg.norm(q.imaginary) * q.imaginary for q in unit_quat(q_vec)])
+    w = np.array([[0.0, 0.0, 0.0] if all(np.isclose(q.elements, [1.0, 0, 0, 0]))
+                  else 2 * np.arccos(q.w) / np.linalg.norm(q.imaginary) * q.imaginary for q in unit_quat(q_vec)])
 
     return w
 

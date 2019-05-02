@@ -15,7 +15,7 @@ gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer"
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 20, "Maximum number of training epochs")
 
-gflags.DEFINE_string("model_name", "imu_int_50_double_loss", "Name for the deep model")
+gflags.DEFINE_string("model_name", "imu_net_50_depth_second_gen", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
 gflags.DEFINE_integer('window_length', 50, 'The number of past samples used to predict next velocity value')
 gflags.DEFINE_integer('output_size', 10, 'The output size at the end of the deep model')
@@ -31,7 +31,7 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
 
 # Reading parameters
 gflags.DEFINE_string('train_ds', 'blackbird', 'Which dataset to use for training')
-gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')
+gflags.DEFINE_boolean('force_ds_remake', True, 'Whether to force re-processing of the dataset file')
 gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-processed dataset training file')
 gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')
 
