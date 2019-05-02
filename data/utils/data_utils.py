@@ -74,10 +74,10 @@ def save_mat_data(x_data, y_data, file_name):
     :param file_name: directory for .mat file
     """
 
-    scipy.io.savemat(file_name, mdict={'x': x_data, 'y': y_data}, oned_as='row')
+    scipy.io.savemat(file_name, mdict=x_data.update(y_data), oned_as='row')
 
 
-def load_mat_data(directory):
+def load_mat_data(directory, x_keys, y_keys):
     """
     Loads a dataset saved with the save_processed_dataset_files function
 
@@ -187,7 +187,9 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
         os.remove(test_ds_node)
     os.mknod(test_ds_node)
 
-    total_ds_len = int(len(y_data))
+    y_sample = list(y_data.values())[0]
+
+    total_ds_len = int(len(y_sample))
     test_ds_len = int(np.ceil(total_ds_len * test_split))
 
     # Choose some entries to separate for the test set
@@ -196,12 +198,16 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
     else:
         test_indexes = range(total_ds_len - test_ds_len, total_ds_len)
 
-    test_set_x = x_data[test_indexes]
-    test_set_y = y_data[test_indexes]
+    test_set_x = {}
+    test_set_y = {}
 
-    # Remove the test ds entries from train dataset
-    train_set_x = np.delete(x_data, test_indexes, axis=0)
-    train_set_y = np.delete(y_data, test_indexes, axis=0)
+    # Remove the test ds entries from train dataset and put them in a separate test dataset
+    for key in x_data.keys():
+        test_set_x[key] = x_data[key][test_indexes]
+        x_data[key] = np.delete(x_data[key], test_indexes, axis=0)
+    for key in y_data.keys():
+        test_set_y[key] = y_data[key][test_indexes]
+        y_data[key] = np.delete(y_data[key], test_indexes, axis=0)
 
-    save_mat_data(train_set_x, train_set_y, train_ds_node)
+    save_mat_data(x_data, y_data, train_ds_node)
     save_mat_data(test_set_x, test_set_y, test_ds_node)

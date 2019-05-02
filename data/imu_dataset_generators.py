@@ -4,46 +4,265 @@ from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
 
 
-def window_imu_data(imu_vec, window_len):
+class StatePredictionDataset:
+    def __init__(self, imu, gt):
+        """
+        :param imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
+        correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is
+        the time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
+        :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
+        17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular
+        velocity, x,y,z acceleration and timestamp difference (same as `raw_imu`)
+        """
 
-    window_channels = np.shape(imu_vec)[1]
+        self.imu_raw = imu
+        self.gt_raw = gt
+        self.x_ds = {}
+        self.y_ds = {}
+        self.accepted_datasets = ["windowed_imu_integration",
+                                  "windowed_imu_speed_regression",
+                                  "windowed_imu_integration_with_so3_rotation",
+                                  "windowed_imu_preintegration"]
 
-    # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_chanels)
-    imu_img_tensor = np.zeros((len(imu_vec), window_len, window_channels, 1))
+        self.dataset_keys = {
+            "windowed_imu_integration": {
+                "x_keys": ["state_input", "imu_input"],
+                "y_keys": ["state_output"]
+            },
+            "windowed_imu_speed_regression": {
+                "x_keys": ["state_input"],
+                "y_keys": ["state_output"]
+            },
+            "windowed_imu_integration_with_so3_rotation": {
+                "x_keys": ["state_input", "imu_input"],
+                "y_keys": ["state_output"]
+            },
+            "windowed_imu_preintegration": {
+                "x_keys": ["state_input", "imu_input"],
+                "y_keys": ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p", "state_output"]
+            }
+        }
 
-    for i in range(len(imu_vec) - window_len):
-        imu_img = np.zeros((window_len, window_channels))
+        assert self.accepted_datasets == list(self.dataset_keys.keys()), "There is one or more key mismatch in the " \
+                                                                         "accepted dataset dictionaries"
 
-        # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
-        if i < window_len:
-            imu_img[window_len - i - 1:window_len, :] = imu_vec[0:i + 1, :]
-        else:
-            imu_img = imu_vec[i - window_len + 1:i + 1, :]
+    def generate_dataset(self, dataset, args):
+        """
+        Generates the chosen dataset
 
-        imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
+        :param dataset: version of dataset to generate (must be one of the accepted keys)
+        :param args: extra arguments for dataset generation
+        """
 
-    return imu_img_tensor
+        assert dataset in self.accepted_datasets, "The dataset version must be among {0}".format(self.accepted_datasets)
 
+        if dataset == "windowed_imu_integration":
+            self.windowed_imu_for_state_prediction(args)
+        elif dataset == "windowed_imu_integration_with_so3_rotation":
+            self.windowed_with_so3_rotation(args)
+        elif dataset == "windowed_imu_speed_regression":
+            self.imu_speed_regression(args)
+        elif dataset == "windowed_imu_preintegration":
+            self.windowed_imu_preintegration_dataset(args)
 
-def imu_img_dataset(imu_vec, gt_vec, imu_len):
-    """
-    Generates a dataset of imu images to regress linear speed. An imu image is defined as a stack of matrices of
-    dimensions <imu_len x 6>, where 6 are the 6 dimensions of the IMU readings (3 gyro + 3 acc), and the number of
-    rows are the number of used imu samples to regress the speed corresponding to the last sample.
-    :param imu_vec: vector of ordered IMU readings. Shape: <n, 2, 3>, n = number of acquisitions, imu_vec[:, 0, :]
-    corresponds to the three gyro readings and imu_vec[:, 1, :] to the tree accelerometer readings
-    :param gt_vec: ground truth velocity data. Shape: <n, 3>, n = number of acquisitions, and each acquisition is a
-    3-dimensional vector with x,y,z velocities
-    :param imu_len: number of columns of the imu_image
-    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
-    """
+    def get_outputs(self, keys, outputs):
+        """
+        Adds the outputs to the dictionary of outputs using the provided keys
 
-    # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-    gt_v_tensor = np.linalg.norm(gt_vec, axis=1)
+        :param keys: names of the outputs
+        :param outputs: outputs to be predicted
+        """
 
-    imu_img_tensor = window_imu_data(imu_vec, imu_len)
+        assert len(keys) == len(outputs), "There must be as many keys as outputs"
+        assert len(np.unique(keys)) == len(keys), "There must not be two outputs with the same key"
 
-    return imu_img_tensor, gt_v_tensor
+        for i in range(len(keys)):
+            self.y_ds[keys[i]] = outputs[i]
+
+    def get_inputs(self, keys, inputs):
+        """
+        Adds the inputs to the dictionary of inputs using the provided keys
+
+        :param keys: names of the inputs
+        :param inputs: inputs to be used for prediction
+        """
+
+        assert len(keys) == len(inputs), "There must be as many keys as inputs"
+        assert len(np.unique(keys)) == len(keys), "There must not be two inputs with the same key"
+
+        for i in range(len(keys)):
+            self.x_ds[keys[i]] = inputs[i]
+
+    def get_dataset(self):
+        """
+        Gets the inputs and the outputs of the generated dataset
+
+        :return: the inputs and outputs dictionaries of the dataset
+        """
+
+        assert self.x_ds, "The dataset has not been generated yet!"
+        assert self.y_ds, "The dataset has not been generated yet!"
+
+        return self.x_ds, self.y_ds
+
+    def get_dataset_keys(self):
+        """
+        Gets the input and output keys of the generated dataset
+
+        :return: the input and output keys of the generated dataset
+        """
+        raise NotImplemented()
+
+    def imu_speed_regression(self, args):
+        """
+        :param args: extra arguments for dataset generation
+
+        Generates a dataset of imu images to regress linear speed.
+            Inputs 1: a window of imu samples of dimensions <imu_len x 7>, where 7 are the 6 dimensions of the IMU
+            readings (3 gyro + 3 acc) plus the time differences between imu acquisitions, and the number of rows are the
+            number of used imu samples.
+            Output 1: the regressed scalar value of the speed at the end of the window of IMU samples
+        """
+
+        window_len = args[0]
+
+        # Initialize y data. Will be the absolute ground truth value of the speed of the drone
+        gt_v_tensor = np.linalg.norm(self.gt_raw[:, 3:6], axis=1)
+
+        imu_img_tensor = self.window_imu_data(window_len)
+
+        self.get_inputs(["state_input"], [imu_img_tensor])
+        self.get_outputs(["state_output"], [gt_v_tensor])
+
+    def windowed_imu_for_state_prediction(self, args):
+        """
+        :param args: extra arguments for dataset generation
+
+        Generates a dataset that aims at performing IMU integration.
+            Input 1: one initial 10-dimensional state consisting on initial position (x,y,z), velocity (x,y,z) and
+            orientation (w,x,y,z)
+            Input 2: a window of imu samples of dimensions <imu_len x 7>, where 7 are the 6 dimensions of the IMU
+            readings (3 gyro + 3 acc) plus the time differences between imu acquisitions, and the number of rows are the
+            number of used imu samples.
+            Output 1: the final 10-dimensional state consisting on final position (x,y,z), velocity (x,y,z) and
+            orientation (w,x,y,z)
+        """
+
+        window_len = args[0]
+        raw_imu = reformat_data(self.imu_raw)
+        gt = reformat_data(self.gt_raw)
+
+        n_samples = len(raw_imu) - window_len
+
+        # Keep only position, attitude, velocity information (remove angular velocity, acceleration and timestamp)
+        gt = np.delete(gt, np.s_[10:17], axis=1)
+
+        # Copy the first row window_len times at the beginning of the dataset
+        gt_augmented = np.append(np.ones((window_len, 1))*np.expand_dims(gt[0, :], axis=0), gt[1:, :], axis=0)
+
+        # Add the initial state of the window at the beginning of each training sequence
+        initial_state_vec = gt_augmented[:n_samples, :]
+
+        imu_window = self.window_imu_data(window_len)[:n_samples, :, :, :]
+
+        self.get_inputs(["state_input", "imu_input"], [initial_state_vec, imu_window])
+        self.get_outputs(["state_output"], gt[1:-window_len+1, :])
+
+    def windowed_with_so3_rotation(self, args):
+        """
+        :param args: extra arguments for dataset generation
+
+        Generates a dataset that aims at performing IMU integration.
+            Input 1: one initial 10-dimensional state consisting on initial position (x,y,z), velocity (x,y,z) and
+            orientation (w,x,y,z)
+            Input 2: a window of imu samples of dimensions <imu_len x 7>, where 7 are the 6 dimensions of the IMU
+            readings (3 gyro + 3 acc) plus the time differences between imu acquisitions, and the number of rows are the
+            number of used imu samples.
+            Output 1: the final 9-dimensional state consisting on final position (x,y,z), velocity (x,y,z) and
+            orientation (x,y,z), in so(3) representation
+        """
+        self.windowed_imu_for_state_prediction(args)
+
+        self.y_ds["state_output"][:, 6:] = log_mapping(self.y_ds["state_output"][:, 6:])
+
+    def windowed_imu_preintegration_dataset(self, args):
+        """
+        :param args: extra arguments for dataset generation
+
+        Generates a dataset that aims at performing IMU integration.
+            Input 1: one initial 10-dimensional state consisting on initial position (x,y,z), velocity (x,y,z) and
+            orientation (w,x,y,z)
+            Input 2: a window of imu samples of dimensions <imu_len x 7>, where 7 are the 6 dimensions of the IMU
+            readings (3 gyro + 3 acc) plus the time differences between imu acquisitions, and the number of rows are the
+            number of used imu samples.
+            Output 1: the final 9-dimensional state consisting on final position (x,y,z), velocity (x,y,z) and
+            orientation (x,y,z), in so(3) representation
+            Output 2: the pre-integrated rotation for each window element, with shape <n_samples, imu_len, 3> in so(3)
+            Output 3: the pre-integrated velocity for each window element, with shape <n_samples, imu_len, 3> in R3
+            Output 4: the pre-integrated position for each window element, with shape <n_samples, imu_len, 3> in R3
+
+        """
+
+        window_len = args[0]
+        n_samples = len(self.imu_raw) - window_len
+
+        self.windowed_with_so3_rotation(args)
+
+        gt_augmented = self.x_ds["state_input"]
+        imu_window = self.x_ds["imu_input"]
+
+        # Define the pre-integrated rotation, velocity and position vectors
+        pre_int_rot = np.zeros((n_samples, window_len, 3))
+        pre_int_v = np.zeros((n_samples, window_len, 3))
+        pre_int_p = np.zeros((n_samples, window_len, 3))
+
+        print("Generating dataset. This may take a while...")
+        prog_bar = Progbar(n_samples)
+
+        for i in range(n_samples):
+            pi = np.tile(gt_augmented[i, 0:3], [window_len, 1])
+            vi = np.tile(gt_augmented[i, 3:6], [window_len, 1])
+            qi = np.tile(gt_augmented[i, 6:], [window_len, 1])
+
+            cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0])
+
+            pre_int_rot[i, :, :] = log_mapping(
+                np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i+window_len, 6:])]))
+
+            v = np.expand_dims(cum_dt_vec * 9.81, axis=1)*np.array([0, 0, 1])
+            pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi + v, qi)
+
+            p = -np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi) + \
+                np.expand_dims(cum_dt_vec ** 2 * 9.81, axis=1)*np.array([0, 0, 1])
+            pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi + p, qi)
+
+            prog_bar.update(i+2)
+
+        self.get_outputs(
+            ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p"], [pre_int_rot, pre_int_v, pre_int_p])
+
+    def window_imu_data(self, window_len):
+        """
+        # TODO: complete
+        """
+
+        window_channels = np.shape(self.imu_raw)[1]
+
+        # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_chanels)
+        imu_img_tensor = np.zeros((len(self.imu_raw), window_len, window_channels, 1))
+
+        for i in range(len(self.imu_raw) - window_len):
+            imu_img = np.zeros((window_len, window_channels))
+
+            # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
+            if i < window_len:
+                imu_img[window_len - i - 1:window_len, :] = self.imu_raw[0:i + 1, :]
+            else:
+                imu_img = self.imu_raw[i - window_len + 1:i + 1, :]
+
+            imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
+
+        return imu_img_tensor
 
 
 def reformat_data(compact_data):
@@ -59,78 +278,3 @@ def reformat_data(compact_data):
     flattened_data[0, -1] = 0
 
     return flattened_data
-
-
-def windowed_imu_integration_dataset(raw_imu, gt, args):
-    """
-    # TODO: complete description. Add so3 stuff
-
-    :param raw_imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
-    correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is the
-    time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
-    :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
-    17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular velocity,
-    x,y,z acceleration and timestamp difference (same as `raw_imu`)
-    :param args: extra arguments for dataset generation
-    :return: the constructed dataset following the above indications, in the format imu_img_tensor, gt_tensor
-    """
-    window_len = args[0]
-
-    raw_imu = reformat_data(raw_imu)
-    gt = reformat_data(gt)
-
-    imu_channels = np.shape(raw_imu)[1] - 1
-    n_samples = len(raw_imu) - window_len
-
-    # Keep only position, velocity, attitude information (remove angular velocity, acceleration and timestamp)
-    gt = np.delete(gt, np.s_[10:17], axis=1)
-    kept_channels = np.shape(gt)[1]
-
-    # Copy the first row window_len times at the beginning of the dataset
-    gt_augmented = np.append(np.ones((window_len, 1))*np.expand_dims(gt[0, :], axis=0), gt[1:, :], axis=0)
-
-    # Pre-compute the initial states for every window (the first w initial states will be the same)
-    zero_padded_gt = np.zeros((n_samples, (imu_channels + 1) * kept_channels))
-    zero_padded_gt[:, :kept_channels] = gt_augmented[:n_samples, :]
-    zero_padded_gt = zero_padded_gt.reshape((n_samples, kept_channels, imu_channels + 1, 1), order='F')
-
-    imu_window_with_initial_state = np.zeros((n_samples, window_len + kept_channels, imu_channels + 1, 1))
-
-    # Add window imu data in the first window_len values
-    imu_window_with_initial_state[:, 0:window_len, :, :] = window_imu_data(raw_imu, window_len)[:n_samples, :, :, :]
-    # Add the inital states in the next remaining values (10)
-    imu_window_with_initial_state[:, window_len:, :, :] = zero_padded_gt
-
-    # The ground truth data to be predicted is the Lie algebra of the state at the end of the window
-    gt_set = np.concatenate((gt[1:-window_len+1, :6], gt[1:-window_len+1, 6:]), axis=1)
-
-    # Define the pre-integrated rotation, velocity and position vectors
-    pre_int_R = np.zeros((n_samples, window_len, 3))
-    pre_int_v = np.zeros((n_samples, window_len, 3))
-    pre_int_p = np.zeros((n_samples, window_len, 3))
-
-    print("Generating dataset. This may take a while...")
-    prog_bar = Progbar(n_samples)
-
-    for i in range(n_samples):
-        pi = np.tile(gt_augmented[i, 0:3], [window_len, 1])
-        vi = np.tile(gt_augmented[i, 3:6], [window_len, 1])
-        qi = np.tile(gt_augmented[i, 6:], [window_len, 1])
-
-        cum_dt_vec = np.cumsum(imu_window_with_initial_state[i, 0:window_len, -1, 0])
-
-        pre_int_R[i, :, :] = log_mapping(
-            np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i+window_len, 6:])]))
-
-        v = np.expand_dims(cum_dt_vec * 9.81, axis=1)*np.array([0, 0, 1])
-        pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi + v, qi)
-
-        p = -np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi) + np.expand_dims(cum_dt_vec ** 2 * 9.81, axis=1)*np.array([0, 0, 1])
-        pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi + p, qi)
-
-        prog_bar.update(i)
-
-    gt_set = np.expand_dims(gt_set, axis=2) * np.reshape(np.array([1, 0, 0]), [1, 1, 3])
-    gt_set = np.concatenate([gt_set, pre_int_R, pre_int_v, pre_int_p], axis=1)
-
-    return imu_window_with_initial_state, gt_set

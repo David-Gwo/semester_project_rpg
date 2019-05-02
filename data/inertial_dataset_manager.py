@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from sklearn.externals import joblib
 
-from data.imu_dataset_generators import windowed_imu_integration_dataset, imu_img_dataset
+from data.imu_dataset_generators import StatePredictionDataset
 from data.utils.data_utils import save_train_and_test_datasets, load_mat_data
 from data.utils.blackbird_utils import BlackbirdDSManager
 from data.utils.euroc_utils import EurocDSManager
@@ -42,6 +42,8 @@ class DatasetManager:
             self.dataset = EurocDSManager()
         else:
             raise NameError("Invalid dataset name")
+
+        self.dataset_generator = None
 
     def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
                     shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False,
@@ -110,14 +112,13 @@ class DatasetManager:
 
         ds_dir = self.dataset.get_ds_directory()
 
-        if self.dataset_formatting == "windowed_imu_integration":
-            train_data_tensor, gt_tensor = windowed_imu_integration_dataset(x_data, y_data, args)
-        else:
-            train_data_tensor, gt_tensor = imu_img_dataset(x_data, y_data, args)
+        self.dataset_generator = StatePredictionDataset(x_data, y_data)
+        self.dataset_generator.generate_dataset(self.dataset_formatting, args)
+        training_data, ground_truth_data = self.dataset_generator.get_dataset()
 
         storage_train_ds_file = "{0}{1}".format(ds_dir, self.train_data_file)
         storage_test_ds_file = "{0}{1}".format(ds_dir, self.test_data_file)
-        save_train_and_test_datasets(storage_train_ds_file, storage_test_ds_file, train_data_tensor, gt_tensor,
+        save_train_and_test_datasets(storage_train_ds_file, storage_test_ds_file, training_data, ground_truth_data,
                                      test_split, shuffle)
 
     def is_dataset_ready(self, args):
@@ -160,7 +161,8 @@ class DatasetManager:
         else:
             filename = self.dataset.get_ds_directory() + self.test_data_file
 
-        x_tensor, y_tensor = load_mat_data(filename)
+        x_keys, y_keys = self.dataset_generator.get_dataset_keys()
+        x_tensor, y_tensor = load_mat_data(filename, x_keys, y_keys)
 
         imu_tensor = x_tensor[:, :args[0], :, :]
         state_in = x_tensor[:, args[0]:, 0, 0]
