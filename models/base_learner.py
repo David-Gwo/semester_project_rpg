@@ -1,11 +1,9 @@
 import os
 import sys
 import math
-import numpy as np
 import tensorflow as tf
 
 from tensorflow.python.keras import callbacks
-from tensorflow.python.keras.optimizers import Adam
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
@@ -41,7 +39,8 @@ class Learner(object):
                 self.last_epoch_number = epoch
 
             if isinstance(x, dict):
-                x = [tf.cast(x_in, tf.float32) for x_in in x.values()]
+                for x_key in x.keys():
+                    x[x_key] = tf.cast(x[x_key], tf.float32)
             else:
                 x = tf.cast(x, tf.float32)
 
@@ -150,8 +149,8 @@ class Learner(object):
                 extra_epoch_number=self.last_epoch_number + 1),
         ]
 
-        for epoch in range(self.config.max_epochs):
-            self.custom_backprop(train_ds, validation_ds, (train_steps_per_epoch, val_steps_per_epoch), epoch)
+        # for epoch in range(self.config.max_epochs):
+        #     self.custom_backprop(train_ds, validation_ds, (train_steps_per_epoch, val_steps_per_epoch), epoch)
 
         # Train!
         self.trainable_model.fit(

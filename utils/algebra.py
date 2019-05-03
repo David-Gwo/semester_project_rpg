@@ -74,9 +74,9 @@ def rotate_quat(q1, q2):
 
     if len(np.shape(q1)) == 2:
         if len(np.shape(q2)) == 2:
-            return np.array([Quaternion(q2_i)*Quaternion(q1_i) for q1_i, q2_i in zip(q1, q2)])
+            return np.array([(Quaternion(q2_i)*Quaternion(q1_i)).elements for q1_i, q2_i in zip(q1, q2)])
         elif len(np.shape(q2)) == 1 and len(q2) == len(q1):
-            np.array([Quaternion(q2)*Quaternion(q1_i) for q1_i in q1])
+            np.array([(Quaternion(q2)*Quaternion(q1_i)).elements for q1_i in q1])
         else:
             raise TypeError("If the initial quaternion is a matrix, there must only be 1 rotation quaternion, "
                             "or exactly as many rotation quaternions as initial quaternions")

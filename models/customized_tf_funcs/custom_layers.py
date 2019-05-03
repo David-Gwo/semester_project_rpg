@@ -127,16 +127,18 @@ class PreIntegrationForwardDense(Layer):
         # cast if `should_cast_variables` is True, as in that case the variable
         # will be automatically casted to inputs.dtype.
         if not self._mixed_precision_policy.should_cast_variables:
-            feature_vec = math_ops.cast(inputs, self.dtype)
+            feature_vec = math_ops.cast(feature_vec, self.dtype)
+            recurrent_vec = math_ops.cast(recurrent_vec, self.dtype)
+
         outputs = gen_math_ops.mat_mul(feature_vec, self.feature_kernel)
-        outputs += math_ops.multiply(gen_math_ops.mat_mul(recurrent_vec, self.recurrent_kernel), self.recurrent_mask)
+        outputs += gen_math_ops.mat_mul(gen_math_ops.mat_mul(recurrent_vec, self.recurrent_kernel), self.recurrent_mask)
 
         if self.use_bias:
             outputs = nn.bias_add(outputs, self.bias)
         if self.activation is not None:
             outputs = self.activation(outputs)  # pylint: disable=not-callable
 
-        return K.reshape(outputs, (self.units, self.channels))
+        return K.reshape(outputs, (outputs.shape[0], self.units, self.channels))
 
 
 class ExponentialRemappingLayer(Layer):
@@ -176,7 +178,7 @@ class IntegratingLayer(Layer):
     def __init__(self, name=None):
         super(IntegratingLayer, self).__init__(name=name, trainable=False)
         # TODO: pass sign as argument
-        self.g_vec = np.array([0, 0, -9.81])
+        self.g_vec = np.expand_dims(np.array([0, 0, -9.81]), 0)
 
     def call(self, inputs, **kwargs):
         if not inputs[0].shape[0]:
@@ -184,11 +186,12 @@ class IntegratingLayer(Layer):
 
         state_in = inputs[0]
         pre_integration = inputs[1]
-        total_dt = K.sum(K.squeeze(K.squeeze(inputs[2], axis=2), axis=2), axis=1)
+        total_dt = K.expand_dims(K.sum(K.squeeze(K.squeeze(inputs[2], axis=2), axis=2), axis=1), 1)
 
-        rot_f = rotate_quat(state_in[6:], pre_integration[6:])
-        vel_f = state_in[3:6] + total_dt * self.g_vec + rotate_vec(pre_integration[3:6], state_in[6:])
-        pos_f = state_in[:3] + state_in[3:6] * total_dt + 1/2 * self.g_vec * total_dt ** 2 + \
-            rotate_vec(pre_integration[:3], state_in[6:])
+        rot_f = rotate_quat(state_in[:, 6:], pre_integration[:, 6:])
+        vel_f = state_in[:, 3:6] + gen_math_ops.mat_mul(total_dt, self.g_vec) + \
+            rotate_vec(pre_integration[:, 3:6], state_in[:, 6:])
+        pos_f = state_in[:, :3] + math_ops.multiply(state_in[:, 3:6], total_dt) + \
+            1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_integration[:, :3], state_in[:, 6:])
 
-        return concat([pos_f, vel_f, rot_f], axis=0)
+        return concat([pos_f, vel_f, rot_f], axis=1)
