@@ -11,7 +11,7 @@ from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import pre_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
-from models.customized_tf_funcs.custom_losses import so3_loss_func, state_loss
+from models.customized_tf_funcs.custom_losses import so3_loss_func, l1_loss
 from models.test_experiments import ExperimentManager
 
 #############################################################################
@@ -71,7 +71,10 @@ class Learner(object):
         print(trainable_model.summary())
 
         trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                loss={"state_output": state_loss})
+                                loss={"state_output": None,
+                                      "pre_integrated_R": l1_loss,
+                                      "pre_integrated_v": l1_loss,
+                                      "pre_integrated_p": l1_loss})
 
         self.trainable_model = trainable_model
 
@@ -147,8 +150,8 @@ class Learner(object):
                 extra_epoch_number=self.last_epoch_number + 1),
         ]
 
-        # for epoch in range(self.config.max_epochs):
-        #     self.custom_backprop(val_ds[0], val_ds[0], (val_ds_splits[0], val_ds_splits[0]), epoch)
+        for epoch in range(self.config.max_epochs):
+            self.custom_backprop(train_ds, validation_ds, (train_steps_per_epoch, val_steps_per_epoch), epoch)
 
         # Train!
         self.trainable_model.fit(

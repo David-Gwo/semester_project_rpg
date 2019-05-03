@@ -6,7 +6,7 @@ from tensorflow.python.keras import activations, initializers, regularizers
 from tensorflow.python.framework import dtypes, tensor_shape, ops
 from tensorflow.python.keras import backend as K
 
-from utils.algebra import exp_mapping, apply_state_diff
+from utils.algebra import exp_mapping, apply_state_diff, rotate_quat, rotate_vec
 
 import numpy as np
 
@@ -159,3 +159,36 @@ class DiffConcatenationLayer(Layer):
         if not inputs[0].shape[0]:
             return inputs[0]
         return apply_state_diff(inputs[0], inputs[1])
+
+
+class FinalPreIntegration(Layer):
+    def __init__(self, name=None):
+        super(FinalPreIntegration, self).__init__(name=name, trainable=False)
+
+    def call(self, inputs, **kwargs):
+        if not inputs[0].shape[0]:
+            return K.concatenate([inputs[2][:, 0, :], inputs[1][:, 0, :], K.placeholder([None, 4])])
+
+        return K.concatenate([inputs[2][:, 0, :], inputs[1][:, 0, :], exp_mapping(inputs[0][:, 0, :])])
+
+
+class IntegratingLayer(Layer):
+    def __init__(self, name=None):
+        super(IntegratingLayer, self).__init__(name=name, trainable=False)
+        # TODO: pass sign as argument
+        self.g_vec = np.array([0, 0, -9.81])
+
+    def call(self, inputs, **kwargs):
+        if not inputs[0].shape[0]:
+            return inputs[0]
+
+        state_in = inputs[0]
+        pre_integration = inputs[1]
+        total_dt = K.sum(K.squeeze(K.squeeze(inputs[2], axis=2), axis=2), axis=1)
+
+        rot_f = rotate_quat(state_in[6:], pre_integration[6:])
+        vel_f = state_in[3:6] + total_dt * self.g_vec + rotate_vec(pre_integration[3:6], state_in[6:])
+        pos_f = state_in[:3] + state_in[3:6] * total_dt + 1/2 * self.g_vec * total_dt ** 2 + \
+            rotate_vec(pre_integration[:3], state_in[6:])
+
+        return concat([pos_f, vel_f, rot_f], axis=0)

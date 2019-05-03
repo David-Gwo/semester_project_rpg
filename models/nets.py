@@ -4,7 +4,7 @@ from tensorflow.python.keras.layers import Dense, Activation, Flatten, Input, Co
     Reshape, Permute
 
 from models.customized_tf_funcs.custom_layers import ExponentialRemappingLayer, ForkLayerIMUdt, DiffConcatenationLayer, \
-    ReshapeIMU, PreIntegrationForwardDense
+    ReshapeIMU, PreIntegrationForwardDense, FinalPreIntegration, IntegratingLayer
 
 import numpy as np
 
@@ -80,8 +80,7 @@ def pre_integration_net(window_len):
     kernel_width = min([window_len, 2])
     pooling_width = min([window_len, 2])
 
-    input_state_shape = (10, 1)
-    output_state_shape = 10
+    input_state_shape = (10,)
     pre_integration_shape = (window_len, 3)
 
     imu_input_shape = (window_len, 7, 1)
@@ -93,11 +92,13 @@ def pre_integration_net(window_len):
     imu_in = Input(imu_input_shape, name="imu_input")
     state_in = Input(input_state_shape, name="state_input")
 
+    # Pre-processing
+    x = ReshapeIMU()(imu_in)
+    _, dt_vec = ForkLayerIMUdt()(imu_in)
+
     #############################
     # ##  TRAINABLE NETWORK  ## #
     #############################
-
-    x = ReshapeIMU()(imu_in)
 
     # Convolution layers
     for i in range(n_conv_layers):
@@ -134,22 +135,9 @@ def pre_integration_net(window_len):
     #################################
     # ##  NON-TRAINABLE NETWORK  ## #
     #################################
-    # imu_conv_final_flat = Reshape((window_len, feat_vec_d * 2, 1), name='reshape_layer')(imu_conv_final)
-    # re_stacked_imu = Concatenate(axis=2)([imu_conv_final_flat, time_diff_imu])
-    #
-    # imu_ts_conv = Conv2D(1 + 2 * feat_vec_d, kernel_size=(kernel_width, 1 + 2 * feat_vec_d), activation='relu')(re_stacked_imu)
-    #
-    # flatten_conv_imu = Flatten()(imu_ts_conv)
-    #
-    # dense_1 = Dense(200, name='dense_layer_1', activation='relu')(flatten_conv_imu)
-    # diff_output = Dense(diff_state_len, name='diff_output', activation='relu')(dense_1)
-    #
-    # diff_su2 = ExponentialRemappingLayer(name='exponential_mapping_layer')(diff_output)
-    #
-    # state_in = Input((input_state_len, 1), name="state_input")
-    #
-    # state_out = DiffConcatenationLayer(name="state_output")((state_in, diff_su2))
 
-    state_out = Dense(output_state_shape)(x)
+    x = FinalPreIntegration()([pre_integrated_rot, pre_integrated_v, pre_integrated_p])
 
-    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_p))
+    state_out = IntegratingLayer(name="state_output")([state_in, x, dt_vec])
+
+    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot, pre_integrated_v, pre_integrated_p, state_out))

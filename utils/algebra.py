@@ -63,6 +63,33 @@ def inv_rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
+def rotate_quat(q1, q2):
+    """
+    Applies the rotation described by q2 to q1
+
+    :param q1: Initial quaternion
+    :param q2: Rotation quaternion
+    :return: The rotated quaternion
+    """
+
+    if len(np.shape(q1)) == 2:
+        if len(np.shape(q2)) == 2:
+            return np.array([Quaternion(q2_i)*Quaternion(q1_i) for q1_i, q2_i in zip(q1, q2)])
+        elif len(np.shape(q2)) == 1 and len(q2) == len(q1):
+            np.array([Quaternion(q2)*Quaternion(q1_i) for q1_i in q1])
+        else:
+            raise TypeError("If the initial quaternion is a matrix, there must only be 1 rotation quaternion, "
+                            "or exactly as many rotation quaternions as initial quaternions")
+
+    elif len(np.shape(q1)) == 1:
+        if len(np.shape(q2)) == 1:
+            return Quaternion(q2)*Quaternion(q1)
+        else:
+            raise TypeError("If there is only an initial quaternion, there must only be one rotation quaternion")
+    else:
+        raise TypeError("The initial quaternion must be a vector or a 2D array")
+
+
 def rotate_vec(v, q):
     if len(np.shape(v)) == 2:
         if len(np.shape(q)) == 2:
@@ -70,13 +97,16 @@ def rotate_vec(v, q):
         elif len(np.shape(q)) == 1 and len(q) == len(v):
             np.array([Quaternion(q).unit.rotate(v_i) for v_i in v])
         else:
-            TypeError("If the vector is a matrix, there must only be 1 quaternion, "
-                      "or exactly as many quaternions as vectors")
+            raise TypeError("If the vector is a matrix, there must only be 1 quaternion, "
+                            "or exactly as many quaternions as vectors")
 
     elif len(np.shape(v)) == 1:
-        return Quaternion(q).unit.rotate(v)
+        if len(np.shape(q)) == 1:
+            return Quaternion(q).unit.rotate(v)
+        else:
+            raise TypeError("If there is only a vector, there must only be one quaternion")
     else:
-        TypeError("If there is only a vector, there must only be one quaternion")
+        raise TypeError("v should be a vector or a 2D array")
 
 
 def unit_quat(q):
@@ -85,7 +115,7 @@ def unit_quat(q):
     elif len(np.shape(q)) == 1:
         return Quaternion(q).unit
     else:
-        TypeError("input should be a 4 component array or an nx4 numpy matrix")
+        raise TypeError("input should be a 4 component array or an nx4 numpy matrix")
 
 
 def quaternion_error(quat_1, quat_2, normalize=True):
@@ -191,4 +221,3 @@ def apply_state_diff(state, diff):
         state_out = tf.concat((state_out, np.array((unit_quat(diff[6:])*unit_quat(state[6.])).elements)))
 
     return state_out
-
