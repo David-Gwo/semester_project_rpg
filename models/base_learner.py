@@ -9,7 +9,7 @@ from tensorflow.python.keras.optimizers import Adam
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
-from models.nets import split_imu_integration_net as prediction_network
+from models.nets import pre_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import so3_loss_func, state_loss
 from models.test_experiments import ExperimentManager
@@ -71,9 +71,7 @@ class Learner(object):
         print(trainable_model.summary())
 
         trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                loss={
-                                    "diff_output": so3_loss_func,
-                                    "state_output": state_loss})
+                                loss={"state_output": state_loss})
 
         self.trainable_model = trainable_model
 
