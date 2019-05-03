@@ -43,7 +43,7 @@ class DatasetManager:
         else:
             raise NameError("Invalid dataset name")
 
-        self.dataset_generator = None
+        self.dataset_generator = StatePredictionDataset()
 
     def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
                     shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False,
@@ -112,7 +112,7 @@ class DatasetManager:
 
         ds_dir = self.dataset.get_ds_directory()
 
-        self.dataset_generator = StatePredictionDataset(x_data, y_data)
+        self.dataset_generator.load_data(x_data, y_data)
         self.dataset_generator.generate_dataset(self.dataset_formatting, args)
         training_data, ground_truth_data = self.dataset_generator.get_dataset()
 
@@ -161,15 +161,10 @@ class DatasetManager:
         else:
             filename = self.dataset.get_ds_directory() + self.test_data_file
 
-        x_keys, y_keys = self.dataset_generator.get_dataset_keys()
-        x_tensor, y_tensor = load_mat_data(filename, x_keys, y_keys)
+        x_keys, y_keys = self.dataset_generator.get_dataset_keys(self.dataset_formatting)
+        training_x, training_y = load_mat_data(filename, x_keys, y_keys)
 
-        imu_tensor = x_tensor[:, :args[0], :, :]
-        state_in = x_tensor[:, args[0]:, 0, 0]
-
-        gt_tensor = y_tensor[:, :10]
-        diff_gt_tensor = y_tensor[:, 10:]
-
+        # TODO: find more elegant way to chose the tensor to normalize?
         if normalize:
             file = open(self.training_dir + self.scaler_dir_file, "r")
             scaler_dir = file.read()
@@ -177,61 +172,61 @@ class DatasetManager:
             scale_g = joblib.load(scaler_dir + self.scaler_gyro_file)
             scale_a = joblib.load(scaler_dir + self.scaler_acc_file)
 
+            imu_tensor = training_x["imu_input"]
+
             for i in range(args[0]):
                 imu_tensor[:, i, 0:3, 0] = scale_g.transform(imu_tensor[:, i, 0:3, 0])
                 imu_tensor[:, i, 3:6, 0] = scale_a.transform(imu_tensor[:, i, 3:6, 0])
 
-        total_ds_len = len(gt_tensor)
+            training_x["imu_input"] = imu_tensor
 
+        # Compute main dataset and validation dataset lengths
+        y_sample = list(training_y.values())[0]
+        total_ds_len = len(y_sample)
         if validation_split:
             val_ds_len = int(np.ceil(total_ds_len * split_percentage))
         else:
             val_ds_len = 0
-
         main_ds_len = total_ds_len - val_ds_len
 
+        # Get validation dataset indexes
         if shuffle:
             val_ds_indexes = np.random.choice(range(total_ds_len), int(val_ds_len), replace=False)
         else:
             val_ds_indexes = range(total_ds_len - val_ds_len, total_ds_len)
 
-        val_ds_state_in = state_in[val_ds_indexes]
-        val_ds_imu_vec = imu_tensor[val_ds_indexes]
-        val_ds_state_out = gt_tensor[val_ds_indexes]
-        val_ds_diff_gt = diff_gt_tensor[val_ds_indexes]
+        # Split the training dataset into training and validation
+        validation_x = {}
+        validation_y = {}
+        for x_key in x_keys:
+            validation_x[x_key] = training_x[x_key][val_ds_indexes]
+            training_x[x_key] = np.delete(training_x[x_key], val_ds_indexes, axis=0)
+        for y_key in y_keys:
+            validation_y[y_key] = training_y[y_key][val_ds_indexes]
+            training_y[y_key] = np.delete(training_y[y_key], val_ds_indexes, axis=0)
 
-        state_in = np.delete(state_in, val_ds_indexes, axis=0)
-        imu_tensor = np.delete(imu_tensor, val_ds_indexes, axis=0)
-        gt_tensor = np.delete(gt_tensor, val_ds_indexes, axis=0)
-        diff_gt_tensor = np.delete(diff_gt_tensor, val_ds_indexes, axis=0)
-
+        # If data is not to be transformed to tensorflow dataset, return
         if not tensorflow_format:
+            # TODO: shuffle if requested
+
             if validation_split:
-                return ((imu_tensor, state_in), (gt_tensor, diff_gt_tensor)), \
-                       ((val_ds_imu_vec, val_ds_state_in), (val_ds_state_out, val_ds_diff_gt)), \
-                       (main_ds_len, val_ds_len)
+                return (training_x, training_y), (validation_x, validation_y), (main_ds_len, val_ds_len)
             else:
-                return (imu_tensor, state_in), (gt_tensor, diff_gt_tensor), main_ds_len
+                return (training_x, training_y), main_ds_len
 
-        main_ds = tf.data.Dataset.from_tensor_slices(
-            ({"imu_img_input": imu_tensor,
-              "state_input": state_in},
-             {"state_output": gt_tensor,
-              "diff_output": diff_gt_tensor})
-        )
-        val_ds = tf.data.Dataset.from_tensor_slices(
-            ({"imu_img_input": val_ds_imu_vec,
-              "state_input": val_ds_state_in},
-             {"state_output": val_ds_state_out,
-              "diff_output": val_ds_diff_gt})
-        )
+        # Otherwise generate the tensorflow datasets
+        main_ds = tf.data.Dataset.from_tensor_slices((training_x, training_y))
+        val_ds = tf.data.Dataset.from_tensor_slices((validation_x, validation_y))
 
+        # Shuffle dataset if requested
         if shuffle:
             main_ds = main_ds.shuffle(batch_size, seed=seed)
 
+        # Batch dataset
         main_ds = main_ds.batch(batch_size, drop_remainder=full_batches)
         val_ds = val_ds.batch(batch_size, drop_remainder=full_batches)
 
+        # Repeat dataset if requested
         if repeat_main_ds:
             main_ds = main_ds.repeat()
 

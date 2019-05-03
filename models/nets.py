@@ -1,18 +1,8 @@
-import tensorflow as tf
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Dropout, Activation, Flatten, Input, Conv2D, Conv1D, MaxPooling2D, \
-    BatchNormalization, Concatenate, Reshape
-from tensorflow.python.keras.layers.merge import add
+from tensorflow.python.keras.layers import Dense, Activation, Flatten, Input, Conv2D, MaxPooling2D, Concatenate, Reshape
 
 from models.customized_tf_funcs.custom_layers import ExponentialRemappingLayer, ForkLayerIMUdt, DiffConcatenationLayer
-
-##########################################
-# ADD HERE YOUR NETWORK                  #
-# BUILD IT WITH PURE TENSORFLOW OR KERAS #
-##########################################
-
-# NOTE: IF USING KERAS, YOU MIGHT HAVE PROBLEMS WITH BATCH-NORMALIZATION
 
 
 def vel_cnn():
@@ -31,7 +21,7 @@ def vel_cnn():
     return model
 
 
-def imu_so3_integration_net(window_len, ):
+def imu_so3_integration_net(window_len):
 
     imu_final_channels = 5
     input_state_len = 10
@@ -80,9 +70,11 @@ def imu_so3_integration_net(window_len, ):
     return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)
 
 
-def split_imu_integration_net(window_len, input_state_len, diff_state_len, output_state_len):
+def split_imu_integration_net(window_len):
 
     imu_final_channels = 5
+    diff_state_len = 9
+    input_state_len = 10
 
     conv_kernel_width = min([window_len, 2])
     imu_in = Input((window_len, 7, 1), name="imu_input")

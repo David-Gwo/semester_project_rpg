@@ -1,27 +1,17 @@
 import numpy as np
 import collections
-from utils.algebra import log_mapping, quaternion_error, rotate_vec
+from utils.algebra import log_mapping, exp_mapping, quaternion_error, rotate_vec
 from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
-from utils.algebra import exp_mapping
 
 
 class StatePredictionDataset:
-    def __init__(self, imu, gt):
-        """
-        :param imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
-        correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is
-        the time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
-        :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
-        17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular
-        velocity, x,y,z acceleration and timestamp difference (same as `raw_imu`)
-        """
+    def __init__(self):
 
-        self.imu_raw = imu
-        self.gt_raw = gt
+        self.imu_raw = None
+        self.gt_raw = None
         self.x_ds = {}
         self.y_ds = {}
-        self.used_dataset = None
         self.accepted_datasets = ["windowed_imu_integration",
                                   "windowed_imu_speed_regression",
                                   "windowed_imu_integration_with_so3_rotation",
@@ -49,6 +39,21 @@ class StatePredictionDataset:
         assert collections.Counter(self.accepted_datasets) == collections.Counter(list(self.dataset_keys.keys())), \
             "There is one or more key mismatch in the accepted dataset dictionaries"
 
+    def load_data(self, imu, gt):
+        """
+        Loads the imu and ground truth data. They will be used to generate a dataset
+
+        :param imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
+        correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is
+        the time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
+        :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
+        17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular
+        velocity, x,y,z acceleration and timestamp difference (same as `raw_imu`)
+        """
+
+        self.imu_raw = imu
+        self.gt_raw = gt
+
     def generate_dataset(self, dataset, args):
         """
         Generates the chosen dataset
@@ -58,8 +63,6 @@ class StatePredictionDataset:
         """
 
         assert dataset in self.accepted_datasets, "The dataset version must be among {0}".format(self.accepted_datasets)
-
-        self.used_dataset = dataset
 
         if dataset == "windowed_imu_integration":
             self.windowed_imu_for_state_prediction(args)
@@ -112,13 +115,13 @@ class StatePredictionDataset:
 
         return self.x_ds, self.y_ds
 
-    def get_dataset_keys(self):
+    def get_dataset_keys(self, dataset_type):
         """
         Gets the input and output keys of the generated dataset
 
         :return: the input and output keys of the generated dataset
         """
-        return self.dataset_keys[self.used_dataset]["x_keys"], self.dataset_keys[self.used_dataset]["y_keys"]
+        return self.dataset_keys[dataset_type]["x_keys"], self.dataset_keys[dataset_type]["y_keys"]
 
     def imu_speed_regression(self, args):
         """
@@ -218,9 +221,11 @@ class StatePredictionDataset:
 
         n_samples = len(self.imu_raw) - window_len
 
-        self.windowed_with_so3_rotation(args)
+        self.windowed_imu_for_state_prediction(args)
 
         gt_augmented = self.x_ds["state_input"]
+        gt_augmented = np.concatenate((gt_augmented, self.y_ds["state_output"][-window_len:, :]), axis=0)
+
         imu_window = self.x_ds["imu_input"]
 
         # Define the pre-integrated rotation, velocity and position vectors
@@ -228,7 +233,7 @@ class StatePredictionDataset:
         pre_int_v = np.zeros((n_samples, window_len, 3))
         pre_int_p = np.zeros((n_samples, window_len, 3))
 
-        print("Generating dataset. This may take a while...")
+        print("Generating pre-integration dataset. This may take a while...")
         prog_bar = Progbar(n_samples)
 
         for i in range(n_samples):
@@ -266,7 +271,7 @@ class StatePredictionDataset:
 
         window_channels = np.shape(raw_imu)[1]
 
-        # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_chanels)
+        # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_channels)
         imu_img_tensor = np.zeros((len(raw_imu), window_len, window_channels, 1))
 
         for i in range(len(raw_imu) - window_len):
@@ -297,7 +302,7 @@ def reformat_data(compact_data):
     flattened_data = np.concatenate([np.stack(compact_data[:, i], axis=0) for i in range(data_channels)], axis=1)
     flattened_data = np.append(flattened_data, np.expand_dims(compact_data[:, data_channels], axis=1), axis=1)
 
-    # TODO: get timestamp format (s/ms/us)
+    # TODO: get timestamp format (s/ms/us). blackbird is in us
     # Calculate difference between timestamps, and change units to ms
     flattened_data[1:, -1] = np.diff(flattened_data[:, -1]) / 1000
     flattened_data[0, -1] = 0

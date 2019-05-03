@@ -66,11 +66,7 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
     def build_and_compile_model(self):
-        trainable_model = prediction_network(
-            window_len=self.config.window_length,
-            input_state_len=self.config.output_size,
-            diff_state_len=9,
-            output_state_len=self.config.output_size)
+        trainable_model = prediction_network(window_len=self.config.window_length)
 
         print(trainable_model.summary())
 
@@ -138,15 +134,8 @@ class Learner(object):
         dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True, plot=self.config.plot_ds)
         train_ds, validation_ds, ds_lengths = dataset
 
-        val_ds_splits = np.diff(np.linspace(0, ds_lengths[1], 2)/self.config.batch_size).astype(np.int)
-        val_ds = {}
-
-        for i, split in enumerate(val_ds_splits):
-            val_ds[i] = validation_ds.take(split)
-            validation_ds = validation_ds.skip(split)
-
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
-        val_steps_per_epoch = int(math.ceil(val_ds_splits[0]))
+        val_steps_per_epoch = int(math.ceil((ds_lengths[1]/self.config.batch_size)))
 
         keras_callbacks = [
             callbacks.EarlyStopping(patience=20, monitor='val_loss'),
@@ -169,7 +158,7 @@ class Learner(object):
             verbose=2,
             epochs=self.config.max_epochs,
             steps_per_epoch=train_steps_per_epoch,
-            validation_data=val_ds[0],
+            validation_data=validation_ds,
             validation_steps=val_steps_per_epoch,
             callbacks=keras_callbacks)
 

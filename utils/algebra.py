@@ -3,6 +3,7 @@ from pyquaternion import Quaternion
 from tensorflow.python.keras.utils import Progbar
 import tensorflow as tf
 
+
 def imu_integration(imu_data, window_len, track_progress=True):
 
     # TODO: get a better comparison
@@ -149,14 +150,14 @@ def log_mapping(q_vec):
 
 def exp_mapping(w_vec):
     """
-    Computes the Lie group SU2 of the Lie algebra vector so3, or array of vectors, via the exponential mapping
+    Computes the quaternion representation of the Lie algebra vector so3, or array of vectors, by exponential mapping
 
     :param w_vec: 3 component vector or array of vectors
     :return: the Lie group SU2 (in quaternion format) of the so3 Lie algebra
     """
     
     q_vec = np.array(
-        [Quaternion().elements if all(np.isclose(w, [0, 0, 0]))
+        [Quaternion().elements if all(np.isclose(list(w), [0, 0, 0]))
          else np.append(np.cos(np.linalg.norm(w)/2), np.sin(np.linalg.norm(w)/2)/np.linalg.norm(w)*w)
          for w in w_vec])
 
