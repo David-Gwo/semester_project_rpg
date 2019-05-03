@@ -84,7 +84,7 @@ def load_mat_data(directory, x_keys, y_keys):
     :param directory: directory of the mat file <dir/file.mat>
     :return: the x and y data, in format [x, y]
     """
-
+    raise NotImplemented()
     mat_data = scipy.io.loadmat(directory)
 
     y_tensor = mat_data['y']

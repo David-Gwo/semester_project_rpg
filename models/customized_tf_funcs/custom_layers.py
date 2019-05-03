@@ -3,14 +3,6 @@ from utils.algebra import exp_mapping, apply_state_diff
 from tensorflow.python.ops.array_ops import expand_dims, concat
 
 
-class ForkLayer(Layer):
-    def __init__(self, *args, **kwargs):
-        super(ForkLayer, self).__init__(args, kwargs)
-
-    def call(self, inputs, **kwargs):
-        return inputs[:, :, 0:6, :] * 1, inputs[:, :, 6, :] * 1
-
-
 class ForkLayerIMUdt(Layer):
     def __init__(self, window_len, name=None):
         super(ForkLayerIMUdt, self).__init__(name=name)

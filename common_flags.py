@@ -31,7 +31,7 @@ gflags.DEFINE_integer('capacity_queue', 100, 'Capacity of input queue. A high '
 
 # Reading parameters
 gflags.DEFINE_string('train_ds', 'blackbird', 'Which dataset to use for training')
-gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')
+gflags.DEFINE_boolean('force_ds_remake', True, 'Whether to force re-processing of the dataset file')
 gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-processed dataset training file')
 gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')
 

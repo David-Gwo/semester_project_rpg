@@ -1,7 +1,9 @@
 import numpy as np
-from utils.algebra import log_mapping, quaternion_error, exp_mapping, rotate_vec
+import collections
+from utils.algebra import log_mapping, quaternion_error, rotate_vec
 from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
+from utils.algebra import exp_mapping
 
 
 class StatePredictionDataset:
@@ -19,6 +21,7 @@ class StatePredictionDataset:
         self.gt_raw = gt
         self.x_ds = {}
         self.y_ds = {}
+        self.used_dataset = None
         self.accepted_datasets = ["windowed_imu_integration",
                                   "windowed_imu_speed_regression",
                                   "windowed_imu_integration_with_so3_rotation",
@@ -43,8 +46,8 @@ class StatePredictionDataset:
             }
         }
 
-        assert self.accepted_datasets == list(self.dataset_keys.keys()), "There is one or more key mismatch in the " \
-                                                                         "accepted dataset dictionaries"
+        assert collections.Counter(self.accepted_datasets) == collections.Counter(list(self.dataset_keys.keys())), \
+            "There is one or more key mismatch in the accepted dataset dictionaries"
 
     def generate_dataset(self, dataset, args):
         """
@@ -56,6 +59,8 @@ class StatePredictionDataset:
 
         assert dataset in self.accepted_datasets, "The dataset version must be among {0}".format(self.accepted_datasets)
 
+        self.used_dataset = dataset
+
         if dataset == "windowed_imu_integration":
             self.windowed_imu_for_state_prediction(args)
         elif dataset == "windowed_imu_integration_with_so3_rotation":
@@ -65,7 +70,7 @@ class StatePredictionDataset:
         elif dataset == "windowed_imu_preintegration":
             self.windowed_imu_preintegration_dataset(args)
 
-    def get_outputs(self, keys, outputs):
+    def set_outputs(self, keys, outputs):
         """
         Adds the outputs to the dictionary of outputs using the provided keys
 
@@ -73,13 +78,14 @@ class StatePredictionDataset:
         :param outputs: outputs to be predicted
         """
 
+        assert isinstance(keys, list) == isinstance(outputs, list), "The parameters must be lists of same length"
         assert len(keys) == len(outputs), "There must be as many keys as outputs"
         assert len(np.unique(keys)) == len(keys), "There must not be two outputs with the same key"
 
         for i in range(len(keys)):
             self.y_ds[keys[i]] = outputs[i]
 
-    def get_inputs(self, keys, inputs):
+    def set_inputs(self, keys, inputs):
         """
         Adds the inputs to the dictionary of inputs using the provided keys
 
@@ -87,6 +93,7 @@ class StatePredictionDataset:
         :param inputs: inputs to be used for prediction
         """
 
+        assert isinstance(keys, list) == isinstance(inputs, list), "The parameters must be lists of same length"
         assert len(keys) == len(inputs), "There must be as many keys as inputs"
         assert len(np.unique(keys)) == len(keys), "There must not be two inputs with the same key"
 
@@ -111,7 +118,7 @@ class StatePredictionDataset:
 
         :return: the input and output keys of the generated dataset
         """
-        raise NotImplemented()
+        return self.dataset_keys[self.used_dataset]["x_keys"], self.dataset_keys[self.used_dataset]["y_keys"]
 
     def imu_speed_regression(self, args):
         """
@@ -131,8 +138,8 @@ class StatePredictionDataset:
 
         imu_img_tensor = self.window_imu_data(window_len)
 
-        self.get_inputs(["state_input"], [imu_img_tensor])
-        self.get_outputs(["state_output"], [gt_v_tensor])
+        self.set_inputs(["state_input"], [imu_img_tensor])
+        self.set_outputs(["state_output"], [gt_v_tensor])
 
     def windowed_imu_for_state_prediction(self, args):
         """
@@ -149,10 +156,10 @@ class StatePredictionDataset:
         """
 
         window_len = args[0]
-        raw_imu = reformat_data(self.imu_raw)
-        gt = reformat_data(self.gt_raw)
 
-        n_samples = len(raw_imu) - window_len
+        n_samples = len(self.imu_raw) - window_len
+
+        gt = reformat_data(self.gt_raw)
 
         # Keep only position, attitude, velocity information (remove angular velocity, acceleration and timestamp)
         gt = np.delete(gt, np.s_[10:17], axis=1)
@@ -165,8 +172,8 @@ class StatePredictionDataset:
 
         imu_window = self.window_imu_data(window_len)[:n_samples, :, :, :]
 
-        self.get_inputs(["state_input", "imu_input"], [initial_state_vec, imu_window])
-        self.get_outputs(["state_output"], gt[1:-window_len+1, :])
+        self.set_inputs(["state_input", "imu_input"], [initial_state_vec, imu_window])
+        self.set_outputs(["state_output"], [gt[1:-window_len + 1, :]])
 
     def windowed_with_so3_rotation(self, args):
         """
@@ -183,7 +190,8 @@ class StatePredictionDataset:
         """
         self.windowed_imu_for_state_prediction(args)
 
-        self.y_ds["state_output"][:, 6:] = log_mapping(self.y_ds["state_output"][:, 6:])
+        self.y_ds["state_output"] = np.concatenate((self.y_ds["state_output"][:, :6],
+                                                    log_mapping(self.y_ds["state_output"][:, 6:])), axis=1)
 
     def windowed_imu_preintegration_dataset(self, args):
         """
@@ -198,12 +206,16 @@ class StatePredictionDataset:
             Output 1: the final 9-dimensional state consisting on final position (x,y,z), velocity (x,y,z) and
             orientation (x,y,z), in so(3) representation
             Output 2: the pre-integrated rotation for each window element, with shape <n_samples, imu_len, 3> in so(3)
-            Output 3: the pre-integrated velocity for each window element, with shape <n_samples, imu_len, 3> in R3
-            Output 4: the pre-integrated position for each window element, with shape <n_samples, imu_len, 3> in R3
+            Output 3: the pre-integrated velocity for each window element, with shape <n_samples, imu_len, 3> in R(3)
+            Output 4: the pre-integrated position for each window element, with shape <n_samples, imu_len, 3> in R(3)
 
         """
 
         window_len = args[0]
+
+        # TODO: get as a parameter of the dataset (in blackbird it's negative)
+        g_val = -9.81
+
         n_samples = len(self.imu_raw) - window_len
 
         self.windowed_with_so3_rotation(args)
@@ -224,21 +236,25 @@ class StatePredictionDataset:
             vi = np.tile(gt_augmented[i, 3:6], [window_len, 1])
             qi = np.tile(gt_augmented[i, 6:], [window_len, 1])
 
+            # imu_window[i, :, -1, 0] is a <1, window_len> vector containing all the dt between two consecutive samples
+            # of the imu. We compute the cumulative sum to get the total time for every sample in the window since the
+            # beginning of the window itself
             cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0])
 
+            # We calculate the quaternion that rotates q(i) to q(i+t) for all t in [0, window_len], and map it to so(3)
             pre_int_rot[i, :, :] = log_mapping(
                 np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i+window_len, 6:])]))
 
-            v = np.expand_dims(cum_dt_vec * 9.81, axis=1)*np.array([0, 0, 1])
-            pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi + v, qi)
+            g_contrib = np.expand_dims(cum_dt_vec * g_val, axis=1)*np.array([0, 0, 1])
+            pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi - g_contrib, qi)
 
-            p = -np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi) + \
-                np.expand_dims(cum_dt_vec ** 2 * 9.81, axis=1)*np.array([0, 0, 1])
-            pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi + p, qi)
+            v_contrib = np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi)
+            g_contrib = 1/2 * np.expand_dims(cum_dt_vec ** 2 * g_val, axis=1)*np.array([0, 0, 1])
+            pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi - v_contrib - g_contrib, qi)
 
             prog_bar.update(i+2)
 
-        self.get_outputs(
+        self.set_outputs(
             ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p"], [pre_int_rot, pre_int_v, pre_int_p])
 
     def window_imu_data(self, window_len):
@@ -246,19 +262,21 @@ class StatePredictionDataset:
         # TODO: complete
         """
 
-        window_channels = np.shape(self.imu_raw)[1]
+        raw_imu = reformat_data(self.imu_raw)
+
+        window_channels = np.shape(raw_imu)[1]
 
         # Initialize x data. Will be sequence of IMU measurements of size (imu_len x window_chanels)
-        imu_img_tensor = np.zeros((len(self.imu_raw), window_len, window_channels, 1))
+        imu_img_tensor = np.zeros((len(raw_imu), window_len, window_channels, 1))
 
-        for i in range(len(self.imu_raw) - window_len):
+        for i in range(len(raw_imu) - window_len):
             imu_img = np.zeros((window_len, window_channels))
 
             # The first imu_x_len data vectors will not be full of data (not enough acquisitions to fill it up yet)
             if i < window_len:
-                imu_img[window_len - i - 1:window_len, :] = self.imu_raw[0:i + 1, :]
+                imu_img[window_len - i - 1:window_len, :] = raw_imu[0:i + 1, :]
             else:
-                imu_img = self.imu_raw[i - window_len + 1:i + 1, :]
+                imu_img = raw_imu[i - window_len + 1:i + 1, :]
 
             imu_img_tensor[i, :, :, :] = np.expand_dims(imu_img, 2)
 
@@ -266,6 +284,12 @@ class StatePredictionDataset:
 
 
 def reformat_data(compact_data):
+    """
+    Expands the data (converts from IMU/GT object to a flat-dimensional vector. Additionally, computes the timestamp
+    differences
+
+    :param compact_data: data from IMU/GT, with the timestamps at the last component
+    """
 
     data_channels = np.shape(compact_data)[1] - 1
 
@@ -273,6 +297,7 @@ def reformat_data(compact_data):
     flattened_data = np.concatenate([np.stack(compact_data[:, i], axis=0) for i in range(data_channels)], axis=1)
     flattened_data = np.append(flattened_data, np.expand_dims(compact_data[:, data_channels], axis=1), axis=1)
 
+    # TODO: get timestamp format (s/ms/us)
     # Calculate difference between timestamps, and change units to ms
     flattened_data[1:, -1] = np.diff(flattened_data[:, -1]) / 1000
     flattened_data[0, -1] = 0

@@ -96,7 +96,7 @@ class Learner(object):
                                          self.trained_model_dir,
                                          dataset_name)
 
-        return dataset_manager.get_dataset("windowed_imu_integration",
+        return dataset_manager.get_dataset("windowed_imu_preintegration",
                                            self.config.window_length,
                                            batch_size=self.config.batch_size,
                                            validation_split=val_split,
