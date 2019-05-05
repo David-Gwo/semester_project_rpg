@@ -5,7 +5,21 @@ import numpy as np
 
 
 def l1_loss(y_true, y_pred):
-    return tf.reduce_sum(tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)), axis=1)
+    abs_diff = tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
+
+    while len(abs_diff.shape) > 1:
+        abs_diff = tf.reduce_sum(abs_diff, axis=1)
+
+    return abs_diff
+
+
+def l2_loss(y_true, y_pred):
+    abs_diff = tf.sqrt(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)**2)
+
+    while len(abs_diff.shape) > 1:
+        abs_diff = tf.reduce_sum(abs_diff, axis=1)
+
+    return abs_diff
 
 
 def mock_loss(y_true, _):
