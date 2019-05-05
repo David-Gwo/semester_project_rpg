@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import cm
 from utils.algebra import imu_integration, log_mapping
 from utils.visualization import Dynamic3DTrajectory
 from tensorflow.python.keras.utils import Progbar
@@ -22,7 +23,7 @@ class ExperimentManager:
             "iterate_model_output": self.iterate_model_output
         }
 
-        self.valid_plot_types = ["10-dof-state"]
+        self.valid_plot_types = ["10-dof-state", "pre_integration"]
 
     def run_experiment(self, experiment_func, datasets_and_options):
 
@@ -208,6 +209,9 @@ class ExperimentManager:
             if plot_options[key]["type"] == "10-dof-state":
                 return self.draw_state_output(ground_truth[key], model_prediction[key], comparative_prediction[key],
                                               plot_options[key], gt_x, model_x, comp_x)
+            if plot_options[key]["type"] == "pre_integration":
+                return self.draw_pre_integration(ground_truth[key], model_prediction[key], plot_options[key], gt_x,
+                                                 model_x)
 
     def draw_state_output(self, ground_truth, model_prediction, comparative_prediction, options, gt_x, model_x, comp_x):
         if gt_x is None:
@@ -326,3 +330,36 @@ class ExperimentManager:
 
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
+
+    def draw_pre_integration(self, ground_truth, model_prediction, options, gt_x, model_x):
+
+        gt_shape = ground_truth.shape
+
+        if gt_x is None:
+            gt_x = range(gt_shape[0])
+        if model_x is None:
+            model_x = range(len(model_prediction))
+
+        fig1 = plt.figure()
+        ax1 = fig1.add_subplot(3, 1, 1)
+        ax2 = fig1.add_subplot(3, 1, 2)
+        ax3 = fig1.add_subplot(3, 1, 3)
+
+        im1 = ax1.imshow(ground_truth[:, :, 0].T, cmap=cm.get_cmap('jet'), aspect='auto')
+        im2 = ax2.imshow(ground_truth[:, :, 1].T, cmap=cm.get_cmap('jet'), aspect='auto')
+        im3 = ax3.imshow(ground_truth[:, :, 2].T, cmap=cm.get_cmap('jet'), aspect='auto')
+
+        fig1.colorbar(im1, ax=ax1)
+        fig1.colorbar(im2, ax=ax2)
+        fig1.colorbar(im3, ax=ax3)
+        ax1.axes.get_xaxis().set_ticks([])
+        ax2.axes.get_xaxis().set_ticks([])
+        ax1.set_ylabel("x")
+        ax2.set_ylabel("y")
+        ax3.set_ylabel("z")
+        ax1.invert_yaxis()
+        ax2.invert_yaxis()
+        ax3.invert_yaxis()
+        fig1.suptitle('Pre-integrated position increment')
+
+        return fig1
