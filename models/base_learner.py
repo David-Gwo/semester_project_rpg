@@ -73,10 +73,11 @@ class Learner(object):
                                       "pre_integrated_R": l1_loss,
                                       "pre_integrated_v": l1_loss,
                                       "pre_integrated_p": l1_loss},
-                                loss_weight={'state_output': 1,
-                                             'pre_integrated_R': 1.,
-                                             'pre_integrated_v': 1.,
-                                             'pre_integrated_p': 1.})
+                                # loss_weight={'state_output': 1,
+                                #              'pre_integrated_R': 1.,
+                                #              'pre_integrated_v': 1.,
+                                #              'pre_integrated_p': 1.}
+                                )
 
         self.trainable_model = trainable_model
 
@@ -237,11 +238,18 @@ class Learner(object):
         if 'non_tensorflow' in dataset_tags:
             tensorflow_format = False
 
-        return self.get_dataset(train=train,
-                                val_split=val_split,
-                                const_batch_size=const_batch_size,
-                                plot=plot,
-                                shuffle=shuffle,
-                                normalize=normalize,
-                                repeat_ds=repeat_ds,
-                                tensorflow_format=tensorflow_format)[0]
+        dataset = self.get_dataset(train=train,
+                                   val_split=val_split,
+                                   const_batch_size=const_batch_size,
+                                   plot=plot,
+                                   shuffle=shuffle,
+                                   normalize=normalize,
+                                   repeat_ds=repeat_ds,
+                                   tensorflow_format=tensorflow_format)
+
+        if val_split:
+            training, validation, _ = dataset
+            return training, validation
+        else:
+            training, _ = dataset
+            return training

@@ -22,15 +22,26 @@ class ExperimentManager:
             "iterate_model_output": self.iterate_model_output
         }
 
+        self.valid_plot_types = ["10-dof-state"]
+
     def run_experiment(self, experiment_func, datasets_and_options):
 
         experiment_options = datasets_and_options["options"]
         datasets_and_options.pop("options")
 
-        if "dynamic_plot" not in experiment_options.keys():
-            experiment_options["dynamic_plot"] = False
-        if "sparsing_factor" not in experiment_options.keys():
-            experiment_options["sparsing_factor"] = 0
+        # Sanity checks of inputs
+        if "plot_data" in experiment_options:
+            plot_data = experiment_options["plot_data"]
+            for key in plot_data.keys():
+                if "type" not in plot_data[key].keys():
+                    raise ValueError("The type of the data must be specified")
+                elif plot_data[key]["type"] not in self.valid_plot_types:
+                    raise ValueError("The type of the data must be one of the valid types: {0}".format(
+                        self.valid_plot_types))
+                if "dynamic_plot" not in plot_data[key].keys():
+                    plot_data[key]["dynamic_plot"] = False
+                if "sparsing_factor" not in plot_data[key].keys():
+                    plot_data[key]["sparsing_factor"] = 0
 
         # Request and save dataset if needed
         for dataset_key_tags in datasets_and_options.keys():
@@ -49,24 +60,26 @@ class ExperimentManager:
 
     def plot_predictions(self, datasets, dataset_options, experiment_options, experiment_name):
 
-        gt = []
-        predictions = []
-        comparisons = []
+        gt = {k: [] for k in experiment_options["plot_data"].keys()}
+        predictions = {k: [] for k in experiment_options["plot_data"].keys()}
+        comparisons = {k: [] for k in experiment_options["plot_data"].keys()}
 
         for i, dataset in enumerate(datasets):
             for option in dataset_options[i]:
                 if option == "predict":
-                    predictions = self.model_loader().predict(dataset, verbose=1)
+                    model = self.model_loader()
+                    predictions = model.predict(dataset[0], verbose=1)
+                    predictions = {out.name.split('/')[0]: predictions[i] for i, out in enumerate(model.outputs)}
+                    predictions = {k: predictions[k] for k in experiment_options["plot_data"].keys()}
                 elif option == "compare_prediction":
                     comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                 elif option == "ground_truth":
-                    gt = dataset[1][:, :9]
+                    gt = {k: dataset[1][k] for k in experiment_options["plot_data"].keys()}
 
-        fig = self.plot_prediction(ground_truth=gt,
-                                   model_prediction=predictions,
-                                   comparative_prediction=comparisons,
-                                   dynamic_plot=experiment_options["dynamic_plot"],
-                                   sparsing_factor=experiment_options["sparsing_factor"])
+        fig = self.draw_predictions(ground_truth=gt,
+                                    model_prediction=predictions,
+                                    comparative_prediction=comparisons,
+                                    plot_options=experiment_options["plot_data"])
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     def training_progression(self, datasets, dataset_options, experiment_options, experiment_name):
@@ -89,11 +102,11 @@ class ExperimentManager:
                     elif option == "ground_truth":
                         gt = dataset[1][:, :9]
 
-            figs.append(self.plot_prediction(ground_truth=gt,
-                                             model_prediction=predictions,
-                                             comparative_prediction=comparisons,
-                                             dynamic_plot=experiment_options["dynamic_plot"],
-                                             sparsing_factor=experiment_options["sparsing_factor"]))
+            figs.append(self.draw_predictions(ground_truth=gt,
+                                              model_prediction=predictions,
+                                              comparative_prediction=comparisons,
+                                              dynamic_plot=experiment_options["dynamic_plot"],
+                                              sparsing_factor=experiment_options["sparsing_factor"]))
             j += 1
             self.experiment_plot(figs[0], experiment_options, experiment_name=experiment_name, iteration=str(j))
 
@@ -158,14 +171,12 @@ class ExperimentManager:
 
         predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
         predictions_x_axis[1:] -= 1
-        fig = self.plot_prediction(ground_truth=gt,
-                                   model_prediction=predictions,
-                                   comparative_prediction=comparisons,
-                                   gt_x=np.arange(0, n_predictions * self.window_len),
-                                   model_x=predictions_x_axis,
-                                   comp_x=predictions_x_axis,
-                                   dynamic_plot=experiment_options["dynamic_plot"],
-                                   sparsing_factor=experiment_options["sparsing_factor"])
+        fig = self.draw_predictions(ground_truth=gt,
+                                    model_prediction=predictions,
+                                    comparative_prediction=comparisons,
+                                    gt_x=np.arange(0, n_predictions * self.window_len),
+                                    model_x=predictions_x_axis,
+                                    comp_x=predictions_x_axis)
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     @staticmethod
@@ -190,9 +201,15 @@ class ExperimentManager:
         elif experiment_general_options["output"] == "show":
             plt.show()
 
-    def plot_prediction(self, ground_truth, model_prediction, comparative_prediction, gt_x=None, model_x=None, comp_x=None,
-                        dynamic_plot=False, sparsing_factor=0):
+    def draw_predictions(self, ground_truth, model_prediction, comparative_prediction, plot_options,
+                         gt_x=None, model_x=None, comp_x=None):
 
+        for key in plot_options.keys():
+            if plot_options[key]["type"] == "10-dof-state":
+                return self.draw_state_output(ground_truth[key], model_prediction[key], comparative_prediction[key],
+                                              plot_options[key], gt_x, model_x, comp_x)
+
+    def draw_state_output(self, ground_truth, model_prediction, comparative_prediction, options, gt_x, model_x, comp_x):
         if gt_x is None:
             gt_x = range(len(ground_truth))
         if model_x is None:
@@ -202,7 +219,7 @@ class ExperimentManager:
 
         figs = []
 
-        if dynamic_plot:
+        if options["dynamic_plot"]:
             if len(ground_truth) != len(model_prediction):
                 tiled_prediction = np.zeros(ground_truth[:, 0:3].shape)
                 for i in np.arange(len(model_prediction) - 1, 0, -1) - 1:
@@ -210,8 +227,8 @@ class ExperimentManager:
             else:
                 tiled_prediction = model_prediction[:, 0:3]
 
-            dynamic_plot = Dynamic3DTrajectory([ground_truth[:, 0:3], tiled_prediction], sparsing_factor)
-            dynamic_fig = dynamic_plot()
+            dynamic_plot = Dynamic3DTrajectory([ground_truth[:, 0:3], tiled_prediction], options["sparsing_factor"])
+            _ = dynamic_plot()
 
         fig3d = plt.figure()
         ax = axes3d.Axes3D(fig3d)
