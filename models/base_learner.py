@@ -63,21 +63,30 @@ class Learner(object):
             # Update weights of layer
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
-    def build_and_compile_model(self):
+    def build_and_compile_model(self, is_testing=False):
         trainable_model = prediction_network(window_len=self.config.window_length)
 
         print(trainable_model.summary())
 
-        trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                loss={"state_output": mock_loss,
-                                      "pre_integrated_R": l1_loss,
-                                      "pre_integrated_v": l1_loss,
-                                      "pre_integrated_p": l1_loss},
-                                # loss_weight={'state_output': 1,
-                                #              'pre_integrated_R': 1.,
-                                #              'pre_integrated_v': 1.,
-                                #              'pre_integrated_p': 1.}
-                                )
+        loss_connections = {"state_output": mock_loss,
+                            "pre_integrated_R": l1_loss,
+                            "pre_integrated_v": l1_loss,
+                            "pre_integrated_p": l1_loss}
+
+        if not is_testing:
+            loss_weight = {'state_output': 1,
+                           'pre_integrated_R': 1.,
+                           'pre_integrated_v': 1.,
+                           'pre_integrated_p': 1.}
+            trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
+                                    loss=loss_connections,
+                                    loss_weight=loss_weight)
+        else:
+            trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
+                                    loss={"state_output": mock_loss,
+                                          "pre_integrated_R": l1_loss,
+                                          "pre_integrated_v": l1_loss,
+                                          "pre_integrated_p": l1_loss})
 
         self.trainable_model = trainable_model
 
@@ -198,7 +207,7 @@ class Learner(object):
             return model_used_pos + 1
 
     def test(self, experiments):
-        self.build_and_compile_model()
+        self.build_and_compile_model(is_testing=True)
         self.experiment_manager = ExperimentManager(window_len=self.config.window_length,
                                                     final_epoch=self.last_epoch_number,
                                                     model_loader_func=self.experiment_model_request,
