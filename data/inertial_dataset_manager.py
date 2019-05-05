@@ -198,6 +198,7 @@ class DatasetManager:
         # Split the training dataset into training and validation
         validation_x = {}
         validation_y = {}
+
         for x_key in x_keys:
             validation_x[x_key] = training_x[x_key][val_ds_indexes]
             training_x[x_key] = np.delete(training_x[x_key], val_ds_indexes, axis=0)

@@ -9,7 +9,7 @@ from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
 from models.nets import pre_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
-from models.customized_tf_funcs.custom_losses import so3_loss_func, l1_loss
+from models.customized_tf_funcs.custom_losses import so3_loss_func, l1_loss, mock_loss
 from models.test_experiments import ExperimentManager
 
 #############################################################################
@@ -70,15 +70,19 @@ class Learner(object):
         print(trainable_model.summary())
 
         trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                loss={"state_output": None,
+                                loss={"state_output": mock_loss,
                                       "pre_integrated_R": l1_loss,
                                       "pre_integrated_v": l1_loss,
-                                      "pre_integrated_p": l1_loss})
+                                      "pre_integrated_p": l1_loss},
+                                loss_weight={'state_output': 1,
+                                             'pre_integrated_R': 1.,
+                                             'pre_integrated_v': 1.,
+                                             'pre_integrated_p': 1.})
 
         self.trainable_model = trainable_model
 
-    def get_dataset(self, train, val_split, shuffle, repeat_ds, plot=False, const_batch_size=False, normalize=True,
-                    tensorflow_format=True):
+    def get_dataset(self, train, val_split, shuffle, plot=False, const_batch_size=False, normalize=True,
+                    repeat_ds=False, tensorflow_format=True):
 
         force_remake = self.config.force_ds_remake
 
@@ -158,8 +162,8 @@ class Learner(object):
             verbose=2,
             epochs=self.config.max_epochs,
             steps_per_epoch=train_steps_per_epoch,
-            validation_data=validation_ds,
             validation_steps=val_steps_per_epoch,
+            validation_data=validation_ds,
             callbacks=keras_callbacks)
 
     def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):

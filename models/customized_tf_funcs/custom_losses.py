@@ -8,6 +8,10 @@ def l1_loss(y_true, y_pred):
     return tf.reduce_sum(tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)), axis=1)
 
 
+def mock_loss(y_true, _):
+    return y_true * 0
+
+
 def so3_loss_func(y_true, y_pred):
 
     pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
