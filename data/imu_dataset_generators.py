@@ -216,8 +216,8 @@ class StatePredictionDataset:
 
         window_len = args[0]
 
-        # TODO: get as a parameter of the dataset (in blackbird it's negative)
-        g_val = -9.81
+        # TODO: get as a parameter of the dataset
+        g_val = 9.81
 
         n_samples = len(self.imu_raw) - window_len
 
@@ -244,7 +244,7 @@ class StatePredictionDataset:
             # imu_window[i, :, -1, 0] is a <1, window_len> vector containing all the dt between two consecutive samples
             # of the imu. We compute the cumulative sum to get the total time for every sample in the window since the
             # beginning of the window itself
-            cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0])
+            cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0]) / 1000
 
             # We calculate the quaternion that rotates q(i) to q(i+t) for all t in [0, window_len], and map it to so(3)
             pre_int_rot[i, :, :] = log_mapping(

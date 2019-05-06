@@ -79,7 +79,7 @@ class ExperimentManager:
 
         fig = self.draw_predictions(ground_truth=gt,
                                     model_prediction=predictions,
-                                    comparative_prediction=comparisons,
+                                    comp_prediction=comparisons,
                                     plot_options=experiment_options["plot_data"])
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
@@ -105,7 +105,7 @@ class ExperimentManager:
 
             figs.append(self.draw_predictions(ground_truth=gt,
                                               model_prediction=predictions,
-                                              comparative_prediction=comparisons,
+                                              comp_prediction=comparisons,
                                               dynamic_plot=experiment_options["dynamic_plot"],
                                               sparsing_factor=experiment_options["sparsing_factor"]))
             j += 1
@@ -174,7 +174,7 @@ class ExperimentManager:
         predictions_x_axis[1:] -= 1
         fig = self.draw_predictions(ground_truth=gt,
                                     model_prediction=predictions,
-                                    comparative_prediction=comparisons,
+                                    comp_prediction=comparisons,
                                     gt_x=np.arange(0, n_predictions * self.window_len),
                                     model_x=predictions_x_axis,
                                     comp_x=predictions_x_axis)
@@ -202,16 +202,20 @@ class ExperimentManager:
         elif experiment_general_options["output"] == "show":
             plt.show()
 
-    def draw_predictions(self, ground_truth, model_prediction, comparative_prediction, plot_options,
+    def draw_predictions(self, ground_truth, model_prediction, comp_prediction, plot_options,
                          gt_x=None, model_x=None, comp_x=None):
+
+        figs = []
 
         for key in plot_options.keys():
             if plot_options[key]["type"] == "10-dof-state":
-                return self.draw_state_output(ground_truth[key], model_prediction[key], comparative_prediction[key],
-                                              plot_options[key], gt_x, model_x, comp_x)
+                figs.append(self.draw_state_output(ground_truth[key], model_prediction[key], comp_prediction[key],
+                                                   plot_options[key], gt_x, model_x, comp_x))
             if plot_options[key]["type"] == "pre_integration":
-                return self.draw_pre_integration(ground_truth[key], model_prediction[key], plot_options[key], gt_x,
-                                                 model_x)
+                figs.append(self.draw_pre_integration(ground_truth[key], model_prediction[key], gt_x, model_x,
+                                                      title=key))
+
+        return figs
 
     def draw_state_output(self, ground_truth, model_prediction, comparative_prediction, options, gt_x, model_x, comp_x):
         if gt_x is None:
@@ -331,7 +335,7 @@ class ExperimentManager:
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
 
-    def draw_pre_integration(self, ground_truth, model_prediction, options, gt_x, model_x):
+    def draw_pre_integration(self, ground_truth, model_prediction, gt_x, model_x, title):
 
         gt_shape = ground_truth.shape
 
@@ -360,6 +364,6 @@ class ExperimentManager:
         ax1.invert_yaxis()
         ax2.invert_yaxis()
         ax3.invert_yaxis()
-        fig1.suptitle('Pre-integrated position increment')
+        fig1.suptitle(title)
 
         return fig1
