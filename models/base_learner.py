@@ -10,6 +10,7 @@ from models.nets import pre_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
 from models.test_experiments import ExperimentManager
+from tensorflow.python.keras.utils import plot_model
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -45,10 +46,21 @@ class Learner(object):
 
             with tf.GradientTape() as tape:
                 # Forward pass
-                logit = self.trainable_model(x)
+                predictions = self.trainable_model(x)
+                predictions = {out.name.split(':')[0]: predictions[i] for i, out in enumerate(
+                    self.trainable_model.outputs)}
+                predictions = {i.split('/')[0]: predictions[i] for i in predictions.keys()}
 
                 # External loss calculation
-                loss = so3_loss_func(y, logit)
+                loss_connections = {"state_output": mock_loss,
+                                    "pre_integrated_R": l2_loss,
+                                    "pre_integrated_v": l2_loss,
+                                    "pre_integrated_p": l2_loss}
+                loss = []
+                for key in loss_connections.keys():
+                    loss.append(loss_connections[key](y[key], predictions[key]))
+
+                loss = tf.add_n([loss_i for loss_i in loss])
 
                 # Manual loss combination:
                 loss += sum(self.trainable_model.losses)
@@ -67,11 +79,12 @@ class Learner(object):
         trainable_model = prediction_network(window_len=self.config.window_length)
 
         print(trainable_model.summary())
+        plot_model(trainable_model, to_file='model.png')
 
         loss_connections = {"state_output": mock_loss,
-                            "pre_integrated_R": l1_loss,
-                            "pre_integrated_v": l1_loss,
-                            "pre_integrated_p": l1_loss}
+                            "pre_integrated_R": l2_loss,
+                            "pre_integrated_v": l2_loss,
+                            "pre_integrated_p": l2_loss}
 
         if not is_testing:
             loss_weight = {'state_output': 1,
@@ -83,10 +96,7 @@ class Learner(object):
                                     loss_weight=loss_weight)
         else:
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                    loss={"state_output": mock_loss,
-                                          "pre_integrated_R": l1_loss,
-                                          "pre_integrated_v": l1_loss,
-                                          "pre_integrated_p": l1_loss})
+                                    loss=loss_connections)
 
         self.trainable_model = trainable_model
 

@@ -19,7 +19,7 @@ def define_test_experiments():
                 "plot_data": {
                     "state_output": {
                         "type": "10-dof-state",
-                        "dynamic_plot": True,
+                        # "dynamic_plot": True,
                         "sparsing_factor": 2,
                     },
                     "pre_integrated_p": {

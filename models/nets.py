@@ -1,26 +1,25 @@
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
-from tensorflow.python.keras.layers import Dense, Activation, Flatten, Input, Conv2D, MaxPooling2D, Concatenate, \
-    Reshape, Permute
+from tensorflow.python.keras import layers
 
 from models.customized_tf_funcs.custom_layers import ExponentialRemappingLayer, ForkLayerIMUdt, DiffConcatenationLayer, \
     ReshapeIMU, PreIntegrationForwardDense, FinalPreIntegration, IntegratingLayer
 
+import tensorflow as tf
 import numpy as np
 
 
 def vel_cnn():
     model = Sequential()
 
-    model.add(Conv2D(filters=60, kernel_size=(3, 6), padding='same', activation='relu', input_shape=(200, 6, 1),
-                     name="convolution_layer_1"))
-    model.add(Conv2D(filters=120, kernel_size=(3, 6), padding='same', activation='relu', name="convolution_layer_2"))
-    model.add(Conv2D(filters=240, kernel_size=(3, 1), padding='valid', activation='relu', name="convolution_layer_3"))
-    model.add(MaxPooling2D(pool_size=(10, 1), strides=(6, 1), name="pooling_layer"))
-    model.add(Flatten(name="flattening_layer"))
-    model.add(Dense(400, activation='relu', name="dense_layer_1"))
-    model.add(Dense(100, activation='relu', name="dense_layer_2"))
-    model.add(Dense(1, name="output_layer"))
+    model.add(layers.Conv2D(filters=60, kernel_size=(3, 6), padding='same', activation='relu', input_shape=(200, 6, 1)))
+    model.add(layers.Conv2D(filters=120, kernel_size=(3, 6), padding='same', activation='relu'))
+    model.add(layers.Conv2D(filters=240, kernel_size=(3, 1), padding='valid', activation='relu'))
+    model.add(layers.MaxPooling2D(pool_size=(10, 1), strides=(6, 1)))
+    model.add(layers.Flatten())
+    model.add(layers.Dense(400, activation='relu'))
+    model.add(layers.Dense(100, activation='relu'))
+    model.add(layers.Dense(1))
 
     return model
 
@@ -34,41 +33,41 @@ def imu_so3_integration_net(window_len):
     conv_kernel_width = min([window_len, 2])
 
     # Input layers
-    net_in = Input((window_len + input_state_len, 7, 1), name="imu_input")
-    state_0 = Input((input_state_len, 1), name="state_input")
+    net_in = layers.Input((window_len + input_state_len, 7, 1), name="imu_input")
+    state_0 = layers.Input((input_state_len, 1), name="state_input")
 
     imu_stack, time_diff_imu = ForkLayerIMUdt(name="forking_layer")(net_in)
 
-    imu_conv_1 = Conv2D(filters=15, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='same',
-                        activation='relu', name='imu_conv_layer_1')(imu_stack)
-    imu_conv_2 = Conv2D(filters=30, kernel_size=(conv_kernel_width, 1), padding='same',
-                        activation='relu', name='imu_conv_layer_2')(imu_conv_1)
-    imu_conv_3 = Conv2D(filters=60, kernel_size=(conv_kernel_width, 1), padding='same',
-                        activation='relu', name='imu_conv_layer_3')(imu_conv_2)
+    imu_conv_1 = layers.Conv2D(filters=15, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='same',
+                               activation='relu', name='imu_conv_layer_1')(imu_stack)
+    imu_conv_2 = layers.Conv2D(filters=30, kernel_size=(conv_kernel_width, 1), padding='same',
+                               activation='relu', name='imu_conv_layer_2')(imu_conv_1)
+    imu_conv_3 = layers.Conv2D(filters=60, kernel_size=(conv_kernel_width, 1), padding='same',
+                               activation='relu', name='imu_conv_layer_3')(imu_conv_2)
 
-    imu_conv_reduced = Conv2D(filters=imu_final_channels, kernel_size=(conv_kernel_width, 1), padding='same',
-                              activation='tanh', name='imu_1x_conv_layer')(imu_conv_3)
-    imu_conv_flat = Reshape((window_len, imu_final_channels * 2, 1), name='reshape_layer')(imu_conv_reduced)
-    re_stacked_imu = Concatenate(name='imu_concatenating_layer', axis=2)([imu_conv_flat, time_diff_imu])
+    imu_conv_reduced = layers.Conv2D(filters=imu_final_channels, kernel_size=(conv_kernel_width, 1), padding='same',
+                                     activation='tanh', name='imu_1x_conv_layer')(imu_conv_3)
+    imu_conv_flat = layers.Reshape((window_len, imu_final_channels * 2, 1), name='reshape_layer')(imu_conv_reduced)
+    re_stacked_imu = layers.Concatenate(name='imu_concatenating_layer', axis=2)([imu_conv_flat, time_diff_imu])
 
-    imu_ts_conv = Conv2D(filters=1+2*imu_final_channels, kernel_size=(conv_kernel_width, 1+2*imu_final_channels),
-                         padding='valid', activation='relu', name='imu_final_conv_layer')(re_stacked_imu)
+    imu_ts_conv = layers.Conv2D(filters=1+2*imu_final_channels, kernel_size=(conv_kernel_width, 1+2*imu_final_channels),
+                                padding='valid', activation='relu', name='imu_final_conv_layer')(re_stacked_imu)
 
-    flatten_conv_imu = Flatten(name='imu_flattening_layer')(imu_ts_conv)
-    flatten_state_0 = Flatten(name='state_input_flattening_layer')(state_0)
+    flatten_conv_imu = layers.Flatten(name='imu_flattening_layer')(imu_ts_conv)
+    flatten_state_0 = layers.Flatten(name='state_input_flattening_layer')(state_0)
 
-    stacked = Concatenate(name='data_concatenating_layer')([flatten_conv_imu, flatten_state_0])
+    stacked = layers.Concatenate(name='data_concatenating_layer')([flatten_conv_imu, flatten_state_0])
 
-    dense_1 = Dense(400, name='dense_layer_1')(stacked)
-    activation_1 = Activation('relu', name='activation_1')(dense_1)
+    dense_1 = layers.Dense(400, name='dense_layer_1')(stacked)
+    activation_1 = layers.Activation('relu', name='activation_1')(dense_1)
 
-    dense_2 = Dense(200, name='dense_layer_2')(activation_1)
-    activation_2 = Activation('relu', name='activation_2')(dense_2)
+    dense_2 = layers.Dense(200, name='dense_layer_2')(activation_1)
+    activation_2 = layers.Activation('relu', name='activation_2')(dense_2)
 
-    dense_3 = Dense(100, name='dense_layer_3')(activation_2)
-    activation_3 = Activation('relu', name='activation_3')(dense_3)
+    dense_3 = layers.Dense(100, name='dense_layer_3')(activation_2)
+    activation_3 = layers.Activation('relu', name='activation_3')(dense_3)
 
-    net_out = Dense(output_state_len, name='state_output')(activation_3)
+    net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
 
     state_out = ExponentialRemappingLayer(name='remapped_state_output')(net_out)
     return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)
@@ -77,23 +76,24 @@ def imu_so3_integration_net(window_len):
 def pre_integration_net(window_len):
 
     # Define parameters for model
-    kernel_width = min([window_len, 2])
+    kernel_width = min([window_len, 3])
     pooling_width = min([window_len, 2])
 
     input_state_shape = (10,)
     pre_integration_shape = (window_len, 3)
-
     imu_input_shape = (window_len, 7, 1)
 
     # This parameter will vary in terms of window_len (higher window_len will allow more layers)
-    n_conv_layers = 4
+    n_conv_layers = 3
 
     # Input layers. Don't change names
-    imu_in = Input(imu_input_shape, name="imu_input")
-    state_in = Input(input_state_shape, name="state_input")
+    imu_in = layers.Input(imu_input_shape, name="imu_input")
+    state_in = layers.Input(input_state_shape, name="state_input")
 
     # Pre-processing
-    x = ReshapeIMU()(imu_in)
+    x_shrink = pre_integration_shape[0] - 8 * round(pre_integration_shape[0]/8) + 1
+    imu_reshaped = layers.Conv2D(1, kernel_size=(x_shrink, 1))(imu_in)
+    x = ReshapeIMU()(imu_reshaped)
     _, dt_vec = ForkLayerIMUdt()(imu_in)
 
     #############################
@@ -101,7 +101,7 @@ def pre_integration_net(window_len):
     #############################
 
     # Convolution layers
-    for i in range(n_conv_layers):
+    def down_scaling_loop(inputs, iterations, i):
         if i == 0:
             kernel_size = (kernel_width, 4)
             strides = (1, 4)
@@ -109,28 +109,49 @@ def pre_integration_net(window_len):
             kernel_size = (kernel_width, 1)
             strides = (1, 1)
 
-        x = Conv2D(window_len * (i + 1), kernel_size=kernel_size, strides=strides, padding='same', activation='relu')(x)
-        x = MaxPooling2D(pool_size=(pooling_width, 1))(x)
+        x1 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, strides=strides, padding='same',
+                           activation='relu')(inputs)
+        x2 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, padding='same', activation='relu')(x1)
+        x3 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, padding='same', activation='relu')(x2)
 
-    final_length = np.floor(window_len / pooling_width ** n_conv_layers)
+        if iterations > 0:
+
+            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(tf.add(x1, x3))
+            x3 = layers.Conv2D(window_len * (i + iterations + 1), kernel_size=kernel_size, padding='same', activation='relu')(x3)
+
+            x_up = down_scaling_loop(x_up, iterations - 1, i + 1)
+            x_up = layers.UpSampling2D(size=(pooling_width, 1))(x_up)
+
+            x3 = tf.add(x3, x_up)
+
+        return x3
+
+    x = down_scaling_loop(x, n_conv_layers, 0)
 
     # Adapt feature vector so it has a compatible shape with the outputs
-    x = Permute(dims=[3, 1, 2])(x)
-    x = Conv2D(n_conv_layers, kernel_size=(4, 1), strides=(n_conv_layers, 1), padding='same', activation='relu')(x)
-    feat_vec = Reshape(target_shape=(window_len, n_conv_layers * final_length))(x)
-    x = Flatten()(feat_vec)
+    y_shrink = pre_integration_shape[0] - x.shape[1]
+    feat_vec = layers.Conv2DTranspose(pre_integration_shape[0], (x_shrink, y_shrink))(x)
 
     # Pre-integrated rotation
-    x = Dense(np.prod(pre_integration_shape), activation='relu')(x)
-    pre_integrated_rot = Reshape(target_shape=pre_integration_shape, name="pre_integrated_R")(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
 
-    # Pre-integrated velocity
-    x = Concatenate(axis=2)([feat_vec, pre_integrated_rot])
-    pre_integrated_v = PreIntegrationForwardDense(pre_integration_shape, activation='relu', name="pre_integrated_v")(x)
+    # # Pre-integrated velocity
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    y = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_rot)
+    x = layers.Concatenate(axis=-1)([x, y])
+    x = layers.Conv2D(window_len, kernel_size=(2, 2), padding='same')(x)
+    x = layers.Conv2D(1, kernel_size=(2, 2), padding='same')(x)
+    pre_integrated_v = tf.squeeze(x, axis=3, name="pre_integrated_v")
 
     # Pre-integrated position
-    x = Concatenate(axis=2)([feat_vec, pre_integrated_v])
-    pre_integrated_p = PreIntegrationForwardDense(pre_integration_shape, activation='relu', name="pre_integrated_p")(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    y = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_rot)
+    z = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_v)
+    x = layers.Concatenate(axis=-1)([x, y, z])
+    x = layers.Conv2D(window_len, kernel_size=(2, 2), padding='same')(x)
+    x = layers.Conv2D(1, kernel_size=(2, 2), padding='same')(x)
+    pre_integrated_p = tf.squeeze(x, axis=3, name="pre_integrated_p")
 
     #################################
     # ##  NON-TRAINABLE NETWORK  ## #

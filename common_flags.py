@@ -11,7 +11,7 @@ FLAGS = gflags.FLAGS
 gflags.DEFINE_integer('batch_size', 20, 'Batch size in training and evaluation')
 gflags.DEFINE_float("l2_reg_scale", 0.00000001, "Scale for regularization losses")
 
-gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer")  # 0.0000001
+gflags.DEFINE_float("learning_rate", 0.0000001, "Learning rate for adam optimizer")  # 0.0000001
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
 gflags.DEFINE_integer("max_epochs", 20, "Maximum number of training epochs")
 

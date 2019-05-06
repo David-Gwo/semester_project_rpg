@@ -9,6 +9,7 @@ from tensorflow.python.keras import backend as K
 from utils.algebra import exp_mapping, apply_state_diff, rotate_quat, rotate_vec
 
 import numpy as np
+import tensorflow as tf
 
 
 class ForkLayerIMUdt(Layer):
@@ -40,20 +41,17 @@ class PreIntegrationForwardDense(Layer):
         if len(target_shape) != 2:
             raise ValueError("The target shape should be 3D")
 
-        self.units = int(target_shape[0])
-        self.channels = int(target_shape[1])
+        self.target_shape = target_shape
         self.activation = activations.get(activation)
         self.use_bias = use_bias
         self.kernel_initializer = initializers.get(kernel_initializer)
         self.bias_initializer = initializers.get(bias_initializer)
 
-        self.feature_kernel = None
         self.bias = None
-        self.recurrent_mask = None
-        self.recurrent_kernel = None
+        self.mask = None
+        self.kernel = None
 
-        self.feature_units = None
-        self.recurrent_units = None
+        self.flat_length = None
 
     def build(self, input_shape):
         dtype = dtypes.as_dtype(self.dtype or K.floatx())
@@ -65,37 +63,28 @@ class PreIntegrationForwardDense(Layer):
             raise ValueError('The last dimension of the inputs to `Dense` should be defined. Found `None`.')
         if len(input_shape) != 3:
             raise ValueError('The input shape should be a 3D tensor. Found %s' % (input_shape,))
-        if input_shape[1] != self.units:
-            raise ValueError('The first dimension of input and output shape must coincide')
-        if input_shape[2] < self.channels:
-            raise ValueError('The number of channels in the input is smaller than in the output. It should be at least'
-                             'the same size')
+        if input_shape[1:3] != self.target_shape:
+            raise ValueError('The input and output shapes must coincide. Got {0} and {1}'.format(
+                input_shape[1:3], self.target_shape))
 
-        self.feature_units = input_shape[1] * (input_shape[2] - self.channels)
-        self.recurrent_units = input_shape[1] * self.channels
+        self.flat_length = np.prod(input_shape[1:3])
+        output_channels = self.target_shape[-1]
 
-        self.feature_kernel = self.add_weight(
+        self.kernel = self.add_weight(
             'feature_kernel',
-            shape=[self.feature_units, self.recurrent_units],
+            shape=[self.flat_length, self.flat_length],
             initializer=self.kernel_initializer,
             dtype=self.dtype,
             trainable=True)
 
-        self.recurrent_kernel = self.add_weight(
-            'recurrent_kernel',
-            shape=[self.recurrent_units, self.recurrent_units],
-            initializer=self.kernel_initializer,
-            dtype=self.dtype,
-            trainable=True)
-
-        recurrent_mask = np.zeros((self.units, self.units))
-        for i in range(self.units):
-            for j in range(i, self.units):
+        recurrent_mask = np.zeros((input_shape[1], input_shape[1]))
+        for i in range(input_shape[1]):
+            for j in range(i, input_shape[1]):
                 recurrent_mask[i, j] = 1
-        recurrent_mask = np.tile(recurrent_mask, (self.channels, self.channels))
+        recurrent_mask = np.tile(recurrent_mask[::-1, :], (output_channels, output_channels))
 
-        self.recurrent_mask = self.add_weight(
-            shape=[self.recurrent_units, self.recurrent_units],
+        self.mask = self.add_weight(
+            shape=[self.flat_length, self.flat_length],
             initializer=lambda shape, dtype, partition_info=None: K.variable(recurrent_mask),
             dtype=self.dtype,
             trainable=False)
@@ -103,42 +92,37 @@ class PreIntegrationForwardDense(Layer):
         if self.use_bias:
             self.bias = self.add_weight(
                 'bias',
-                shape=[self.recurrent_units, ],
+                shape=[self.flat_length, ],
                 initializer=self.bias_initializer,
                 dtype=self.dtype,
                 trainable=True)
 
         self.built = True
 
+    # @tf.function
     def call(self, inputs, **kwargs):
 
         inputs = ops.convert_to_tensor(inputs)
 
-        feature_vec = inputs[:, :, :-self.channels]
-        recurrent_vec = inputs[:, :, -self.channels:]
+        if not inputs.shape[0]:
+            return K.expand_dims(inputs, axis=3)
 
-        if not context.executing_eagerly():
-            return recurrent_vec
-
-        feature_vec = K.reshape(feature_vec, (feature_vec.shape[0], self.units*feature_vec.shape[2]))
-        recurrent_vec = K.reshape(recurrent_vec, (recurrent_vec.shape[0], self.units * self.channels))
+        vectorized_input = K.reshape(inputs, (inputs.shape[0], self.flat_length))
 
         # Cast the inputs to self.dtype, which is the variable dtype. We do not
         # cast if `should_cast_variables` is True, as in that case the variable
         # will be automatically casted to inputs.dtype.
         if not self._mixed_precision_policy.should_cast_variables:
-            feature_vec = math_ops.cast(feature_vec, self.dtype)
-            recurrent_vec = math_ops.cast(recurrent_vec, self.dtype)
+            vectorized_input = math_ops.cast(vectorized_input, self.dtype)
 
-        outputs = gen_math_ops.mat_mul(feature_vec, self.feature_kernel)
-        outputs += gen_math_ops.mat_mul(gen_math_ops.mat_mul(recurrent_vec, self.recurrent_kernel), self.recurrent_mask)
+        outputs = gen_math_ops.mat_mul(vectorized_input, tf.math.multiply(self.kernel, self.mask))
 
         if self.use_bias:
             outputs = nn.bias_add(outputs, self.bias)
         if self.activation is not None:
             outputs = self.activation(outputs)  # pylint: disable=not-callable
 
-        return K.reshape(outputs, (outputs.shape[0], self.units, self.channels))
+        return K.reshape(outputs, (outputs.shape[0], self.target_shape[0], self.target_shape[1], 1))
 
 
 class ExponentialRemappingLayer(Layer):

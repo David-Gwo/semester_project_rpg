@@ -14,7 +14,7 @@ def l1_loss(y_true, y_pred):
 
 
 def l2_loss(y_true, y_pred):
-    abs_diff = tf.sqrt(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)**2)
+    abs_diff = tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)**2
 
     while len(abs_diff.shape) > 1:
         abs_diff = tf.reduce_sum(abs_diff, axis=1)
@@ -23,7 +23,9 @@ def l2_loss(y_true, y_pred):
 
 
 def mock_loss(y_true, _):
-    return y_true * 0
+    if not y_true.shape[0]:
+        return y_true
+    return tf.zeros(y_true.shape[0])
 
 
 def so3_loss_func(y_true, y_pred):
