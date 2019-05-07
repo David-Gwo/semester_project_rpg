@@ -14,7 +14,20 @@ def l1_loss(y_true, y_pred):
 
 
 def l2_loss(y_true, y_pred):
-    abs_diff = tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)**2
+    l2_diff = tf.math.subtract(tf.cast(y_true, tf.float32), y_pred)**2
+
+    return l2_diff
+
+
+def pre_integration_loss(y_true, y_pred):
+    if not y_true.shape[0]:
+        return y_true[:, 0, 0]
+
+    t_shape = y_true.shape
+
+    abs_diff = tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
+    loss_mask = tf.tile(tf.expand_dims(tf.range(1, t_shape[1]+1, dtype=abs_diff.dtype), axis=1), (1, t_shape[2]))
+    abs_diff = tf.math.multiply(abs_diff, loss_mask)
 
     while len(abs_diff.shape) > 1:
         abs_diff = tf.reduce_sum(abs_diff, axis=1)

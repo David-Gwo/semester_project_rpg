@@ -243,7 +243,7 @@ class StatePredictionDataset:
 
             # imu_window[i, :, -1, 0] is a <1, window_len> vector containing all the dt between two consecutive samples
             # of the imu. We compute the cumulative sum to get the total time for every sample in the window since the
-            # beginning of the window itself
+            # beginning of the window itself. We divide by 1000 to transform from ms to s
             cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0]) / 1000
 
             # We calculate the quaternion that rotates q(i) to q(i+t) for all t in [0, window_len], and map it to so(3)

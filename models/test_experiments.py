@@ -5,6 +5,7 @@ from utils.algebra import imu_integration, log_mapping
 from utils.visualization import Dynamic3DTrajectory
 from tensorflow.python.keras.utils import Progbar
 from mpl_toolkits.mplot3d import axes3d
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 
 class ExperimentManager:
@@ -70,7 +71,8 @@ class ExperimentManager:
                 if option == "predict":
                     model = self.model_loader()
                     predictions = model.predict(dataset[0], verbose=1)
-                    predictions = {out.name.split('/')[0]: predictions[i] for i, out in enumerate(model.outputs)}
+                    predictions = {out.name.split(':')[0]: predictions[i] for i, out in enumerate(model.outputs)}
+                    predictions = {i.split('/')[0]: predictions[i] for i in predictions.keys()}
                     predictions = {k: predictions[k] for k in experiment_options["plot_data"].keys()}
                 elif option == "compare_prediction":
                     comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
@@ -345,25 +347,55 @@ class ExperimentManager:
             model_x = range(len(model_prediction))
 
         fig1 = plt.figure()
-        ax1 = fig1.add_subplot(3, 1, 1)
-        ax2 = fig1.add_subplot(3, 1, 2)
-        ax3 = fig1.add_subplot(3, 1, 3)
 
-        im1 = ax1.imshow(ground_truth[:, :, 0].T, cmap=cm.get_cmap('jet'), aspect='auto')
-        im2 = ax2.imshow(ground_truth[:, :, 1].T, cmap=cm.get_cmap('jet'), aspect='auto')
-        im3 = ax3.imshow(ground_truth[:, :, 2].T, cmap=cm.get_cmap('jet'), aspect='auto')
+        grid1 = ImageGrid(fig1, 311, nrows_ncols=(1, 3), axes_pad=0.15, share_all=True, cbar_location="right",
+                          cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
+        ax1, ax4, ax7 = grid1.axes_all
+        grid2 = ImageGrid(fig1, 312, nrows_ncols=(1, 3), axes_pad=0.15, share_all=True, cbar_location="right",
+                          cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
+        ax2, ax5, ax8 = grid2.axes_all
+        grid3 = ImageGrid(fig1, 313, nrows_ncols=(1, 3), axes_pad=0.15, share_all=True, cbar_location="right",
+                          cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
+        ax3, ax6, ax9 = grid3.axes_all
 
-        fig1.colorbar(im1, ax=ax1)
-        fig1.colorbar(im2, ax=ax2)
-        fig1.colorbar(im3, ax=ax3)
+        diff_1 = np.abs(ground_truth[:, :, 0].T - model_prediction[:, :, 0].T)
+        diff_2 = np.abs(ground_truth[:, :, 1].T - model_prediction[:, :, 1].T)
+        diff_3 = np.abs(ground_truth[:, :, 2].T - model_prediction[:, :, 2].T)
+
+        vmin_1 = min([np.amin(ground_truth[:, :, 0]), np.amin(model_prediction[:, :, 0]), np.amin(diff_1)])
+        vmax_1 = max([np.amax(ground_truth[:, :, 0]), np.amax(model_prediction[:, :, 0]), np.amax(diff_1)])
+        vmin_2 = min([np.amin(ground_truth[:, :, 1]), np.amin(model_prediction[:, :, 1]), np.amin(diff_2)])
+        vmax_2 = max([np.amax(ground_truth[:, :, 1]), np.amax(model_prediction[:, :, 1]), np.amax(diff_2)])
+        vmin_3 = min([np.amin(ground_truth[:, :, 2]), np.amin(model_prediction[:, :, 2]), np.amin(diff_3)])
+        vmax_3 = max([np.amax(ground_truth[:, :, 2]), np.amax(model_prediction[:, :, 2]), np.amax(diff_3)])
+
+        ax1.imshow(ground_truth[:, :, 0].T, cmap=cm.get_cmap('jet'), vmin=vmin_1, vmax=vmax_1, aspect='auto')
+        ax2.imshow(ground_truth[:, :, 1].T, cmap=cm.get_cmap('jet'), vmin=vmin_2, vmax=vmax_2, aspect='auto')
+        ax3.imshow(ground_truth[:, :, 2].T, cmap=cm.get_cmap('jet'), vmin=vmin_3, vmax=vmax_3, aspect='auto')
+        ax4.imshow(model_prediction[:, :, 0].T, cmap=cm.get_cmap('jet'), vmin=vmin_1, vmax=vmax_1, aspect='auto')
+        ax5.imshow(model_prediction[:, :, 1].T, cmap=cm.get_cmap('jet'), vmin=vmin_2, vmax=vmax_2, aspect='auto')
+        ax6.imshow(model_prediction[:, :, 2].T, cmap=cm.get_cmap('jet'), vmin=vmin_3, vmax=vmax_3, aspect='auto')
+        im7 = ax7.imshow(diff_1, cmap=cm.get_cmap('jet'), vmin=vmin_1, vmax=vmax_1, aspect='auto')
+        im8 = ax8.imshow(diff_2, cmap=cm.get_cmap('jet'), vmin=vmin_2, vmax=vmax_2, aspect='auto')
+        im9 = ax9.imshow(diff_3, cmap=cm.get_cmap('jet'), vmin=vmin_3, vmax=vmax_3, aspect='auto')
+
+        grid1.cbar_axes[0].colorbar(im7)
+        grid2.cbar_axes[0].colorbar(im8)
+        grid3.cbar_axes[0].colorbar(im9)
+
         ax1.axes.get_xaxis().set_ticks([])
         ax2.axes.get_xaxis().set_ticks([])
+        ax4.axes.get_xaxis().set_ticks([])
+        ax5.axes.get_xaxis().set_ticks([])
+
         ax1.set_ylabel("x")
         ax2.set_ylabel("y")
         ax3.set_ylabel("z")
-        ax1.invert_yaxis()
-        ax2.invert_yaxis()
-        ax3.invert_yaxis()
+
+        ax1.set_title("True")
+        ax4.set_title("Predicted")
+        ax7.set_title("Error")
+
         fig1.suptitle(title)
 
         return fig1

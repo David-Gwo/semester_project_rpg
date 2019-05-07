@@ -6,7 +6,6 @@ from models.customized_tf_funcs.custom_layers import ExponentialRemappingLayer, 
     ReshapeIMU, PreIntegrationForwardDense, FinalPreIntegration, IntegratingLayer
 
 import tensorflow as tf
-import numpy as np
 
 
 def vel_cnn():
@@ -91,9 +90,7 @@ def pre_integration_net(window_len):
     state_in = layers.Input(input_state_shape, name="state_input")
 
     # Pre-processing
-    x_shrink = pre_integration_shape[0] - 8 * round(pre_integration_shape[0]/8) + 1
-    imu_reshaped = layers.Conv2D(1, kernel_size=(x_shrink, 1))(imu_in)
-    x = ReshapeIMU()(imu_reshaped)
+    x = ReshapeIMU()(imu_in)
     _, dt_vec = ForkLayerIMUdt()(imu_in)
 
     #############################
@@ -101,43 +98,51 @@ def pre_integration_net(window_len):
     #############################
 
     # Convolution layers
-    def down_scaling_loop(inputs, iterations, i):
+    def down_scaling_loop(x1, iterations, i):
+        x_shrink = pre_integration_shape[0] - (2 ** n_conv_layers) * round(pre_integration_shape[0] / (2 ** n_conv_layers)) + 1
         if i == 0:
-            kernel_size = (kernel_width, 4)
             strides = (1, 4)
-        else:
-            kernel_size = (kernel_width, 1)
-            strides = (1, 1)
+            x1 = layers.Conv2D(1, kernel_size=(x_shrink, 4), strides=strides)(x1)
 
-        x1 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, strides=strides, padding='same',
-                           activation='relu')(inputs)
-        x2 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, padding='same', activation='relu')(x1)
-        x3 = layers.Conv2D(window_len * (i + 1), kernel_size=kernel_size, padding='same', activation='relu')(x2)
+        x2 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same', activation='relu')(x1)
+        x3 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same', activation='relu')(x2)
+        x4 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same', activation='relu')(x3)
 
         if iterations > 0:
 
-            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(tf.add(x1, x3))
-            x3 = layers.Conv2D(window_len * (i + iterations + 1), kernel_size=kernel_size, padding='same', activation='relu')(x3)
+            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(tf.add(x2, x4))
+            x4 = layers.Conv2D(window_len * (i + iterations + 1), kernel_size=(kernel_width, 1), padding='same',
+                               activation='relu')(x1)
 
             x_up = down_scaling_loop(x_up, iterations - 1, i + 1)
             x_up = layers.UpSampling2D(size=(pooling_width, 1))(x_up)
 
-            x3 = tf.add(x3, x_up)
+            x4 = tf.add(x4, x_up)
 
-        return x3
+        if i == 0:
+            # Recover original shape
+            y_shrink = pre_integration_shape[0] - x1.shape[1]
+            x4 = layers.Conv2DTranspose(pre_integration_shape[0], (x_shrink, y_shrink))(x4)
 
-    x = down_scaling_loop(x, n_conv_layers, 0)
+        return x4
 
-    # Adapt feature vector so it has a compatible shape with the outputs
-    y_shrink = pre_integration_shape[0] - x.shape[1]
-    feat_vec = layers.Conv2DTranspose(pre_integration_shape[0], (x_shrink, y_shrink))(x)
+    feat_vec = down_scaling_loop(x, n_conv_layers, 0)
 
     # Pre-integrated rotation
-    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(x)
+
     pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
 
     # # Pre-integrated velocity
-    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(x)
     y = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_rot)
     x = layers.Concatenate(axis=-1)([x, y])
     x = layers.Conv2D(window_len, kernel_size=(2, 2), padding='same')(x)
@@ -145,7 +150,11 @@ def pre_integration_net(window_len):
     pre_integrated_v = tf.squeeze(x, axis=3, name="pre_integrated_v")
 
     # Pre-integrated position
-    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=(pre_integration_shape[1], pre_integration_shape[1]), padding='same',
+                      activation='relu')(x)
+    x = layers.Conv2D(1, kernel_size=(1, 1), activation='relu')(x)
     y = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_rot)
     z = PreIntegrationForwardDense(pre_integration_shape, activation='relu')(pre_integrated_v)
     x = layers.Concatenate(axis=-1)([x, y, z])

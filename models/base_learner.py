@@ -53,9 +53,9 @@ class Learner(object):
 
                 # External loss calculation
                 loss_connections = {"state_output": mock_loss,
-                                    "pre_integrated_R": l2_loss,
-                                    "pre_integrated_v": l2_loss,
-                                    "pre_integrated_p": l2_loss}
+                                    "pre_integrated_R": pre_integration_loss,
+                                    "pre_integrated_v": pre_integration_loss,
+                                    "pre_integrated_p": pre_integration_loss}
                 loss = []
                 for key in loss_connections.keys():
                     loss.append(loss_connections[key](y[key], predictions[key]))
@@ -82,9 +82,9 @@ class Learner(object):
         plot_model(trainable_model, to_file='model.png')
 
         loss_connections = {"state_output": mock_loss,
-                            "pre_integrated_R": l2_loss,
-                            "pre_integrated_v": l2_loss,
-                            "pre_integrated_p": l2_loss}
+                            "pre_integrated_R": pre_integration_loss,
+                            "pre_integrated_v": pre_integration_loss,
+                            "pre_integrated_p": pre_integration_loss}
 
         if not is_testing:
             loss_weight = {'state_output': 1,
