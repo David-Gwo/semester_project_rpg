@@ -26,7 +26,9 @@ def pre_integration_loss(y_true, y_pred):
     t_shape = y_true.shape
 
     abs_diff = tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
-    loss_mask = tf.tile(tf.expand_dims(tf.range(1, t_shape[1]+1, dtype=abs_diff.dtype), axis=1), (1, t_shape[2]))
+    # loss_mask = tf.tile(tf.expand_dims(tf.range(1, t_shape[1]+1, dtype=abs_diff.dtype), axis=1), (1, t_shape[2]))
+    loss_mask = np.zeros(abs_diff.shape)
+    loss_mask[-10:, :] = 1
     abs_diff = tf.math.multiply(abs_diff, loss_mask)
 
     while len(abs_diff.shape) > 1:
