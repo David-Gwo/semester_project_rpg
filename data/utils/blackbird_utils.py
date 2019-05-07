@@ -5,7 +5,7 @@ import csv
 import os
 
 import numpy as np
-import quaternion as q
+from pyquaternion import Quaternion
 
 from utils.directories import safe_mkdir_recursive
 from utils.algebra import correct_quaternion_flip
@@ -45,15 +45,13 @@ class BBGT(GT):
 
         :param gt_old: BBGT from previous timestamp
         """
-        # TODO: review angular velocity integration -> https://www.ashwinnarayan.com/post/how-to-integrate-quaternions/
+
+        # TODO: implement angular velocity integration
 
         dt = (self.timestamp - gt_old.timestamp) * 10e-6
         self.vel = (self.pos - gt_old.pos) / dt
-        att_q = q.quaternion(self.att[0], self.att[1], self.att[2], self.att[3])
-        att = q.as_euler_angles(att_q)
-        old_att_q = q.quaternion(gt_old.att[0], gt_old.att[1], gt_old.att[2], gt_old.att[3])
-        old_att = q.as_euler_angles(old_att_q)
-        self.ang_vel = (att - old_att) / dt
+        att_q = Quaternion(self.att[0], self.att[1], self.att[2], self.att[3])
+        self.ang_vel = self.ang_vel
 
 
 class BlackbirdDSManager(InertialDataset):
