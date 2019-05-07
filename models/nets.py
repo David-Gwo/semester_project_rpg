@@ -145,17 +145,21 @@ def pre_integration_net(window_len):
     pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
 
     # # Pre-integrated velocity
-    x = layers.Conv2D(10, kernel_size=small_kernel, padding='same', name="v_Branch")(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="v_Branch")(feat_vec)
     x = norm_activate(x, 'relu', 'v_Branch', '1')
+    x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
+    x = norm_activate(x, 'relu', 'v_Branch', '2')
     y = PreIntegrationForwardDense(pre_integration_shape)([pre_integrated_rot, x])
-    y = norm_activate(y, 'relu', 'v_Branch', '2')
+    y = norm_activate(y, 'relu', 'v_Branch', '3')
     pre_integrated_v = tf.squeeze(y, axis=3, name="pre_integrated_v")
 
     # Pre-integrated position
-    x = layers.Conv2D(10 + 10, kernel_size=small_kernel, padding='same', name="p_Branch")(feat_vec)
+    x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="p_Branch")(x)
     x = norm_activate(x, 'relu', 'p_Branch', '1')
+    x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
+    x = norm_activate(x, 'relu', 'p_Branch', '2')
     y = PreIntegrationForwardDense(pre_integration_shape)([(pre_integrated_rot, pre_integrated_v), x])
-    y = norm_activate(y, 'relu', 'p_Branch', '2')
+    y = norm_activate(y, 'relu', 'p_Branch', '3')
     pre_integrated_p = tf.squeeze(y, axis=3, name="pre_integrated_p")
 
     #################################

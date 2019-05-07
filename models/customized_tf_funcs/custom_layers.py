@@ -102,7 +102,7 @@ class PreIntegrationForwardDense(Layer):
             trainable=True)
 
         self.kernel = self.add_weight(
-            'feature_kernel',
+            'kernel',
             shape=[self.total_kernel_units, self.total_recurrent_units],
             initializer=self.kernel_initializer,
             dtype=self.dtype,
