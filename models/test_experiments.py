@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from utils.algebra import imu_integration, log_mapping
 from utils.visualization import Dynamic3DTrajectory
+from utils.models import create_predictions_dict
+from utils.directories import safe_mkdir_recursive
 from tensorflow.python.keras.utils import Progbar
 from mpl_toolkits.mplot3d import axes3d
 from mpl_toolkits.axes_grid1 import ImageGrid
@@ -32,6 +34,10 @@ class ExperimentManager:
         datasets_and_options.pop("options")
 
         # Sanity checks of inputs
+        if "output" not in experiment_options:
+            experiment_options["output"] = "save"
+        if experiment_options["output"] == "save":
+            safe_mkdir_recursive('figures', overwrite=True)
         if "plot_data" in experiment_options:
             plot_data = experiment_options["plot_data"]
             for key in plot_data.keys():
@@ -71,8 +77,7 @@ class ExperimentManager:
                 if option == "predict":
                     model = self.model_loader()
                     predictions = model.predict(dataset[0], verbose=1)
-                    predictions = {out.name.split(':')[0]: predictions[i] for i, out in enumerate(model.outputs)}
-                    predictions = {i.split('/')[0]: predictions[i] for i in predictions.keys()}
+                    predictions = create_predictions_dict(predictions, model)
                     predictions = {k: predictions[k] for k in experiment_options["plot_data"].keys()}
                 elif option == "compare_prediction":
                     comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
@@ -87,9 +92,9 @@ class ExperimentManager:
 
     def training_progression(self, datasets, dataset_options, experiment_options, experiment_name):
 
-        gt = []
-        predictions = []
-        comparisons = []
+        gt = {k: [] for k in experiment_options["plot_data"].keys()}
+        predictions = {k: [] for k in experiment_options["plot_data"].keys()}
+        comparisons = {k: [] for k in experiment_options["plot_data"].keys()}
 
         j = 0
         next_model_num = 0
@@ -99,17 +104,18 @@ class ExperimentManager:
             for i, dataset in enumerate(datasets):
                 for option in dataset_options[i]:
                     if option == "predict":
-                        predictions = model.predict(dataset, verbose=1)
+                        predictions = model.predict(dataset[0], verbose=1)
+                        predictions = create_predictions_dict(predictions, model)
+                        predictions = {k: predictions[k] for k in experiment_options["plot_data"].keys()}
                     elif option == "compare_prediction":
                         comparisons = self.alternative_prediction_method(np.squeeze(dataset[0]), self.window_len)
                     elif option == "ground_truth":
-                        gt = dataset[1][:, :9]
+                        gt = {k: dataset[1][k] for k in experiment_options["plot_data"].keys()}
 
             figs.append(self.draw_predictions(ground_truth=gt,
                                               model_prediction=predictions,
                                               comp_prediction=comparisons,
-                                              dynamic_plot=experiment_options["dynamic_plot"],
-                                              sparsing_factor=experiment_options["sparsing_factor"]))
+                                              plot_options=experiment_options["plot_data"]))
             j += 1
             self.experiment_plot(figs[0], experiment_options, experiment_name=experiment_name, iteration=str(j))
 
@@ -184,21 +190,26 @@ class ExperimentManager:
 
     @staticmethod
     def experiment_plot(figures, experiment_general_options, experiment_name, iteration=''):
+        if iteration != '':
+            iteration = '_' + iteration
+
         if experiment_general_options["output"] == "save":
             if isinstance(figures, (tuple, list)):
                 for i, fig_i in enumerate(figures):
+                    output_dir = 'figures/{0}'.format(i)
+                    safe_mkdir_recursive(output_dir)
                     if "append_save_name" in experiment_general_options.keys():
-                        fig_i.savefig('figures/fig_{0}_experiment_{1}{3}_{2}'.format(
-                            experiment_name, experiment_general_options["append_save_name"], i, '_' + iteration))
+                        fig_i.savefig('{0}/fig_{1}_experiment_{2}{3}'.format(
+                            output_dir, experiment_name, experiment_general_options["append_save_name"], iteration))
                     else:
-                        fig_i.savefig('figures/fig_{0}_experiment{2}_{1}'.format(experiment_name, i, '_' + iteration))
+                        fig_i.savefig('{0}/fig_{1}_experiment{2}'.format(output_dir, experiment_name, iteration))
                     plt.close(fig_i)
             else:
                 if "append_save_name" in experiment_general_options.keys():
                     figures.savefig('figures/fig_{0}_experiment_{1}{2}'.format(
-                            experiment_name, experiment_general_options["append_save_name"], '_' + iteration))
+                            experiment_name, experiment_general_options["append_save_name"], iteration))
                 else:
-                    figures.savefig('figures/fig_{0}_experiment{1}'.format(experiment_name, '_' + iteration))
+                    figures.savefig('figures/fig_{0}_experiment{1}'.format(experiment_name, iteration))
                 plt.close(figures)
 
         elif experiment_general_options["output"] == "show":
@@ -337,14 +348,8 @@ class ExperimentManager:
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
 
-    def draw_pre_integration(self, ground_truth, model_prediction, gt_x, model_x, title):
-
-        gt_shape = ground_truth.shape
-
-        if gt_x is None:
-            gt_x = range(gt_shape[0])
-        if model_x is None:
-            model_x = range(len(model_prediction))
+    @staticmethod
+    def draw_pre_integration(ground_truth, model_prediction, gt_x, model_x, title):
 
         fig1 = plt.figure()
 

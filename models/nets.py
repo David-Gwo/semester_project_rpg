@@ -83,7 +83,7 @@ def pre_integration_net(window_len):
     imu_input_shape = (window_len, 7, 1)
 
     # This parameter will vary in terms of window_len (higher window_len will allow more layers)
-    n_conv_layers = 2
+    n_conv_layers = 3
 
     # Input layers. Don't change names
     imu_in = layers.Input(imu_input_shape, name="imu_input")

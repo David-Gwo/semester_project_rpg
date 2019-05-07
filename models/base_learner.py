@@ -88,9 +88,9 @@ class Learner(object):
 
         if not is_testing:
             loss_weight = {'state_output': 1,
-                           'pre_integrated_R': 1.,
+                           'pre_integrated_R': 3.,
                            'pre_integrated_v': 1.,
-                           'pre_integrated_p': 1.}
+                           'pre_integrated_p': 2.}
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
                                     loss=loss_connections,
                                     loss_weight=loss_weight)

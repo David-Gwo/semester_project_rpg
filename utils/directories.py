@@ -1,3 +1,4 @@
+import shutil
 import errno
 import os
 import re
@@ -21,7 +22,7 @@ def get_checkpoint_file_list(checkpoint_dir, name):
     return files
 
 
-def safe_mkdir_recursive(directory):
+def safe_mkdir_recursive(directory, overwrite=False):
     if not os.path.exists(directory):
         try:
             os.makedirs(directory)
@@ -30,6 +31,12 @@ def safe_mkdir_recursive(directory):
                 pass
             else:
                 raise
+    else:
+        if overwrite:
+            try:
+                shutil.rmtree(directory)
+            except:
+                print('Error while removing directory: {0}'.format(directory))
 
 
 def safe_mknode_recursive(destiny_dir, node_name, overwrite):
