@@ -10,7 +10,6 @@ from models.nets import pre_integration_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
 from models.test_experiments import ExperimentManager
-from tensorflow.python.keras.utils import plot_model
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -79,7 +78,6 @@ class Learner(object):
         trainable_model = prediction_network(window_len=self.config.window_length)
 
         print(trainable_model.summary())
-        plot_model(trainable_model, to_file='model.png')
 
         loss_connections = {"state_output": mock_loss,
                             "pre_integrated_R": pre_integration_loss,
