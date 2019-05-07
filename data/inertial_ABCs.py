@@ -1,9 +1,9 @@
-import joblib
 import numpy as np
 import matplotlib.pyplot as plt
 
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.externals import joblib
 from scipy.signal import butter as butterworth_filter
 
 from data.utils.data_utils import filter_with_coeffs, interpolate_ts

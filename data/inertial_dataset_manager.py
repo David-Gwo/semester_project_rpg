@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-import joblib
+from sklearn.externals import joblib
 
 from data.imu_dataset_generators import StatePredictionDataset
 from data.utils.data_utils import save_train_and_test_datasets, load_mat_data

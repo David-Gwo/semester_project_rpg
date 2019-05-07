@@ -1,9 +1,8 @@
 from tensorflow.python.keras.layers import Layer
-from tensorflow.python.eager import context
 from tensorflow.python.ops import gen_math_ops, math_ops, nn
 from tensorflow.python.ops.array_ops import expand_dims, concat
-from tensorflow.python.keras import activations, initializers, regularizers
-from tensorflow.python.framework import dtypes, tensor_shape, ops
+from tensorflow.python.keras import activations, initializers
+from tensorflow.python.framework import dtypes, tensor_shape
 from tensorflow.python.keras import backend as K
 
 from utils.algebra import exp_mapping, apply_state_diff, rotate_quat, rotate_vec
