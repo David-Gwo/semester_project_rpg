@@ -34,15 +34,15 @@ gflags.DEFINE_string('prepared_train_data_file', 'imu_dataset_train.mat', 'Pre-p
 gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')
 
 # Log parameters
-gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
-gflags.DEFINE_integer("resume_train_model_number", 6, "Which model number to resume training")
+gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
+gflags.DEFINE_integer("resume_train_model_number", 7, "Which model number to resume training")
 gflags.DEFINE_integer("summary_freq", 20, "Logging every log_freq iterations")
-gflags.DEFINE_integer("save_freq", 2, "Save the latest model every save_freq epochs")
+gflags.DEFINE_integer("save_freq", 1, "Save the latest model every save_freq epochs")
 
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
-gflags.DEFINE_integer("test_model_number", 6, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 7, "Which model number to test")
 
 # Debugging parameters
 gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')
