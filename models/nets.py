@@ -2,9 +2,7 @@ from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras import layers
 
-from models.customized_tf_funcs.custom_layers import ExponentialRemappingLayer, ForkLayerIMUdt, DiffConcatenationLayer, \
-    ReshapeIMU, PreIntegrationForwardDense, FinalPreIntegration, IntegratingLayer
-
+from models.customized_tf_funcs import custom_layers
 import tensorflow as tf
 
 
@@ -35,7 +33,7 @@ def imu_so3_integration_net(window_len):
     net_in = layers.Input((window_len + input_state_len, 7, 1), name="imu_input")
     state_0 = layers.Input((input_state_len, 1), name="state_input")
 
-    imu_stack, time_diff_imu = ForkLayerIMUdt(name="forking_layer")(net_in)
+    imu_stack, time_diff_imu = custom_layers.ForkLayerIMUdt(name="forking_layer")(net_in)
 
     imu_conv_1 = layers.Conv2D(filters=15, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='same',
                                activation='relu', name='imu_conv_layer_1')(imu_stack)
@@ -68,30 +66,29 @@ def imu_so3_integration_net(window_len):
 
     net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
 
-    state_out = ExponentialRemappingLayer(name='remapped_state_output')(net_out)
+    state_out = custom_layers.ExponentialRemappingLayer(name='remapped_state_output')(net_out)
     return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)
 
 
-def pre_integration_net(window_len):
+def pre_integration_net(args):
+
+    window_len = args[0]
+    n_iterations = args[1]
 
     # Define parameters for model
     kernel_width = min([window_len, 3])
     pooling_width = min([window_len, 2])
 
     input_state_shape = (10,)
-    pre_integration_shape = (window_len, 3)
+    pre_int_shape = (window_len, 3)
     imu_input_shape = (window_len, 7, 1)
-
-    # This parameter will vary in terms of window_len (higher window_len will allow more layers)
-    n_conv_layers = 3
 
     # Input layers. Don't change names
     imu_in = layers.Input(imu_input_shape, name="imu_input")
     state_in = layers.Input(input_state_shape, name="state_input")
 
     # Pre-processing
-    x = ReshapeIMU()(imu_in)
-    _, dt_vec = ForkLayerIMUdt()(imu_in)
+    gyro, acc, dt_vec = custom_layers.PreProcessIMU()(imu_in)
 
     #############################
     # ##  TRAINABLE NETWORK  ## #
@@ -104,70 +101,84 @@ def pre_integration_net(window_len):
         return inputs
 
     # Convolution layers
-    def down_scaling_loop(x1, iterations, i):
-        x_shrink = pre_integration_shape[0] - (2 ** n_conv_layers) * round(pre_integration_shape[0] / (2 ** n_conv_layers)) + 1
+    def down_scaling_loop(x1, iterations, i, conv_channels):
+        x_shrink = pre_int_shape[0] - (2 ** n_iterations) * round(pre_int_shape[0] / (2 ** n_iterations)) + 1
         if i == 0:
-            x1 = layers.Conv2D(1, kernel_size=(x_shrink, 4), strides=(1, 4))(x1)
+            x1 = layers.Conv2D(1, kernel_size=(x_shrink, 1), strides=(1, 1))(x1)
+            
+        conv_kernel = (kernel_width, 4)
 
-        x2 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same')(x1)
+        x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, padding='same')(x1)
         x2 = norm_activate(x2, 'relu')
-        x3 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same')(x2)
+        x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, padding='same')(x2)
         x3 = norm_activate(x3, 'relu')
-        x4 = layers.Conv2D(window_len*(i+1), kernel_size=(kernel_width, 1), padding='same')(x3)
-        x4 = norm_activate(x4, 'relu')
 
         if iterations > 0:
 
-            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(tf.add(x2, x4))
-            x4 = layers.Conv2D(window_len * (i + iterations + 1), kernel_size=(kernel_width, 1), padding='same')(x1)
+            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(x3)
+            x4 = layers.Conv2D(channels[-1], kernel_size=(1, 4))(x1)
             x4 = norm_activate(x4, 'relu')
 
-            x_up = down_scaling_loop(x_up, iterations - 1, i + 1)
+            x_up = down_scaling_loop(x_up, iterations - 1, i + 1, conv_channels)
             x_up = layers.UpSampling2D(size=(pooling_width, 1))(x_up)
 
             x4 = tf.add(x4, x_up)
 
+        else:
+            x4 = layers.Conv2D(conv_channels[i], kernel_size=(1, 4))(x3)
+            x4 = norm_activate(x4, 'relu')
+
         if i == 0:
             # Recover original shape
-            y_shrink = pre_integration_shape[0] - x1.shape[1]
-            x4 = layers.Conv2DTranspose(pre_integration_shape[0], (x_shrink, y_shrink))(x4)
+            x4 = layers.Conv2DTranspose(pre_int_shape[0], (x_shrink, 1))(x4)
+            x4 = tf.squeeze(x4, axis=2)
 
         return x4
 
-    feat_vec = down_scaling_loop(x, n_conv_layers, 0)
-    small_kernel = (pre_integration_shape[1], pre_integration_shape[1])
+    channels = [2**i for i in range(4, 4 + n_iterations + 1)]
+    gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels)
+    # acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels)
+
+    small_kernel = (pre_int_shape[1], pre_int_shape[1])
     
     # Pre-integrated rotation
-    x = layers.Conv2D(10, kernel_size=small_kernel, padding='same', name='Rot_Branch')(feat_vec)
-    x = norm_activate(x, 'relu', "Rot_Branch", '1')
-    x = layers.Conv2D(1, kernel_size=(1, 1))(x)
-    x = norm_activate(x, 'relu', "Rot_Branch", '2')
-    pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
+    x = layers.Bidirectional(layers.LSTM(96, return_sequences=True), merge_mode='concat')(gyro_feat_vec)
+    x = layers.Bidirectional(layers.LSTM(96, return_sequences=True), merge_mode='concat')(x)
+    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    pre_integrated_rot = layers.Flatten(name="pre_integrated_R")(x)
 
-    # # Pre-integrated velocity
-    x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="v_Branch")(feat_vec)
-    x = norm_activate(x, 'relu', 'v_Branch', '1')
-    x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
-    x = norm_activate(x, 'relu', 'v_Branch', '2')
-    y = PreIntegrationForwardDense(pre_integration_shape)([pre_integrated_rot, x])
-    y = norm_activate(y, 'relu', 'v_Branch', '3')
-    pre_integrated_v = tf.squeeze(y, axis=3, name="pre_integrated_v")
+    # x = layers.Conv2D(10, kernel_size=small_kernel, padding='same', name='Rot_Branch')(feat_vec)
+    # x = norm_activate(x, 'relu', "Rot_Branch", '1')
+    # x = layers.Conv2D(1, kernel_size=(1, 1))(x)
+    # x = norm_activate(x, 'relu', "Rot_Branch", '2')
+    # pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
+    #
+    # # # Pre-integrated velocity
+    # x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="v_Branch")(feat_vec)
+    # x = norm_activate(x, 'relu', 'v_Branch', '1')
+    # x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
+    # x = norm_activate(x, 'relu', 'v_Branch', '2')
+    # y = PreIntegrationForwardDense(pre_int_shape)([pre_integrated_rot, x])
+    # y = norm_activate(y, 'relu', 'v_Branch', '3')
+    # pre_integrated_v = tf.squeeze(y, axis=3, name="pre_integrated_v")
+    #
+    # # Pre-integrated position
+    # x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="p_Branch")(x)
+    # x = norm_activate(x, 'relu', 'p_Branch', '1')
+    # x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
+    # x = norm_activate(x, 'relu', 'p_Branch', '2')
+    # y = PreIntegrationForwardDense(pre_int_shape)([(pre_integrated_rot, pre_integrated_v), x])
+    # y = norm_activate(y, 'relu', 'p_Branch', '3')
+    # pre_integrated_p = tf.squeeze(y, axis=3, name="pre_integrated_p")
+    #
+    # #################################
+    # # ##  NON-TRAINABLE NETWORK  ## #
+    # #################################
+    #
+    # x = FinalPreIntegration()([pre_integrated_rot, pre_integrated_v, pre_integrated_p])
+    #
+    # state_out = IntegratingLayer(name="state_output")([state_in, x, dt_vec])
+    #
+    # return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot, pre_integrated_v, pre_integrated_p, state_out))
 
-    # Pre-integrated position
-    x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="p_Branch")(x)
-    x = norm_activate(x, 'relu', 'p_Branch', '1')
-    x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
-    x = norm_activate(x, 'relu', 'p_Branch', '2')
-    y = PreIntegrationForwardDense(pre_integration_shape)([(pre_integrated_rot, pre_integrated_v), x])
-    y = norm_activate(y, 'relu', 'p_Branch', '3')
-    pre_integrated_p = tf.squeeze(y, axis=3, name="pre_integrated_p")
-
-    #################################
-    # ##  NON-TRAINABLE NETWORK  ## #
-    #################################
-
-    x = FinalPreIntegration()([pre_integrated_rot, pre_integrated_v, pre_integrated_p])
-
-    state_out = IntegratingLayer(name="state_output")([state_in, x, dt_vec])
-
-    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot, pre_integrated_v, pre_integrated_p, state_out))
+    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot))

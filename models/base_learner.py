@@ -75,20 +75,14 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
     def build_and_compile_model(self, is_testing=False):
-        trainable_model = prediction_network(window_len=self.config.window_length)
+        trainable_model = prediction_network([self.config.window_length, 2])
 
         print(trainable_model.summary())
 
-        loss_connections = {"state_output": mock_loss,
-                            "pre_integrated_R": pre_integration_loss,
-                            "pre_integrated_v": pre_integration_loss,
-                            "pre_integrated_p": pre_integration_loss}
+        loss_connections = {"pre_integrated_R": pre_integration_loss}
 
         if not is_testing:
-            loss_weight = {'state_output': 1,
-                           'pre_integrated_R': 3.,
-                           'pre_integrated_v': 1.,
-                           'pre_integrated_p': 2.}
+            loss_weight = {'pre_integrated_R': 1.0}
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
                                     loss=loss_connections,
                                     loss_weight=loss_weight)
@@ -152,7 +146,12 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        dataset = self.get_dataset(train=True, val_split=True, shuffle=False, repeat_ds=True, plot=self.config.plot_ds)
+        dataset = self.get_dataset(train=True,
+                                   val_split=True,
+                                   shuffle=False,
+                                   repeat_ds=True,
+                                   plot=self.config.plot_ds,
+                                   normalize=False)
         train_ds, validation_ds, ds_lengths = dataset
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))

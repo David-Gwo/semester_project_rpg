@@ -19,12 +19,14 @@ class ForkLayerIMUdt(Layer):
         return inputs[:, :, :6, :], inputs[:, :, 6:, :]
 
 
-class ReshapeIMU(Layer):
+class PreProcessIMU(Layer):
     def __init__(self, name=None):
-        super(ReshapeIMU, self).__init__(name=name)
+        super(PreProcessIMU, self).__init__(name=name)
 
     def call(self, inputs, **kwargs):
-        return concat([inputs[:, :, :3, :], inputs[:, :, 6:, :], inputs[:, :, 3:6, :], inputs[:, :, 6:, :]], axis=2)
+        return concat([inputs[:, :, :3, :], inputs[:, :, 6:, :]], axis=2), \
+               concat([inputs[:, :, 3:6, :], inputs[:, :, 6:, :]], axis=2), \
+               inputs[:, :, 6:, :]
 
 
 class PreIntegrationForwardDense(Layer):

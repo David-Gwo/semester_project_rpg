@@ -348,8 +348,7 @@ class ExperimentManager:
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
 
-    @staticmethod
-    def draw_pre_integration(ground_truth, model_prediction, gt_x, model_x, title):
+    def draw_pre_integration(self, ground_truth, model_prediction, gt_x, model_x, title):
 
         fig1 = plt.figure()
 
@@ -362,6 +361,8 @@ class ExperimentManager:
         grid3 = ImageGrid(fig1, 313, nrows_ncols=(1, 3), axes_pad=0.15, share_all=True, cbar_location="right",
                           cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
         ax3, ax6, ax9 = grid3.axes_all
+
+        model_prediction = np.reshape(model_prediction, (len(model_prediction), self.window_len, -1))
 
         diff_1 = np.abs(ground_truth[:, :, 0].T - model_prediction[:, :, 0].T)
         diff_2 = np.abs(ground_truth[:, :, 1].T - model_prediction[:, :, 1].T)

@@ -8,12 +8,12 @@ FLAGS = gflags.FLAGS
 
 
 # Train parameters
-gflags.DEFINE_integer('batch_size', 20, 'Batch size in training and evaluation')
+gflags.DEFINE_integer('batch_size', 32, 'Batch size in training and evaluation')
 gflags.DEFINE_float("l2_reg_scale", 0.00000001, "Scale for regularization losses")
 
 gflags.DEFINE_float("learning_rate", 0.00001, "Learning rate for adam optimizer")  # 0.0000001
 gflags.DEFINE_float("beta1", 0.9, "Momentum term of adam")
-gflags.DEFINE_integer("max_epochs", 4, "Maximum number of training epochs")
+gflags.DEFINE_integer("max_epochs", 20, "Maximum number of training epochs")
 
 gflags.DEFINE_string("model_name", "imu_net_50_depth_second_gen", "Name for the deep model")
 gflags.DEFINE_string('checkpoint_dir', "./results/", "Directory name to save checkpoints and logs.")
@@ -42,7 +42,7 @@ gflags.DEFINE_integer("save_freq", 1, "Save the latest model every save_freq epo
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
 gflags.DEFINE_string('prepared_test_data_file', 'imu_dataset_test.mat', 'Preprocessed dataset testing file')
-gflags.DEFINE_integer("test_model_number", 7, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
 
 # Debugging parameters
 gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')

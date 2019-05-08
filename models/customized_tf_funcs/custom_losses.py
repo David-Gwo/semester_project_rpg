@@ -1,5 +1,5 @@
 import tensorflow as tf
-from tensorflow.python.keras.losses import mean_squared_error
+from tensorflow.python.keras.losses import mean_squared_error, mean_absolute_error
 from utils.algebra import quaternion_error
 import numpy as np
 
@@ -20,21 +20,10 @@ def l2_loss(y_true, y_pred):
 
 
 def pre_integration_loss(y_true, y_pred):
-    if not y_true.shape[0]:
-        return y_true[:, 0, 0]
+    if not y_pred.shape[0]:
+        return tf.reduce_sum(y_pred, axis=1)
 
-    t_shape = y_true.shape
-
-    abs_diff = tf.abs(tf.math.subtract(tf.cast(y_true, tf.float32), y_pred))
-    # loss_mask = tf.tile(tf.expand_dims(tf.range(1, t_shape[1]+1, dtype=abs_diff.dtype), axis=1), (1, t_shape[2]))
-    loss_mask = np.zeros(abs_diff.shape)
-    loss_mask[-10:, :] = 1
-    abs_diff = tf.math.multiply(abs_diff, loss_mask)
-
-    while len(abs_diff.shape) > 1:
-        abs_diff = tf.reduce_sum(abs_diff, axis=1)
-
-    return abs_diff
+    return mean_absolute_error(tf.reshape(y_true, [y_true.shape[0], -1]), y_pred)
 
 
 def mock_loss(y_true, _):
