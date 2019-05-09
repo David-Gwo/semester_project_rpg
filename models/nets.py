@@ -108,19 +108,20 @@ def pre_integration_net(args):
             
         conv_kernel = (kernel_width, 4)
 
-        x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, padding='same')(x1)
+        x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1), padding='same')(x1)
         x2 = norm_activate(x2, 'relu')
-        x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, padding='same')(x2)
+        x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1), padding='same')(x2)
         x3 = norm_activate(x3, 'relu')
 
         if iterations > 0:
 
-            x_up = layers.MaxPooling2D(pool_size=(pooling_width, 1))(x3)
+            x_up = layers.Conv2D(conv_channels[i], kernel_size=(2, 1), strides=(2, 1), padding='same')(x3)
             x4 = layers.Conv2D(channels[-1], kernel_size=(1, 4))(x1)
             x4 = norm_activate(x4, 'relu')
 
             x_up = down_scaling_loop(x_up, iterations - 1, i + 1, conv_channels)
-            x_up = layers.UpSampling2D(size=(pooling_width, 1))(x_up)
+            x_up = layers.Conv2DTranspose(conv_channels[-1], kernel_size=conv_kernel, strides=(pooling_width, 1),
+                                          padding='same')(x_up)
 
             x4 = tf.add(x4, x_up)
 
@@ -130,46 +131,51 @@ def pre_integration_net(args):
 
         if i == 0:
             # Recover original shape
-            x4 = layers.Conv2DTranspose(pre_int_shape[0], (x_shrink, 1))(x4)
+            x4 = layers.Conv2DTranspose(pre_int_shape[0], kernel_size=(x_shrink, 1))(x4)
             x4 = tf.squeeze(x4, axis=2)
 
         return x4
 
-    channels = [2**i for i in range(4, 4 + n_iterations + 1)]
+    channels = [2**i for i in range(3, 3 + n_iterations + 1)]
     gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels)
-    # acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels)
+    acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels)
+    feat_vec = layers.Concatenate()([gyro_feat_vec, acc_feat_vec])
 
-    small_kernel = (pre_int_shape[1], pre_int_shape[1])
-    
     # Pre-integrated rotation
-    x = layers.Bidirectional(layers.LSTM(96, return_sequences=True), merge_mode='concat')(gyro_feat_vec)
-    x = layers.Bidirectional(layers.LSTM(96, return_sequences=True), merge_mode='concat')(x)
-    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
-    pre_integrated_rot = layers.Flatten(name="pre_integrated_R")(x)
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(feat_vec)
+    x = layers.Conv2D(pre_int_shape[1], kernel_size=(4, 1), activation='relu', padding='same')(tf.expand_dims(x, axis=2))
+    rot_prior = layers.Permute([1, 3, 2])(x)
+    pre_integrated_rot_flat = layers.Flatten(name="pre_integrated_R")(x)
 
-    # x = layers.Conv2D(10, kernel_size=small_kernel, padding='same', name='Rot_Branch')(feat_vec)
-    # x = norm_activate(x, 'relu', "Rot_Branch", '1')
-    # x = layers.Conv2D(1, kernel_size=(1, 1))(x)
-    # x = norm_activate(x, 'relu', "Rot_Branch", '2')
-    # pre_integrated_rot = tf.squeeze(x, axis=3, name="pre_integrated_R")
-    #
-    # # # Pre-integrated velocity
-    # x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="v_Branch")(feat_vec)
-    # x = norm_activate(x, 'relu', 'v_Branch', '1')
-    # x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
-    # x = norm_activate(x, 'relu', 'v_Branch', '2')
-    # y = PreIntegrationForwardDense(pre_int_shape)([pre_integrated_rot, x])
-    # y = norm_activate(y, 'relu', 'v_Branch', '3')
-    # pre_integrated_v = tf.squeeze(y, axis=3, name="pre_integrated_v")
-    #
-    # # Pre-integrated position
-    # x = layers.Conv2D(window_len, kernel_size=small_kernel, padding='same', name="p_Branch")(x)
-    # x = norm_activate(x, 'relu', 'p_Branch', '1')
-    # x = layers.Conv2D(5, kernel_size=small_kernel, padding='same')(x)
-    # x = norm_activate(x, 'relu', 'p_Branch', '2')
-    # y = PreIntegrationForwardDense(pre_int_shape)([(pre_integrated_rot, pre_integrated_v), x])
-    # y = norm_activate(y, 'relu', 'p_Branch', '3')
-    # pre_integrated_p = tf.squeeze(y, axis=3, name="pre_integrated_p")
+    # Pre-integrated velocity
+    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(rot_prior)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Reshape(pre_int_shape)(x)
+    x = layers.Concatenate(axis=2)([x, feat_vec])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
+    x = layers.Conv2D(pre_int_shape[1], kernel_size=(4, 1), activation='relu', padding='same')(tf.expand_dims(x, axis=2))
+    v_prior = layers.Permute([1, 3, 2])(x)
+    pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(x)
+
+    # Pre-integrated position
+    x = layers.Concatenate()([rot_prior, v_prior])
+    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Reshape(pre_int_shape)(x)
+    x = layers.Concatenate(axis=2)([x, feat_vec])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
+    x = layers.Conv2D(pre_int_shape[1], kernel_size=(4, 1), activation='relu', padding='same')(tf.expand_dims(x, axis=2))
+    x = layers.Permute([1, 3, 2])(x)
+    pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(x)
+
     #
     # #################################
     # # ##  NON-TRAINABLE NETWORK  ## #
@@ -181,4 +187,4 @@ def pre_integration_net(args):
     #
     # return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot, pre_integrated_v, pre_integrated_p, state_out))
 
-    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot))
+    return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
