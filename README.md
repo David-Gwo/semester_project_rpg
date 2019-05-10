@@ -1,22 +1,19 @@
-# rpg\_tensorflow\_base
-### A template to train and test your machine learning models in tensorflow
+# rpg\_imu\_prior\_learning
+### Improve Inertial Odometry using Deep Learning
 
-![alt text](./readme_img/tensorflowo.jpg)
+This repository is set-up for processing of Inertial datasets with ground truth pose estimates, with the objective of training deep models for Inertial Odometry using eager tensorflow with the keras backend. The code is set up to run with tensorflow (tf) 2.0.0a and python >= 3.5 (see [setup script](./setup.py)).
 
-While there are plenty of very nice libraries to provide high-level API for
-implementing deep neural networks models, e.g. [Keras](https://keras.io/) or [TFlearn](http://tflearn.org/), this repo
-attempts to facilitate the use of the fast and pure tensorflow API.
+The pipeline followed by this repo is mainly optimized for CPU training (as the Inertial Odometry problem deals with low-dimensional data and models can be trained within minutes or a few hours), but it can be run on GPU architectures as well. In summary, this repository:
+1. Uses the simplified callback to Tensorboard to log and debug the training processwith tf 2.0 and the keras backend
+2. Builds a basic file structure that follows some basic good practices
+3. Ensures the process of model saving, stopping and resuming training using the keras checkpoint callback
+4. Enables easy processing of inertial datasets for supervised training, provided they have some format of ground truth data
 
-In particular, this repo provides a template for any machine model you want
-to develop. It has been written with the following goals in mind:
-
-1. Summarize and deploy all the recommendations coming from the [TF community](https://www.tensorflow.org/performance/performance_guide)
-2. Make effort-free the use of [Tensorboard](https://www.tensorflow.org/get_started/summaries_and_tensorboard) (for baby-sitting the learning process) and [Checkpoints](https://www.tensorflow.org/programmers_guide/variables) (to restore training or do testing) 
-3. Build a basic file structure that follows some basic good practices (the best I discovered up to now)
+We have used this repository to work with the [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) and [BlackBird](https://github.com/mit-fast/Blackbird-Dataset) datasets, but other similar ones can be easily added. 
 
 ## Table of Contents
 
-* [What do you usually need to do when coding a deep learning system?](#what-do-you-usually-need-to-do-when-coding-a-deep-learning-system)
+* [Installation](#installation)
 * [What should you do to successfully train your network?](#what-should-you-do-to-successfully-train-your-network)
 * [In what does this repo helps me with building a tensorflow model?](#in-what-does-this-repo-helps-me-with-building-a-tensorflow-model)
 * [Minimal requirements](#minimal-requirements)
@@ -25,39 +22,79 @@ to develop. It has been written with the following goals in mind:
 * [The overall folder architecture](#the-overall-folder-architecture)
 * [Dependencies](#dependencies)
 
-## What do you usually need to do when coding a deep learning system?
+## Installation
 
-1. You will have to code the network you want to use
-2. This model will have (at least) two different stages: training stage and inferring stage (for validation or testing)
-3. You will have to feed a dataset to this model (training stage)
-4. You might have to feed it single elements too (when, for example, deploying it on a robotic platform)
-5. You will have to tune its hyper-parameters
+To use properly this repository, we recommend setting up a python>=3.5 virtual environment, especially since at the time this readme is being written (May 2019), tensorflow 2.0 is still in alpha version. If you want to work with a native python3.x interpreter, you can skip to . If you already have virtualenvwrapper installed, skip to [virtualenv creation](#make-a-new-virtualenv)
 
-## What should you do to successfully train your network?
+### Clone the repository
+```
+git clone https://github.com/uzh-rpg/rpg_imu_prior_learning/
+```
 
-1. You will need to periodically plot some evaluation metrics (e.g. loss or accuracy), in training AND testing phase
-2. You will need a nice folder architecture for training results or tests (so you can skim through it and remember each experiment easily)
-3. You want to be able to replicate any experiment you do
-4. You want to be able to restore the training in case something goes bad (e.g. blackout)
+### Install virtualenvwrapper for python 3
+```
+# Install virtualenvwrapper with pip
+sudo apt-get install python3-pip
+sudo pip3 install virtualenvwrapper
 
-## In what does this repo helps me with building a tensorflow model?
+# Create a folder for saving the virtual environments 
+mkdir ~/.virtualenvs
+export WORKON_HOME=~/.virtualenvs
+```
+Add the virtualenvwrapper commands to your .bashrc (`vi ~/.bashrc`)
+```
+VIRTUALENVWRAPPER_PYTHON='/usr/bin/python3' # This line needs to be before the next
+source /usr/local/bin/virtualenvwrapper.sh
+```
+Reopen the shell terminal to continue to next section.
 
-1. The basic folder structure and key files are already written for you
-2. It maximizes the usage of your GPU power thanks to the multi-threaded reading
-3. It helps you using tensorboard logs to baby-sit your training process
+### Make a new virtualenv 
+To create a new virtual environment, run:
+```
+mkvirtualenv tensorflow_2.0_venv # Use any name you prefer for the venv
+```
+This will activate the virtual environment by default. Then, install the python dependencies:
+```
+cd rpg_imu_prior_learning
+python setup.py install
+```
 
-## Minimal requirements
+## Repository structure:
+# Project tree
 
-If this is the first time you write a deep learning model, maybe this is not the right place to start. Try to get a bit more familiar
-with tensorflow notations using [tutorials](https://www.tensorflow.org/get_started/mnist/beginners), and try to also have a look at some [Keras tutorials](https://keras.io/getting-started/sequential-model-guide/#examples).
-You should be able to understand the following terms before starting:
-
-1. Placeholders
-2. Operations and Tensors
-3. [Input queues](https://blog.metaflow.fr/tensorflow-how-to-optimise-your-input-pipeline-with-queues-and-multi-threading-e7c3874157e0) (they are already coded for you, but might be a good idea to know what they are)
-4. Difference between graph creation and graph evaluation
-5. Supervised / Unsupervised Learning
-
+.
+  * [catkin_ws](./catkin_ws)
+     * [src](./catkin_ws/src)
+       *  [bag2csv](./catkin_ws/src/bag2csv)
+ * [common_flags.py](./common_flags.py)
+ * [data](./data)
+   * [config](./data/config)
+     * [blackbird_flags.py](./data/config/blackbird_flags.py)
+     * [euroc_flags.py](./data/config/euroc_flags.py)
+   * [imu_dataset_generators.py](./data/imu_dataset_generators.py)
+   * [inertial_ABCs.py](./data/inertial_ABCs.py)
+   * [inertial_dataset_manager.py](./data/inertial_dataset_manager.py)
+   * [utils](./data/utils)
+     * [blackbird_utils.py](./data/utils/blackbird_utils.py)
+     * [convert_bag_to_csv.sh](./data/utils/convert_bag_to_csv.sh)
+     * [data_utils.py](./data/utils/data_utils.py)
+     * [euroc_utils.py](./data/utils/euroc_utils.py)
+ * [models](./models)
+   * [base_learner.py](./models/base_learner.py)
+   * [customized_tf_funcs](./models/customized_tf_funcs)
+     * [custom_callbacks.py](./models/customized_tf_funcs/custom_callbacks.py)
+     * [custom_layers.py](./models/customized_tf_funcs/custom_layers.py)
+     * [custom_losses.py](./models/customized_tf_funcs/custom_losses.py)
+   * [nets.py](./models/nets.py)
+   * [test_experiments.py](./models/test_experiments.py)
+ * [setup.py](./setup.py)
+ * [test.py](./test.py)
+ * [train.py](./train.py)
+ * [utils](./utils)
+     * [algebra.py](./utils/algebra.py)
+     * [directories.py](./utils/directories.py)
+     * [models.py](./utils/models.py)
+     * [visualization.py](./utils/visualization.py)
 
 ## What should I do after cloning the repo?
 
