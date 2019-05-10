@@ -79,14 +79,14 @@ class Learner(object):
 
         print(trainable_model.summary())
 
-        loss_connections = {"pre_integrated_R": pre_integration_loss,}
-                            # "pre_integrated_v": pre_integration_loss,
-                            # "pre_integrated_p": pre_integration_loss}
+        loss_connections = {"pre_integrated_R": pre_integration_loss,
+                            "pre_integrated_v": pre_integration_loss,
+                            "pre_integrated_p": pre_integration_loss}
 
         if not is_testing:
-            loss_weight = {'pre_integrated_R': 1.0,}
-                           # "pre_integrated_v": 1.0,
-                           # "pre_integrated_p": 1.0}
+            loss_weight = {'pre_integrated_R': 1.0,
+                           "pre_integrated_v": 1.0,
+                           "pre_integrated_p": 1.0}
 
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
                                     loss=loss_connections,
