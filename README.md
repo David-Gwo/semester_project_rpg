@@ -15,7 +15,8 @@ We have used this repository to work with the [EuRoC](https://projects.asl.ethz.
 
 * [Installation](#installation)
 * [Project structure](#repository-structure)
-* [Working with datasets](#working-with-datasets)
+* [Working with new and old datasets](#working-with-datasets)
+* [Testing a model](#testing-a-model)
 
 
 ## Installation
@@ -164,7 +165,16 @@ Once the .csv files have been extracted from the rosbag, the pipeline will use t
       
  #### Adding a new dataset
  
- Adding a new dataset so it's fully compatible with the pipeline is simple. The following steps should be completed to do it:
-  * Create a new python script in `./data/utils/<my_dataset>_utils.py`. See the [blackbird_utils.py](./data/utils/blackbird_utils.py) as a reference. This script must implement the [three ABC's](./data/inertial_ABCs.py) with the specified abstract methods. The classes GT and IMU are used to read the ground truth and IMU data respectively. InertialDataset is the third abstract class to be implented, which provides and processes each dataset according to its specific needs. In fact, two methods from this class must be completed:
-    * `get_raw_ds()`: which returns the IMU and ground truth data using the GT and IMU based classes
-    * `pre_process_data`: which does any kind of pre-processing needed. There are some pre-processing functions available to call in the ABC. 
+Adding a new dataset so it's fully compatible with the pipeline is simple. The following steps should be completed to do it:
+  * Create a new python script in `./data/utils/<my_dataset>_utils.py`. See the [blackbird_utils.py](./data/utils/blackbird_utils.py) as a reference. 
+  * Implement in this new script the [three ABC's](./data/inertial_ABCs.py) with the specified abstract methods. 
+    * The classes `GT` and `IMU` are used to read the ground truth and IMU data respectively. For each one, the method `read()` must be implemented
+    
+    * `InertialDataset` is the third abstract class to be implented, which provides and processes each dataset according to its specific needs. In fact, two methods from this class must be completed:
+        * `get_raw_ds()`: which returns the IMU and ground truth data using the GT and IMU based classes. This method might get as complicated as the user wants. For instance, for the blackbird dataset, it performs the http request to download the data, decompresses the rosbags into csv files and constructs the data. For EuRoC, it assumes that the files are already downloaded. 
+        * `pre_process_data()`: which does any kind of pre-processing needed. There are some pre-processing functions available to call in the ABC which can be called using `super()`. 
+        
+If all these classes are methods are completed properly, the dataset should be fully embedded in the pipeline with any further effort.
+
+
+## Testing a model
