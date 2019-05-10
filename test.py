@@ -22,12 +22,12 @@ def define_test_experiments():
                     #     "dynamic_plot": True,
                     #     "sparsing_factor": 2,
                     # },
-                    # "pre_integrated_p": {
-                    #     "type": "pre_integration"
-                    # },
-                    # "pre_integrated_v": {
-                    #     "type": "pre_integration"
-                    # },
+                    "pre_integrated_p": {
+                        "type": "pre_integration"
+                    },
+                    "pre_integrated_v": {
+                        "type": "pre_integration"
+                    },
                     "pre_integrated_R": {
                         "type": "pre_integration"
                     }

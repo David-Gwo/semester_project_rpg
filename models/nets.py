@@ -143,37 +143,35 @@ def pre_integration_net(args):
 
     # Pre-integrated rotation
     x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(feat_vec)
-    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
-    pre_integrated_rot_flat = layers.Flatten(name="pre_integrated_R")(x)
+    rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    pre_integrated_rot_flat = layers.Flatten(name="pre_integrated_R")(rot_prior)
 
     # Pre-integrated velocity
-    # x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(rot_prior)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Reshape(pre_int_shape)(x)
-    # x = layers.Concatenate(axis=2)([x, feat_vec])
-    # x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
-    # x = layers.Conv2D(pre_int_shape[1], kernel_size=(4, 1), activation='relu', padding='same')(tf.expand_dims(x, axis=2))
-    # v_prior = layers.Permute([1, 3, 2])(x)
-    # pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(x)
-    #
-    # # Pre-integrated position
-    # x = layers.Concatenate()([rot_prior, v_prior])
-    # x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
-    # x = norm_activate(x, 'relu')
-    # x = layers.Reshape(pre_int_shape)(x)
-    # x = layers.Concatenate(axis=2)([x, feat_vec])
-    # x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
-    # x = layers.Conv2D(pre_int_shape[1], kernel_size=(4, 1), activation='relu', padding='same')(tf.expand_dims(x, axis=2))
-    # x = layers.Permute([1, 3, 2])(x)
-    # pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(x)
+    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(tf.expand_dims(rot_prior, axis=3))
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Reshape(pre_int_shape)(x)
+    x = layers.Concatenate(axis=2)([x, feat_vec])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
+    v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(v_prior)
+
+    # Pre-integrated position
+    x = layers.Concatenate()([tf.expand_dims(rot_prior, axis=3), tf.expand_dims(v_prior, axis=3)])
+    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Conv2D(1, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Reshape(pre_int_shape)(x)
+    x = layers.Concatenate(axis=2)([x, feat_vec])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
+    p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(p_prior)
 
     #
     # #################################
@@ -184,6 +182,4 @@ def pre_integration_net(args):
     #
     # state_out = IntegratingLayer(name="state_output")([state_in, x, dt_vec])
     #
-    # return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot, pre_integrated_v, pre_integrated_p, state_out))
-
     return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))

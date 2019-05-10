@@ -107,10 +107,10 @@ class Learner(object):
         else:
             dataset_name = self.config.test_ds
 
-        dataset_manager = DatasetManager(self.config.prepared_train_data_file,
-                                         self.config.prepared_test_data_file,
-                                         self.trained_model_dir,
-                                         dataset_name)
+        dataset_manager = DatasetManager(prepared_train_data_file='imu_dataset_train.mat',
+                                         prepared_test_data_file='imu_dataset_test.mat',
+                                         trained_model_dir=self.trained_model_dir,
+                                         dataset_name=dataset_name)
 
         return dataset_manager.get_dataset("windowed_imu_preintegration",
                                            self.config.window_length,
@@ -164,7 +164,9 @@ class Learner(object):
 
         keras_callbacks = [
             callbacks.EarlyStopping(patience=self.config.patience, monitor='val_loss'),
-            callbacks.TensorBoard(log_dir=self.config.checkpoint_dir + model_number + "/keras", histogram_freq=5),
+            callbacks.TensorBoard(
+                log_dir=self.config.checkpoint_dir + model_number + "/keras",
+                histogram_freq=self.config.summary_freq),
             CustomModelCheckpoint(
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
