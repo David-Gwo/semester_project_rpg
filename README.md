@@ -16,6 +16,7 @@ We have used this repository to work with the [EuRoC](https://projects.asl.ethz.
 * [Installation](#installation)
 * [Project structure](#repository-structure)
 * [Working with new and old datasets](#working-with-datasets)
+* [Training supervision](#training-supervision)
 * [Testing a model](#testing-a-model)
 
 
@@ -169,12 +170,26 @@ Adding a new dataset so it's fully compatible with the pipeline is simple. The f
   * Create a new python script in `./data/utils/<my_dataset>_utils.py`. See the [blackbird_utils.py](./data/utils/blackbird_utils.py) as a reference. 
   * Implement in this new script the [three ABC's](./data/inertial_ABCs.py) with the specified abstract methods. 
     * The classes `GT` and `IMU` are used to read the ground truth and IMU data respectively. For each one, the method `read()` must be implemented
-    
     * `InertialDataset` is the third abstract class to be implented, which provides and processes each dataset according to its specific needs. In fact, two methods from this class must be completed:
-        * `get_raw_ds()`: which returns the IMU and ground truth data using the GT and IMU based classes. This method might get as complicated as the user wants. For instance, for the blackbird dataset, it performs the http request to download the data, decompresses the rosbags into csv files and constructs the data. For EuRoC, it assumes that the files are already downloaded. 
-        * `pre_process_data()`: which does any kind of pre-processing needed. There are some pre-processing functions available to call in the ABC which can be called using `super()`. 
+      * `get_raw_ds()`: which returns the IMU and ground truth data using the GT and IMU based classes. This method might get as complicated as the user wants. For instance, for the blackbird dataset, it performs the http request to download the data, decompresses the rosbags into csv files and constructs the data. For EuRoC, it assumes that the files are already downloaded. 
+      * `pre_process_data()`: which does any kind of pre-processing needed. There are some pre-processing functions available to call in the ABC which can be called using `super()`. 
+    * Add the new implementation of `InertialDataset` to the [DatasetManager](./data/inertial_dataset_manager.py) class (see lines 39-44
         
 If all these classes are methods are completed properly, the dataset should be fully embedded in the pipeline with any further effort.
 
+## Training Supervision
+
+As commented previously, this repo uses the simplified keras callback function for Tensorboard to log training summaries. These can be visualized using the command line:
+
+```
+tensorboard -logdir=/path_to_repo/results/my_model_name_Id/
+```
+
+Or equivalently if the command is not exported to your current shell by:
+```
+python3 /usr/local/lib/python3.x/dist-packages/tensorboard/main.py -logdir=/path_to_repo/results/my_model_name_Id/
+```
 
 ## Testing a model
+
+
