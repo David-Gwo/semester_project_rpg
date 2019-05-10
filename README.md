@@ -14,13 +14,8 @@ We have used this repository to work with the [EuRoC](https://projects.asl.ethz.
 ## Table of Contents
 
 * [Installation](#installation)
-* [What should you do to successfully train your network?](#what-should-you-do-to-successfully-train-your-network)
-* [In what does this repo helps me with building a tensorflow model?](#in-what-does-this-repo-helps-me-with-building-a-tensorflow-model)
-* [Minimal requirements](#minimal-requirements)
-* [What should I do after cloning the repo?](#what-should-i-do-after-cloning-the-repo)
-  * [Getting started](#getting-started)
-* [The overall folder architecture](#the-overall-folder-architecture)
-* [Dependencies](#dependencies)
+* [Project structure](#repository-structure)
+
 
 ## Installation
 
@@ -60,8 +55,7 @@ python setup.py install
 ```
 
 ## Repository structure:
-# Project tree
-
+### Project tree
 .
   * [catkin_ws](./catkin_ws)
      * [src](./catkin_ws/src)
@@ -123,56 +117,6 @@ To check over your training process, you can use [Tensorboard](https://www.tenso
 tensorboard --logdir=./tests/test_0
 ```
 
-Be sure there is a single events file in the `logdir` (otherwise you will see some mixed output). Then open the link you will be given in a browser and have a look at the logs.
-
-Now again stop training and test the model you learned. 
-
 ```
 python test.py --test_dir=./data/sample_data/testing --ckpt_file=./tests/test_0/model-#
 ```
-
-In the last command, `#` is the checkpoint number you want to evaluate. Have a look at the folder `tests/test_0` to see which ones are available.
-It's a good idea to test it on the train and test dataset, to see if everything is as expected.
-During training, the `val_dir` will be your validation directory, used to benchmark your model while training. Don't forget to put this parameter, it won't work otherwise.
-Overall, a model will be saved every `save_freq' epochs. Additionally, the model with best validation loss will be also saved.
-Have a look at [common_flags.py](./common_flags) to see what are the available training options.
-
-After adapting the code to your problem, and prepared your dataset, you should be able to train and test using exactly the same commands. The following section gives more details about the file structure and what to change to prepare and run your model.
-
-## The overall folder architecture
-
-![alt text](./readme_img/folder_struct.png "Folder Structure")
-
-[__models__](/models): This is the folder containing the deep learning module and the deep neural networks implementations. In particular, [base_learner.py](./models/base_learner.py)
-implements the class `Learner` that you should use for training and testing. You should change this class to your needs. There are comments, where
-you need to make changes. At high level, you should just define how to compute the loss given network predictions, and what things to log to
-tensorboard. Moreover, the file [nets.py](./models/nets.py) should contain the neural network you want to use to make predictions. You can use any high level
-API, like Keras, to build it. There are few examples on how to do it!
-
-[__data__](./data): This is the base folder for I/0. In here should go your script to load all filenames (and optionally the labels) of your data. Note
-that you will load the data __during__ training, not before it! This allows to scale very well to large datasets, that might not fit in memory.
-Additionally you need to be able to load batches of images at test/validation time. Have a look at the file [data_utils.py](data/utils/data_utils.py) to have an example on how to do it.
-
-__results__ and __tests__ : Self-explanatory, they should contain the outputs and checkpoints of your tests and results.
-
-[__train.py__](./train.py): Main function to start the training. For most use cases, you won't need to change this function.
-
-[__test.py__](./test.py): Main testing function. You might need some little adaptation to output the results of your trained models.
-
-[__utils.py__](utils/directories.py): Utility script, contains some general functions to automate testing or some other useful API.
-
-[__common_flags.py__](./common_flags.py): Script containing all flags you want to use to set up your training and testing model.
-
-## Dependencies
-
-This library has the following dependencies:
-
-0. Python (3.n versions are better)
-1. [Tensorflow](https://www.tensorflow.org/install/)
-2. Keras, ```sudo pip install keras```
-3. numpy, ```sudo pip install numpy```
-4. gflags, ```sudo pip install python-gflags ```
-
-Additionally, you might need to use OpenCV (```sudo pip install opencv-python```) to load images at test time (as it is done in the example). In case you have problems for this library,
-like conflict with your catkin-opencv, try to update your `PYTHONPATH' so that the system does not see catkin-opencv. If you are desperate or don't want
-to mess up with your OpenCv, just use an other image loader, e.g. Pillow.
