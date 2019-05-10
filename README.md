@@ -19,7 +19,7 @@ We have used this repository to work with the [EuRoC](https://projects.asl.ethz.
 
 ## Installation
 
-To use properly this repository, we recommend setting up a python>=3.5 virtual environment, especially since at the time this readme is being written (May 2019), tensorflow 2.0 is still in alpha version. If you want to work with a native python3.x interpreter, you can skip to . If you already have virtualenvwrapper installed, skip to [virtualenv creation](#make-a-new-virtualenv)
+To use properly this repository, we recommend setting up a python>=3.5 virtual environment, especially since at the time this readme is being written (May 2019), tensorflow 2.0 is still in alpha version. If you want to work with a native python3.x interpreter, you can skip to [dependencies installation](#install-dependencies). If you already have virtualenvwrapper installed, skip to [virtualenv creation](#make-a-new-virtualenv)
 
 ### Clone the repository
 ```
@@ -48,7 +48,10 @@ To create a new virtual environment, run:
 ```
 mkvirtualenv tensorflow_2.0_venv # Use any name you prefer for the venv
 ```
-This will activate the virtual environment by default. Then, install the python dependencies:
+This will activate the virtual environment by default. 
+
+### Install dependencies
+Finally, install the python dependencies:
 ```
 cd rpg_imu_prior_learning
 python setup.py install
@@ -56,39 +59,39 @@ python setup.py install
 
 ## Repository structure:
 ### Project tree
-.
-  * [catkin_ws](./catkin_ws)
-     * [src](./catkin_ws/src)
-       *  [bag2csv](./catkin_ws/src/bag2csv)
- * [common_flags.py](./common_flags.py)
- * [data](./data)
-   * [config](./data/config)
-     * [blackbird_flags.py](./data/config/blackbird_flags.py)
-     * [euroc_flags.py](./data/config/euroc_flags.py)
-   * [imu_dataset_generators.py](./data/imu_dataset_generators.py)
-   * [inertial_ABCs.py](./data/inertial_ABCs.py)
-   * [inertial_dataset_manager.py](./data/inertial_dataset_manager.py)
-   * [utils](./data/utils)
-     * [blackbird_utils.py](./data/utils/blackbird_utils.py)
-     * [convert_bag_to_csv.sh](./data/utils/convert_bag_to_csv.sh)
-     * [data_utils.py](./data/utils/data_utils.py)
-     * [euroc_utils.py](./data/utils/euroc_utils.py)
- * [models](./models)
-   * [base_learner.py](./models/base_learner.py)
-   * [customized_tf_funcs](./models/customized_tf_funcs)
-     * [custom_callbacks.py](./models/customized_tf_funcs/custom_callbacks.py)
-     * [custom_layers.py](./models/customized_tf_funcs/custom_layers.py)
-     * [custom_losses.py](./models/customized_tf_funcs/custom_losses.py)
-   * [nets.py](./models/nets.py)
-   * [test_experiments.py](./models/test_experiments.py)
- * [setup.py](./setup.py)
- * [test.py](./test.py)
- * [train.py](./train.py)
- * [utils](./utils)
-     * [algebra.py](./utils/algebra.py)
-     * [directories.py](./utils/directories.py)
-     * [models.py](./utils/models.py)
-     * [visualization.py](./utils/visualization.py)
+ * [__catkin_ws__](./catkin_ws): *catkin workspace for [ROS](wiki.ros.org) packages*
+   * [__src/bag2csv__](./catkin_ws/src/bag2csv): *Ros package for transforming ROS bag to .csv files. Used for blackbird dataset*
+ * [__common_flags.py__](./common_flags.py): *Configuration flags to run the main [training](./train.py) and [testing](./test.py) scripts*
+ * [__data__](./data): *This folder contains everything related to the datasets.*
+   * [__config/blackbird_flags.py__](./data/config/blackbird_flags.py): *Configuration flags for the blackbird dataset manager*
+   * [__config/euroc_flags.py__](./data/config/euroc_flags.py): *Configuration flags for the EuRoC dataset manager*
+   * dataset: *all the datasets should be placed in this directory (gitignored by default)*
+   * [__imu_dataset_generators.py__](./data/imu_dataset_generators.py): *Contains the scripts that generate different datasets for different inference tasks given the pre-processed data*
+   * [__inertial_ABCs.py__](./data/inertial_ABCs.py): *Each inertial dataset manager implements these classes. They are called by the [InertialDatasetManager](./data/inertial_dataset_manager.py) for processing all the datasets.*
+   * [__inertial_dataset_manager.py__](./data/inertial_dataset_manager.py): *Provides the datasets to the main [training](./train.py) and [testing](./test.py) scripts by means of the [ABC's](./data/inertial_dataset_manager.py)*
+   * [__tils__](./data/utils)
+     * [__blackbird_utils.py__](./data/utils/blackbird_utils.py): *[ABC](./data/inertial_dataset_manager.py) implementations for the blackbird dataset and other utilities*
+     * [__convert_bag_to_csv.sh__](./data/utils/convert_bag_to_csv.sh): *Details here (X)* 
+     * [_-data_utils.py__](./data/utils/data_utils.py): *Any other interesting utilities for dataset processing (e.g. interpolation)*
+     * [__euroc_utils.py__](./data/utils/euroc_utils.py): *[ABC](./data/inertial_dataset_manager.py) implementations for the EuRoC dataset and other utilities*
+ * [__figures__]: Figures generated by the test experiments will be stored here (gitignored by default)
+ * [__models__](./models)
+   * [__base_learner.py__](./models/base_learner.py): *All the core functions for model generation, training and testing*
+   * [__customized_tf_funcs__](./models/customized_tf_funcs)
+     * [__custom_callbacks.py__](./models/customized_tf_funcs/custom_callbacks.py): *Customized keras callbacks*
+     * [__custom_layers.py__](./models/customized_tf_funcs/custom_layers.py): *Customized keras Layers*
+     * [__custom_losses.py__](./models/customized_tf_funcs/custom_losses.py): *Customized keras losses*
+   * [__nets.py__](./models/nets.py): *Deep keras models*
+   * [__test_experiments.py__](./models/test_experiments.py): *Script that implements several testing experiments (e.g. iterative prediction)*
+ * [__results__]: All the trained models will be kept in this directory (gitignored by default)
+ * [__setup.py__](./setup.py): *Python setup script to install dependencies*
+ * [__test.py__](./test.py): *Runnable test script*
+ * [__train.py__](./train.py) * Runnable training script*
+ * [__utils__](./utils): *Any utilities for the training and testing scripts*
+     * [__algebra.py__](./utils/algebra.py): *Algebra functions (e.g. quaternion/Lie algebra)*
+     * [__directories.py__](./utils/directories.py): *Directory utilities*
+     * [__models.py__](./utils/models.py): *Model utilities*
+     * [__visualization.py__](./utils/visualization.py): *Visualization utilities*
 
 ## What should I do after cloning the repo?
 
