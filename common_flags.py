@@ -7,7 +7,7 @@ FLAGS = gflags.FLAGS
 ###################################
 
 # Main parameters
-gflags.DEFINE_string("model_name", "imu_net_50_depth_second_gen", "Name for the deep model")
+gflags.DEFINE_string("model_name", "imu_int_lstm", "Name for the deep model")
 
 # Train parameters
 gflags.DEFINE_integer('batch_size', 32, 'Batch size in training and evaluation')
@@ -26,11 +26,11 @@ gflags.DEFINE_integer("resume_train_model_number", 7, "Which model number to res
 
 # Log parameters
 gflags.DEFINE_integer("summary_freq", 4, "Logging every log_freq iterations")
-gflags.DEFINE_integer("save_freq", 3, "Save the latest model every save_freq epochs")
+gflags.DEFINE_integer("save_freq", 1, "Save the latest model every save_freq epochs")
 
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
-gflags.DEFINE_integer("test_model_number", 10, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 15, "Which model number to test")
 
 # Debugging parameters
 gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')

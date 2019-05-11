@@ -183,3 +183,38 @@ def pre_integration_net(args):
     # state_out = IntegratingLayer(name="state_output")([state_in, x, dt_vec])
     #
     return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
+
+
+def fully_recurrent_net(args):
+    window_len = args[0]
+    n_iterations = args[1]
+
+    # Define parameters for model
+    kernel_width = min([window_len, 3])
+    pooling_width = min([window_len, 2])
+
+    input_state_shape = (10,)
+    pre_int_shape = (window_len, 3)
+    imu_input_shape = (window_len, 7, 1)
+
+    # Input layers. Don't change names
+    imu_in = layers.Input(imu_input_shape, name="imu_input")
+    state_in = layers.Input(input_state_shape, name="state_input")
+
+    imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(imu_in_squeeze)
+    rot_prior = layers.LSTM(3, return_sequences=True)(x)
+    pre_integrated_rot_flat = layers.Flatten(name="pre_integrated_R")(rot_prior)
+
+    vel_in = layers.Concatenate()([imu_in_squeeze, rot_prior])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(vel_in)
+    v_prior = layers.LSTM(3, return_sequences=True)(x)
+    pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(v_prior)
+
+    pos_in = layers.Concatenate()([imu_in_squeeze, rot_prior, v_prior])
+    x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(pos_in)
+    p_prior = layers.LSTM(3, return_sequences=True)(x)
+    pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(p_prior)
+
+    return Model(inputs=(imu_in, state_in),
+                 outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))

@@ -47,12 +47,12 @@ def define_test_experiments():
         #     "options": {
         #         "output": "save",
         #         "plot_data": {
-        #             # "pre_integrated_p": {
-        #             #     "type": "pre_integration"
-        #             # },
-        #             # "pre_integrated_v": {
-        #             #     "type": "pre_integration"
-        #             # },
+        #             "pre_integrated_p": {
+        #                 "type": "pre_integration"
+        #             },
+        #             "pre_integrated_v": {
+        #                 "type": "pre_integration"
+        #             },
         #             "pre_integrated_R": {
         #                 "type": "pre_integration"
         #             }
