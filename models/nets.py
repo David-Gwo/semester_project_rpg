@@ -1,7 +1,7 @@
 from tensorflow.python.keras import regularizers, Sequential
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras import layers
-
+from tensorflow.python.keras import backend as k_b
 from models.customized_tf_funcs import custom_layers
 import tensorflow as tf
 
@@ -99,12 +99,11 @@ def pre_integration_net(args):
 
     # Pre-integrated rotation
     x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(feat_vec)
-    # rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     rot_prior = layers.LSTM(3, return_sequences=True)(x)
     pre_integrated_rot_flat = layers.Flatten(name="pre_integrated_R")(rot_prior)
 
     # Pre-integrated velocity
-    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(tf.expand_dims(rot_prior, axis=3))
+    x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(k_b.expand_dims(rot_prior, axis=3))
     x = norm_activate(x, 'relu')
     x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
     x = norm_activate(x, 'relu')
@@ -118,7 +117,7 @@ def pre_integration_net(args):
     pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(v_prior)
 
     # Pre-integrated position
-    x = layers.Concatenate()([tf.expand_dims(rot_prior, axis=3), tf.expand_dims(v_prior, axis=3)])
+    x = layers.Concatenate()([k_b.expand_dims(rot_prior, axis=3), k_b.expand_dims(v_prior, axis=3)])
     x = layers.Conv2D(32, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
     x = norm_activate(x, 'relu')
     x = layers.Conv2D(64, kernel_size=(2, 1), dilation_rate=(2, 1), padding='same')(x)
@@ -183,8 +182,21 @@ def fully_recurrent_net(args):
     p_prior = layers.GRU(3, return_sequences=True)(x)
     pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(p_prior)
 
+    rot_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(rot_prior, axis=3))
+    rot_prior = layers.Reshape(pre_int_shape)(rot_prior)
+
+    v_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(v_prior, axis=3))
+    v_prior = layers.Reshape(pre_int_shape)(v_prior)
+
+    p_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(p_prior, axis=3))
+    p_prior = layers.Reshape(pre_int_shape)(p_prior)
+
+    x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
+
+    state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
+
     return Model(inputs=(imu_in, state_in),
-                 outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
+                 outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat, state_out))
 
 
 def norm_activate(inputs, activation, name=None, number=None):
@@ -231,6 +243,6 @@ def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape,
     if i == 0:
         # Recover original shape
         x4 = layers.Conv2DTranspose(final_shape[0], kernel_size=(x_shrink, 1))(x4)
-        x4 = tf.squeeze(x4, axis=2)
+        x4 = k_b.squeeze(x4, axis=2)
 
     return x4

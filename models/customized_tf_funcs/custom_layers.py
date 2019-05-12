@@ -198,9 +198,9 @@ class FinalPreIntegration(Layer):
 
     def call(self, inputs, **kwargs):
         if not inputs[0].shape[0]:
-            return K.concatenate([inputs[2][:, 0, :], inputs[1][:, 0, :], K.placeholder([None, 4])])
+            return K.concatenate([inputs[2][:, -1, :], inputs[1][:, -1, :], K.placeholder([None, 4])])
 
-        return K.concatenate([inputs[2][:, 0, :], inputs[1][:, 0, :], exp_mapping(inputs[0][:, 0, :])])
+        return K.concatenate([inputs[2][:, -1, :], inputs[1][:, -1, :], exp_mapping(inputs[0][:, -1, :])])
 
 
 class IntegratingLayer(Layer):
