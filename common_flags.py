@@ -30,7 +30,7 @@ gflags.DEFINE_integer("save_freq", 1, "Save the latest model every save_freq epo
 
 # Testing parameters
 gflags.DEFINE_string('test_ds', 'blackbird', 'Which dataset to use for testing')
-gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
+gflags.DEFINE_integer("test_model_number", 2, "Which model number to test")
 
 # Debugging parameters
 gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')

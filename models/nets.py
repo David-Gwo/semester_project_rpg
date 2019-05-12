@@ -167,6 +167,7 @@ def fully_recurrent_net(args):
 
     imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
     feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
+    # feat_vec = imu_in_squeeze
 
     rot_in = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(feat_vec)
     rot_prior = layers.GRU(3, return_sequences=True)(rot_in)
