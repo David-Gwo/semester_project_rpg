@@ -17,11 +17,11 @@ def define_test_experiments():
             "options": {
                 "output": "show",
                 "plot_data": {
-                    "state_output": {
-                        "type": "10-dof-state",
-                        "dynamic_plot": True,
-                        "sparsing_factor": 2,
-                    },
+                    # "state_output": {
+                    #     "type": "10-dof-state",
+                    #     "dynamic_plot": True,
+                    #     "sparsing_factor": 2,
+                    # },
                     "pre_integrated_p": {
                         "type": "pre_integration"
                     },

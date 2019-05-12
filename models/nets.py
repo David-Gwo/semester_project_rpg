@@ -169,15 +169,18 @@ def fully_recurrent_net(args):
     feat_vec = imu_in_squeeze
 
     rot_in = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(feat_vec)
-    rot_prior = layers.GRU(3, return_sequences=True, activation='relu', name="pre_integrated_R")(rot_in)
+    x = layers.GRU(3, return_sequences=True)(rot_in)
+    rot_prior = norm_activate(x, 'relu', name="pre_integrated_R")
 
     vel_in = layers.Concatenate()([feat_vec, rot_prior])
     x = layers.Bidirectional(layers.GRU(64, return_sequences=True, activation='relu'), merge_mode='concat')(vel_in)
-    v_prior = layers.GRU(3, return_sequences=True, activation='relu', name="pre_integrated_v")(x)
+    x = layers.GRU(3, return_sequences=True)(x)
+    v_prior = norm_activate(x, 'relu', name="pre_integrated_v")
 
     pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
     x = layers.Bidirectional(layers.GRU(64, return_sequences=True, activation='relu'), merge_mode='concat')(pos_in)
-    p_prior = layers.GRU(3, return_sequences=True, activation='relu', name="pre_integrated_p")(x)
+    x = layers.GRU(3, return_sequences=True)(x)
+    p_prior = norm_activate(x, 'relu', name="pre_integrated_p")
 
     x = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(rot_prior, axis=3))
     y = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(v_prior, axis=3))
@@ -192,7 +195,8 @@ def fully_recurrent_net(args):
     y = norm_activate(y, 'relu')
     z = norm_activate(z, 'relu')
 
-    x = custom_layers.FinalPreIntegration()([k_b.squeeze(x, axis=3), k_b.squeeze(y, axis=3), k_b.squeeze(z, axis=3)])
+    x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
+    # x = custom_layers.FinalPreIntegration()([k_b.squeeze(x, axis=3), k_b.squeeze(y, axis=3), k_b.squeeze(z, axis=3)])
 
     state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
 
@@ -202,10 +206,9 @@ def fully_recurrent_net(args):
     #              outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
 
 
-def norm_activate(inputs, activation, name=None, number=None):
-    if name and number:
-        # inputs = layers.BatchNormalization(name=name + "_batchNorm_" + number)(inputs)
-        inputs = layers.Activation(name=name + "_activation_" + number, activation=activation)(inputs)
+def norm_activate(inputs, activation, name=None):
+    inputs = layers.BatchNormalization()(inputs)
+    inputs = layers.Activation(name=name, activation=activation)(inputs)
     return inputs
 
 

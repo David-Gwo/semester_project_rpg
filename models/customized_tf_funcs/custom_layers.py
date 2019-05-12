@@ -194,7 +194,7 @@ class DiffConcatenationLayer(Layer):
 
 class FinalPreIntegration(Layer):
     def __init__(self, name=None):
-        super(FinalPreIntegration, self).__init__(name=name, trainable=True)
+        super(FinalPreIntegration, self).__init__(name=name, trainable=False)
 
     def call(self, inputs, **kwargs):
         if not inputs[0].shape[0]:
@@ -205,7 +205,7 @@ class FinalPreIntegration(Layer):
 
 class IntegratingLayer(Layer):
     def __init__(self, name=None):
-        super(IntegratingLayer, self).__init__(name=name, trainable=True)
+        super(IntegratingLayer, self).__init__(name=name, trainable=False)
         # TODO: pass sign as argument
         self.g_vec = np.expand_dims(np.array([0, 0, 9.81]), 0)
 
