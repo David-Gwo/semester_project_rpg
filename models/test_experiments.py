@@ -199,17 +199,17 @@ class ExperimentManager:
                     output_dir = 'figures/{0}'.format(i)
                     safe_mkdir_recursive(output_dir)
                     if "append_save_name" in experiment_general_options.keys():
-                        fig_i.savefig('{0}/fig_{1}_experiment_{2}{3}'.format(
+                        fig_i.savefig('{0}/fig_{1}_experiment_{2}{3}.svg'.format(
                             output_dir, experiment_name, experiment_general_options["append_save_name"], iteration))
                     else:
-                        fig_i.savefig('{0}/fig_{1}_experiment{2}'.format(output_dir, experiment_name, iteration))
+                        fig_i.savefig('{0}/fig_{1}_experiment{2}.svg'.format(output_dir, experiment_name, iteration))
                     plt.close(fig_i)
             else:
                 if "append_save_name" in experiment_general_options.keys():
-                    figures.savefig('figures/fig_{0}_experiment_{1}{2}'.format(
+                    figures.savefig('figures/fig_{0}_experiment_{1}{2}.svg'.format(
                             experiment_name, experiment_general_options["append_save_name"], iteration))
                 else:
-                    figures.savefig('figures/fig_{0}_experiment{1}'.format(experiment_name, iteration))
+                    figures.savefig('figures/fig_{0}_experiment{1}.svg'.format(experiment_name, iteration))
                 plt.close(figures)
 
         elif experiment_general_options["output"] == "show":

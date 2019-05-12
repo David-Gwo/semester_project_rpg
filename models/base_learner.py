@@ -75,7 +75,7 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
     def build_and_compile_model(self, is_testing=False):
-        trainable_model = prediction_network([self.config.window_length, 3])
+        trainable_model = prediction_network([self.config.window_length, 2])
 
         print(trainable_model.summary())
 
