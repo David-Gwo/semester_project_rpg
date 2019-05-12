@@ -198,6 +198,9 @@ def fully_recurrent_net(args):
     return Model(inputs=(imu_in, state_in),
                  outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat, state_out))
 
+    # return Model(inputs=(imu_in, state_in),
+    #              outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
+
 
 def norm_activate(inputs, activation, name=None, number=None):
     if name and number:
