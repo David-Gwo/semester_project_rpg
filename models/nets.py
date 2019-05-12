@@ -183,15 +183,15 @@ def fully_recurrent_net(args):
     pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(p_prior)
 
     rot_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(rot_prior, axis=3))
-    rot_prior = layers.Reshape(pre_int_shape)(rot_prior)
-
     v_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(v_prior, axis=3))
-    v_prior = layers.Reshape(pre_int_shape)(v_prior)
-
     p_prior = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(p_prior, axis=3))
-    p_prior = layers.Reshape(pre_int_shape)(p_prior)
+    rot_prior = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(rot_prior)
+    v_prior = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(v_prior)
+    p_prior = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(p_prior)
 
-    x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
+    x = custom_layers.FinalPreIntegration()([k_b.squeeze(rot_prior, axis=3),
+                                             k_b.squeeze(v_prior, axis=3),
+                                             k_b.squeeze(p_prior, axis=3)])
 
     state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
 
