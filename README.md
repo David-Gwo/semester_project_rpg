@@ -129,19 +129,19 @@ This is the complete list of editable flags, and their purpose
 #### [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) dataset
 
 The EuRoC dataset, which is smaller (only 11 recorded flights) and more format friendly than the blackbird. [This link](http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/machine_hall/MH_01_easy/MH_01_easy.zip) will download one instance of the 11 flights. The repository is prepared to accept the following data structure for the EuRoC dataset:
-  * ./data/
-    * dataset/
-      * EuRoC_dataset/
-        * dataset_0/
-        * dataset_1/
+  * `./data/`
+    * `dataset/`
+      * `EuRoC_dataset/`
+        * `dataset_0/`
+        * `dataset_1/`
         * ...
 
 Where each `dataset_i` represents one of these 11 flights. Inside each of these folders, the downloaded zip must be manually decompressed (and left as it comes out), such that:
 
-  * dataset_i/
-    * mav_0/
-      * imu_0/
-      * state_groundtruth_estimate0/
+  * `dataset_i/`
+    * `mav_0/`
+      * `imu_0/`
+      * `state_groundtruth_estimate0/`
       * (the rest of the folders can be deleted, as they contain images, which are not used)
       
 The model can only be trained on one dataset at a time, so the number of the EuRoC dataset must be specified in the [EuRoC flags file](./data/config/euroc_flags.py), by the `dataset_version` flag (e.g. dataset_version=dataset_3, to use the flight stored in folder EuRoC_dataset/dataset_3)
@@ -158,11 +158,11 @@ The instance of the blackbird dataset to be used must be specified in the [black
 With these three values, a request will be made to extract the flight information (provided that the combination exists) to download the inertial and ground truth data. The inertial data, however, is compressed inside a rosbag with many other topics. A [shell script](./data/utils/convert_bag_to_csv.sh) has been created, which is run automatically by the pipeline, which calls [this ROS python script](./catkin_ws/src/bag2csv), that will automatically extract the IMU topic into a .csv file. This script **assumes the native default python interpreter is 2.7 and has ROS installed.** If that's not the case the bash script should be changed, maybe to use a python 2.7 venv.
 
 Once the .csv files have been extracted from the rosbag, the pipeline will use them to generate the dataset. Although all these processes are automatic, for the user's interest, this is the compact folder structure tree generated:
-  * .data/dataset/blackbird_dataset/
-    * bentDice/yawForward/maxSpeed2p0/
-      * data/_slash_blackbird_slash_imu.csv
-      * data.bag
-      * poses.csv
+  * `.data/dataset/blackbird_dataset/`
+    * `bentDice/yawForward/maxSpeed2p0/`
+      * `data/_slash_blackbird_slash_imu.csv`
+      * `data.bag`
+      * `poses.csv`
       
  #### Adding a new dataset
  
