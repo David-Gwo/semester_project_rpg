@@ -6,7 +6,7 @@ from tensorflow.python.keras import callbacks
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
-from models.nets import fully_recurrent_net as prediction_network
+from models.nets import fully_connected_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
 from models.test_experiments import ExperimentManager
@@ -114,7 +114,7 @@ class Learner(object):
                                          trained_model_dir=self.trained_model_dir,
                                          dataset_name=dataset_name)
 
-        return dataset_manager.get_dataset("windowed_imu_preintegration",
+        return dataset_manager.get_dataset(self.config.dataset_type,
                                            self.config.window_length,
                                            batch_size=self.config.batch_size,
                                            validation_split=val_split,

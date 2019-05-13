@@ -66,7 +66,7 @@ def imu_so3_integration_net(window_len):
 
     net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
 
-    state_out = custom_layers.ExponentialRemappingLayer(name='remapped_state_output')(net_out)
+    state_out = custom_layers.ExponentialRemappingLayer(name='state_output')(net_out)
     return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)
 
 
@@ -198,8 +198,45 @@ def fully_recurrent_net(args):
     # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
 
 
-def norm_activate(inputs, activation, name=None):
-    inputs = layers.BatchNormalization()(inputs)
+def fully_connected_net(args):
+    window_len = args[0]
+
+    input_state_shape = (10,)
+    pre_int_shape = (window_len, 3)
+    imu_input_shape = (window_len, 7, 1)
+
+    # Input layers. Don't change names
+    imu_in = layers.Input(imu_input_shape, name="imu_input")
+    state_in = layers.Input(input_state_shape, name="state_input")
+
+    _, _, dt_vec = custom_layers.PreProcessIMU()(imu_in)
+
+    x = layers.Flatten()(imu_in)
+    x = layers.Dense(200)(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Dense(200)(x)
+    feat_vec = norm_activate(x, 'relu')
+
+    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
+    r_flat = norm_activate(x, 'relu')
+    rot_prior = layers.Reshape(pre_int_shape, name="pre_integrated_R")(r_flat)
+
+    x = layers.Concatenate()([feat_vec, r_flat])
+    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
+    v_flat = norm_activate(x, 'relu')
+    v_prior = layers.Reshape(pre_int_shape, name="pre_integrated_v")(v_flat)
+
+    x = layers.Concatenate()([feat_vec, r_flat, v_flat])
+    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
+    p_flat = norm_activate(x, 'relu')
+    p_prior = layers.Reshape(pre_int_shape, name="pre_integrated_p")(p_flat)
+
+    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
+
+
+def norm_activate(inputs, activation, do_norm=True, name=None):
+    if do_norm:
+        inputs = layers.BatchNormalization()(inputs)
     inputs = layers.Activation(name=name, activation=activation)(inputs)
     return inputs
 
