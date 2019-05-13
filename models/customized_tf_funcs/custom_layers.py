@@ -49,12 +49,10 @@ class PreIntegrationForwardDense(Layer):
         self.bias_initializer = initializers.get(bias_initializer)
 
         self.bias = None
-        self.kernel = None
         self.recurrent_mask = None
         self.recurrent_kernel = None
 
         self.total_recurrent_units = None
-        self.total_kernel_units = None
 
     def build(self, input_shape):
         dtype = dtypes.as_dtype(self.dtype or K.floatx())
@@ -62,57 +60,31 @@ class PreIntegrationForwardDense(Layer):
         # Input sanity checks
         if not (dtype.is_floating or dtype.is_complex):
             raise TypeError('Unable to build `Dense` layer with non-floating point dtype %s' % (dtype,))
-        if len(input_shape) != 2:
-            raise ValueError('There should only be two inputs to this layer. Got %s' % (len(input_shape)))
 
-        input_shape_1 = None
-        input_shape_2 = tensor_shape.TensorShape(input_shape[1])
-        n_recurrencies = 1
-
-        if isinstance(input_shape[0], tuple):
-            n_recurrencies = len(input_shape[0])
-            for input_shape_1 in input_shape[0]:
-                if tensor_shape.dimension_value(input_shape[0][-1]) is None:
-                    raise ValueError('The last dimension of the inputs to `Dense` should be defined. Found `None`.')
-                if len(input_shape_1) != 3:
-                    raise ValueError('The first input shape should be a 3D tensor. Found %s' % (input_shape_1,))
-                if input_shape_1[1:3] != self.target_shape:
-                    raise ValueError('The input and output shapes must coincide. Got {0} and {1}'.format(
-                        input_shape_1[1:3], self.target_shape))
-        elif isinstance(input_shape[0], tf.TensorShape):
-            input_shape_1 = input_shape[0]
-            if tensor_shape.dimension_value(input_shape[0][-1]) is None:
-                raise ValueError('The last dimension of the inputs to `Dense` should be defined. Found `None`.')
-            if len(input_shape_1) != 3:
-                raise ValueError('The first input shape should be a 3D tensor. Found %s' % (input_shape_1,))
-            if input_shape_1[1:3] != self.target_shape:
-                raise ValueError('The input and output shapes must coincide. Got {0} and {1}'.format(
-                    input_shape_1[1:3], self.target_shape))
+        if isinstance(input_shape, tf.TensorShape):
+            sample_input_shape = input_shape
+            if len(input_shape) != 3:
+                raise ValueError('The first input shape should be a 3D tensor. Found %s' % (input_shape, ))
+            if input_shape[1:] != self.target_shape:
+                raise ValueError('The input and output shapes must coincide. Got {0} instead of {1}'.format(
+                    input_shape[1:], self.target_shape))
         else:
-            raise TypeError("The first input should be a tensor or a tuple of tensors")
+            raise TypeError("The input should be a single tensor or a list of tensors")
 
-        self.total_recurrent_units = np.prod(input_shape_1[1:3])
-        self.total_kernel_units = np.prod(input_shape_2[1:])
+        self.total_recurrent_units = np.prod(sample_input_shape[1:])
 
         output_channels = self.target_shape[-1]
 
         self.recurrent_kernel = self.add_weight(
             'feature_kernel',
-            shape=[self.total_recurrent_units, self.total_recurrent_units, n_recurrencies],
+            shape=[self.total_recurrent_units, self.total_recurrent_units],
             initializer=self.kernel_initializer,
             dtype=self.dtype,
             trainable=True)
 
-        self.kernel = self.add_weight(
-            'kernel',
-            shape=[self.total_kernel_units, self.total_recurrent_units],
-            initializer=self.kernel_initializer,
-            dtype=self.dtype,
-            trainable=True)
-
-        recurrent_mask = np.zeros((input_shape_1[1], input_shape_1[1]))
-        for i in range(input_shape_1[1]):
-            for j in range(i, input_shape_1[1]):
+        recurrent_mask = np.zeros((sample_input_shape[1], sample_input_shape[1]))
+        for i in range(sample_input_shape[1]):
+            for j in range(i, sample_input_shape[1]):
                 recurrent_mask[i, j] = 1
         recurrent_mask = np.tile(recurrent_mask[::-1, :], (output_channels, output_channels))
 
@@ -134,40 +106,25 @@ class PreIntegrationForwardDense(Layer):
 
     def call(self, inputs, **kwargs):
 
-        recurrent_input, feature_input = inputs
+        if not inputs.shape[0]:
+            return inputs
 
-        if isinstance(recurrent_input, tuple):
-            if not recurrent_input[0].shape[0]:
-                return K.expand_dims(recurrent_input[0], axis=3)
-
-            recurrent_input = K.concatenate([K.expand_dims(rec_in, 3) for rec_in in recurrent_input], axis=3)
-
-        else:
-            if not recurrent_input.shape[0]:
-                return K.expand_dims(recurrent_input, axis=3)
-
-            recurrent_input = K.expand_dims(recurrent_input, axis=3)
-
-        recurrent_input = ops.convert_to_tensor(recurrent_input)
-        feature_input = ops.convert_to_tensor(feature_input)
+        recurrent_input = ops.convert_to_tensor(inputs)
 
         if not self._mixed_precision_policy.should_cast_variables:
             recurrent_input = math_ops.cast(recurrent_input, self.dtype)
-            feature_input = math_ops.cast(feature_input, self.dtype)
 
-        vectorized_features = K.reshape(feature_input, (feature_input.shape[0], self.total_kernel_units))
-        outputs = gen_math_ops.mat_mul(vectorized_features, self.kernel)
+        batch_size = recurrent_input.shape[0]
 
-        for i in range(self.recurrent_kernel.shape[-1]):
-            vectorized_recurrent = K.reshape(recurrent_input[:, :, :, i], (recurrent_input.shape[0], self.total_recurrent_units))
-            outputs += gen_math_ops.mat_mul(vectorized_recurrent, tf.math.multiply(self.recurrent_kernel[:, :, i], self.recurrent_mask))
+        flat_recurrent = K.reshape(recurrent_input[:, :, :], (batch_size, self.total_recurrent_units))
+        outputs = gen_math_ops.mat_mul(flat_recurrent, tf.math.multiply(self.recurrent_kernel, self.recurrent_mask))
 
         if self.use_bias:
             outputs = nn.bias_add(outputs, self.bias)
         if self.activation is not None:
             outputs = self.activation(outputs)
 
-        return K.reshape(outputs, (outputs.shape[0], self.target_shape[0], self.target_shape[1], 1))
+        return K.reshape(outputs, (outputs.shape[0], self.target_shape[0], self.target_shape[1]))
 
 
 class ExponentialRemappingLayer(Layer):

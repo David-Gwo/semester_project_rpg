@@ -167,15 +167,23 @@ def fully_recurrent_net(args):
     imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
     feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
 
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True))(feat_vec)
+    x = layers.GRU(64, return_sequences=True)(feat_vec)
     rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_R")(x)
 
-    vel_in = layers.Concatenate()([feat_vec, rot_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True))(vel_in)
+    x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
+    rot_contrib = norm_activate(x, 'relu')
+
+    vel_in = layers.Concatenate()([feat_vec, rot_contrib])
+    x = layers.GRU(64, return_sequences=True)(vel_in)
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
-    pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True))(pos_in)
+    x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
+    rot_contrib = norm_activate(x, 'relu')
+    x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
+    vel_contrib = norm_activate(x, 'relu')
+
+    pos_in = layers.Concatenate()([feat_vec, rot_contrib, vel_contrib])
+    x = layers.GRU(64, return_sequences=True)(pos_in)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
