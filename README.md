@@ -192,4 +192,44 @@ python3 /usr/local/lib/python3.x/dist-packages/tensorboard/main.py -logdir=/path
 
 ## Testing a model
 
+To test models on different datasets, there is a separate script which can be run: [test.py](./test.py). In it, the user should define the experiments that he wants to run. The experiment definition is structured in a nested dictionary structure. As an example:
+```
+"plot_predictions": {
+    "ds_testing_non_tensorflow": ["predict"],
+    "ds_testing_non_tensorflow_unnormalized": ["ground_truth"],
+    "options": {
+        "output": "show",
+        "append_save_name": "my_first_experiment",
+        "plot_data": {
+            "state_output": {
+                "type": "10-dof-state",
+                "dynamic_plot": True,
+                "sparsing_factor": 2,
+            },
+            "pre_integrated_p": {
+                "type": "pre_integration"
+            },
+            "pre_integrated_v": {
+                "type": "pre_integration"
+            },
+            "pre_integrated_R": {
+                "type": "pre_integration"
+            }
+        }
+    }
+}
+```
 
+The outtermost dictionary should only have a key, which defines the type of experiment that is going to be run. In this case `plot_predictions` is an experiment that consists on taking the most recent version of a model, and plotting its predictions in comparison with other values. Inside this dictionary, the user should specify which data is going to be compared in the experiment, and how to process it. In this case, we want to compare the model predictions on the testing dataset and the ground truth. Additionally, we want the ground truth to display the actual unnormalized data, as the model might require some pre-procecssing to generate the predictions. As such, the first two elements in the experiment dictionary are going to be:
+
+```
+# The `non_tensorflow` flag isrequired for the experiments. It means that the dataset 
+# will be un numpy format, rather than a tensorflow dataset.
+# The order of the flags is not important
+"ds_testing_non_tensorflow": ["predict"],
+"ds_testing_non_tensorflow_unnormalized": ["ground_truth"],
+```        
+Finally, an `options` dictionary should be added, to include other information about the experiment. 
+  - The key `output` can be either `show` or `save`, to display the generated images or store them in the temporal `./figures/` directory.
+  - The names of the generated figures are automatic, but users can add some specific name with the key `append_save_name` 
+  - The key `plot_data` specifies how to plot each output of the model. For now, two types are supported: `10-dof-state` and `pre-integration`, and for the first sort, a `dynamic_plot` can be added with the simulation of the trajectory. The `sparsing_factor` refers to the simulation speed increase factor.
