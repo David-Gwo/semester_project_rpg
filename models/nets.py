@@ -167,15 +167,18 @@ def fully_recurrent_net(args):
     imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
     feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
 
-    x = layers.GRU(3, return_sequences=True)(feat_vec)
+    x = layers.GRU(64, return_sequences=True)(feat_vec)
+    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     rot_prior = tf.identity(x, name="pre_integrated_R")
 
     vel_in = layers.Concatenate()([feat_vec, rot_prior])
-    x = layers.GRU(3, return_sequences=True)(vel_in)
+    x = layers.GRU(64, return_sequences=True)(vel_in)
+    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     v_prior = tf.identity(x, name="pre_integrated_v")
 
     pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
-    x = layers.GRU(3, return_sequences=True)(pos_in)
+    x = layers.GRU(64, return_sequences=True)(pos_in)
+    x = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     p_prior = tf.identity(x, name="pre_integrated_p")
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
@@ -244,7 +247,7 @@ def norm_activate(inputs, activation, do_norm=True, name=None):
 def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape, max_iterations):
 
     # Define parameters for model
-    kernel_width = min([window_len, 3])
+    kernel_width = min([window_len, 2])
     pooling_width = min([window_len, 2])
 
     x_shrink = final_shape[0] - (2 ** max_iterations) * round(final_shape[0] / (2 ** max_iterations)) + 1
