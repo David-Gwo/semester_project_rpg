@@ -167,6 +167,7 @@ class Learner(object):
         keras_callbacks = [
             callbacks.EarlyStopping(patience=self.config.patience, monitor='val_loss'),
             callbacks.TensorBoard(
+                write_images=True,
                 log_dir=self.config.checkpoint_dir + model_number + "/keras",
                 histogram_freq=self.config.summary_freq),
             CustomModelCheckpoint(

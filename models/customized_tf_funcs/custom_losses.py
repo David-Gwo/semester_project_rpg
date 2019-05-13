@@ -1,6 +1,5 @@
 import tensorflow as tf
 from tensorflow.python.keras.losses import mean_squared_error, mean_absolute_error
-from tensorflow.python.keras.backend import flatten
 from utils.algebra import quaternion_error
 import numpy as np
 
@@ -25,7 +24,10 @@ def pre_integration_loss(y_true, y_pred):
     if not y_pred.shape[0]:
         return tf.reshape(y_pred, [-1, np.prod(y_pred.shape[1:])])
 
-    return l1_loss(y_true, y_pred)
+    batch_size = y_pred.shape[0]
+    flattened_size = np.prod(y_pred.shape[1:])
+    return mean_absolute_error(tf.reshape(y_true, (batch_size, flattened_size)),
+                               tf.reshape(y_pred, (batch_size, flattened_size)))
 
 
 def mock_loss(y_true, _):

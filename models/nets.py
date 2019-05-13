@@ -168,19 +168,19 @@ def fully_recurrent_net(args):
     feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
     # feat_vec = imu_in_squeeze
 
-    rot_in = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(feat_vec)
-    x = layers.GRU(3, return_sequences=True)(rot_in)
-    rot_prior = layers.Activation(name="pre_integrated_R", activation='relu')(x)
+    rot_in = layers.Bidirectional(layers.GRU(100, return_sequences=True), merge_mode='concat')(feat_vec)
+    x = layers.TimeDistributed(layers.Dense(3, activation='relu'))(rot_in)
+    rot_prior = tf.identity(x, name="pre_integrated_R")
 
     vel_in = layers.Concatenate()([feat_vec, rot_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(vel_in)
-    x = layers.GRU(3, return_sequences=True)(x)
-    v_prior = layers.Activation(name="pre_integrated_v", activation='relu')(x)
+    x = layers.Bidirectional(layers.GRU(100, return_sequences=True), merge_mode='concat')(vel_in)
+    x = layers.TimeDistributed(layers.Dense(3, activation='relu'))(x)
+    v_prior = tf.identity(x, name="pre_integrated_v")
 
     pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(pos_in)
-    x = layers.GRU(3, return_sequences=True)(x)
-    p_prior = layers.Activation(name="pre_integrated_p", activation='relu')(x)
+    x = layers.Bidirectional(layers.GRU(100, return_sequences=True), merge_mode='concat')(pos_in)
+    x = layers.TimeDistributed(layers.Dense(3, activation='relu'))(x)
+    p_prior = tf.identity(x, name="pre_integrated_p")
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
 
@@ -200,7 +200,6 @@ def fully_recurrent_net(args):
     # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
 
     # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
-
 
 
 def norm_activate(inputs, activation, name=None):

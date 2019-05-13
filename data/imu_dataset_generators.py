@@ -259,6 +259,7 @@ class StatePredictionDataset:
 
             prog_bar.update(i+2)
 
+        pre_int_rot = np.reshape()
         self.set_outputs(
             ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p"], [pre_int_rot, pre_int_v, pre_int_p])
 
