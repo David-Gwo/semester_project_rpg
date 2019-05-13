@@ -165,45 +165,42 @@ def fully_recurrent_net(args):
     acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations)
 
     imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
-    # feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
-    feat_vec = imu_in_squeeze
+    feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
+    # feat_vec = imu_in_squeeze
 
     rot_in = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(feat_vec)
     x = layers.GRU(3, return_sequences=True)(rot_in)
-    rot_prior = norm_activate(x, 'relu', name="pre_integrated_R")
+    rot_prior = layers.Activation(name="pre_integrated_R", activation='relu')(x)
 
     vel_in = layers.Concatenate()([feat_vec, rot_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True, activation='relu'), merge_mode='concat')(vel_in)
+    x = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(vel_in)
     x = layers.GRU(3, return_sequences=True)(x)
-    v_prior = norm_activate(x, 'relu', name="pre_integrated_v")
+    v_prior = layers.Activation(name="pre_integrated_v", activation='relu')(x)
 
     pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
-    x = layers.Bidirectional(layers.GRU(64, return_sequences=True, activation='relu'), merge_mode='concat')(pos_in)
+    x = layers.Bidirectional(layers.GRU(64, return_sequences=True), merge_mode='concat')(pos_in)
     x = layers.GRU(3, return_sequences=True)(x)
-    p_prior = norm_activate(x, 'relu', name="pre_integrated_p")
+    p_prior = layers.Activation(name="pre_integrated_p", activation='relu')(x)
 
-    x = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(rot_prior, axis=3))
-    y = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(v_prior, axis=3))
-    z = layers.Conv2D(3, kernel_size=(3, 3), padding='same')(k_b.expand_dims(p_prior, axis=3))
-    x = norm_activate(x, 'relu')
-    y = norm_activate(y, 'relu')
-    z = norm_activate(z, 'relu')
-    x = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(x)
-    y = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(y)
-    z = layers.Conv2D(1, kernel_size=(3, 3), padding='same')(z)
-    x = norm_activate(x, 'relu')
-    y = norm_activate(y, 'relu')
-    z = norm_activate(z, 'relu')
+    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
 
-    x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
-    # x = custom_layers.FinalPreIntegration()([k_b.squeeze(x, axis=3), k_b.squeeze(y, axis=3), k_b.squeeze(z, axis=3)])
+    # x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
 
-    state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
+    # x = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(rot_prior, axis=3))
+    # y = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(v_prior, axis=3))
+    # z = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(p_prior, axis=3))
+    # x = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(x)
+    # y = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(y)
+    # z = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(z)
+    # x = layers.Reshape(rot_prior.shape[1:])(x)
+    # y = layers.Reshape(v_prior.shape[1:])(y)
+    # z = layers.Reshape(p_prior.shape[1:])(z)
+    # x = custom_layers.FinalPreIntegration()([x, y, z])
 
-    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
+    # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
 
-    # return Model(inputs=(imu_in, state_in),
-    #              outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
+    # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
+
 
 
 def norm_activate(inputs, activation, name=None):
