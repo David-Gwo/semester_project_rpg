@@ -214,21 +214,20 @@ def fully_connected_net(args):
     x = layers.Flatten()(imu_in)
     x = layers.Dense(200)(x)
     x = norm_activate(x, 'relu')
-    x = layers.Dense(200)(x)
+    x = layers.Dense(400)(x)
+    x = norm_activate(x, 'relu')
+    x = layers.Dense(400)(x)
     feat_vec = norm_activate(x, 'relu')
 
-    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
-    r_flat = norm_activate(x, 'relu')
+    r_flat = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
     rot_prior = layers.Reshape(pre_int_shape, name="pre_integrated_R")(r_flat)
 
     x = layers.Concatenate()([feat_vec, r_flat])
-    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
-    v_flat = norm_activate(x, 'relu')
+    v_flat = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
     v_prior = layers.Reshape(pre_int_shape, name="pre_integrated_v")(v_flat)
 
     x = layers.Concatenate()([feat_vec, r_flat, v_flat])
-    x = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
-    p_flat = norm_activate(x, 'relu')
+    p_flat = layers.Dense(tf.reduce_prod(pre_int_shape))(x)
     p_prior = layers.Reshape(pre_int_shape, name="pre_integrated_p")(p_flat)
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
