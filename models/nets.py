@@ -172,8 +172,9 @@ def fully_recurrent_net(args):
 
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
     rot_contrib = norm_activate(x, 'relu')
-
     vel_in = layers.Concatenate()([feat_vec, rot_contrib])
+
+    # vel_in = layers.Concatenate()([feat_vec, rot_prior])
     x = layers.GRU(64, return_sequences=True)(vel_in)
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
@@ -181,8 +182,9 @@ def fully_recurrent_net(args):
     rot_contrib = norm_activate(x, 'relu')
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
     vel_contrib = norm_activate(x, 'relu')
-
     pos_in = layers.Concatenate()([feat_vec, rot_contrib, vel_contrib])
+
+    # pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
     x = layers.GRU(64, return_sequences=True)(pos_in)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
