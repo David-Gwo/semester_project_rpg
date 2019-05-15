@@ -171,7 +171,7 @@ def fully_recurrent_net(args):
     rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_R")(x)
 
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
-    rot_contrib = norm_activate(x, 'relu')
+    rot_contrib = norm_activate(x, 'leakyRelu')
     vel_in = layers.Concatenate()([feat_vec, rot_contrib])
 
     # vel_in = layers.Concatenate()([feat_vec, rot_prior])
@@ -179,9 +179,9 @@ def fully_recurrent_net(args):
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
-    rot_contrib = norm_activate(x, 'relu')
+    rot_contrib = norm_activate(x, 'leakyRelu')
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
-    vel_contrib = norm_activate(x, 'relu')
+    vel_contrib = norm_activate(x, 'leakyRelu')
     pos_in = layers.Concatenate()([feat_vec, rot_contrib, vel_contrib])
 
     # pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
@@ -243,7 +243,10 @@ def fully_connected_net(args):
 def norm_activate(inputs, activation, do_norm=True, name=None):
     if do_norm:
         inputs = layers.BatchNormalization()(inputs)
-    inputs = layers.Activation(name=name, activation=activation)(inputs)
+    if activation == 'leakyRelu':
+        inputs = layers.LeakyReLU(name=name)(inputs)
+    else:
+        inputs = layers.Activation(name=name, activation=activation)(inputs)
     return inputs
 
 
