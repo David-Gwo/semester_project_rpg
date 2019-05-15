@@ -86,7 +86,7 @@ class PreIntegrationForwardDense(Layer):
         for i in range(sample_input_shape[1]):
             for j in range(i, sample_input_shape[1]):
                 recurrent_mask[i, j] = 1
-        recurrent_mask = np.tile(recurrent_mask[::-1, :], (output_channels, output_channels))
+        recurrent_mask = np.tile(recurrent_mask, (output_channels, output_channels))
 
         self.recurrent_mask = self.add_weight(
             shape=[self.total_recurrent_units, self.total_recurrent_units],
@@ -116,7 +116,8 @@ class PreIntegrationForwardDense(Layer):
 
         batch_size = recurrent_input.shape[0]
 
-        flat_recurrent = K.reshape(recurrent_input[:, :, :], (batch_size, self.total_recurrent_units))
+        # Flatten last two dimensions, but along dimension [2]
+        flat_recurrent = K.reshape(K.permute_dimensions(recurrent_input, (0, 2, 1)), (batch_size, -1))
         outputs = gen_math_ops.mat_mul(flat_recurrent, tf.math.multiply(self.recurrent_kernel, self.recurrent_mask))
 
         if self.use_bias:
@@ -124,7 +125,10 @@ class PreIntegrationForwardDense(Layer):
         if self.activation is not None:
             outputs = self.activation(outputs)
 
-        return K.reshape(outputs, (outputs.shape[0], self.target_shape[0], self.target_shape[1]))
+        # Transform back outputs to original shape
+        outputs = K.reshape(K.transpose(outputs), (self.target_shape[0], self.target_shape[1], batch_size))
+        outputs = K.reshape(outputs, (self.target_shape[1], self.target_shape[0], batch_size))
+        return K.permute_dimensions(outputs, (2, 1, 0))
 
 
 class ExponentialRemappingLayer(Layer):
@@ -149,17 +153,6 @@ class DiffConcatenationLayer(Layer):
         return apply_state_diff(inputs[0], inputs[1])
 
 
-class FinalPreIntegration(Layer):
-    def __init__(self, name=None):
-        super(FinalPreIntegration, self).__init__(name=name, trainable=False)
-
-    def call(self, inputs, **kwargs):
-        if not inputs[0].shape[0]:
-            return K.concatenate([inputs[2][:, -1, :], inputs[1][:, -1, :], K.placeholder([None, 4])])
-
-        return K.concatenate([inputs[2][:, -1, :], inputs[1][:, -1, :], exp_mapping(inputs[0][:, -1, :])])
-
-
 class IntegratingLayer(Layer):
     def __init__(self, name=None):
         super(IntegratingLayer, self).__init__(name=name, trainable=False)
@@ -171,13 +164,17 @@ class IntegratingLayer(Layer):
             return inputs[0]
 
         state_in = inputs[0]
-        pre_integration = inputs[1]
+        pre_int_vecs = inputs[1]
+        pre_int_rot = exp_mapping(pre_int_vecs[0][:, -1, :])
+        pre_int_vel = pre_int_vecs[1][:, -1, :]
+        pre_int_pos = pre_int_vecs[2][:, -1, :]
+
         total_dt = K.expand_dims(K.sum(K.squeeze(K.squeeze(inputs[2], axis=2), axis=2), axis=1), 1) / 1000
 
-        rot_f = rotate_quat(state_in[:, 6:], pre_integration[:, 6:])
+        rot_f = rotate_quat(state_in[:, 6:], pre_int_rot)
         vel_f = state_in[:, 3:6] + gen_math_ops.mat_mul(total_dt, self.g_vec) + \
-            rotate_vec(pre_integration[:, 3:6], state_in[:, 6:])
+            rotate_vec(pre_int_vel, state_in[:, 6:])
         pos_f = state_in[:, :3] + math_ops.multiply(state_in[:, 3:6], total_dt) + \
-            1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_integration[:, :3], state_in[:, 6:])
+            1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_int_pos, state_in[:, 6:])
 
         return concat([pos_f, vel_f, rot_f], axis=1)

@@ -189,9 +189,7 @@ def fully_recurrent_net(args):
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
-
-    # x = custom_layers.FinalPreIntegration()([rot_prior, v_prior, p_prior])
-
+    #
     # x = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(rot_prior, axis=3))
     # y = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(v_prior, axis=3))
     # z = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(p_prior, axis=3))
@@ -201,10 +199,9 @@ def fully_recurrent_net(args):
     # x = layers.Reshape(rot_prior.shape[1:])(x)
     # y = layers.Reshape(v_prior.shape[1:])(y)
     # z = layers.Reshape(p_prior.shape[1:])(z)
-    # x = custom_layers.FinalPreIntegration()([x, y, z])
-
-    # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, x, dt_vec])
-
+    #
+    # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, (x, y, z), dt_vec])
+    #
     # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
 
 
