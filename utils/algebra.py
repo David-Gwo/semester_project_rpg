@@ -63,6 +63,21 @@ def inv_rotate_quat(q1, q2):
     return q2 * q1.inverse
 
 
+def q_inv(q):
+    """
+    Returns the inverse of quaternion q
+    :param q: Rotation quaternion
+    :return: The inverse quaternion
+    """
+
+    if len(np.shape(q)) == 2:
+        return np.array([Quaternion(q_i).inverse.elements for q_i in q])
+    elif len(np.shape(q)) == 1:
+        return np.array(Quaternion(q).inverse.elements)
+    else:
+        raise TypeError("The initial quaternion must be a vector or a 2D array")
+
+
 def rotate_quat(q1, q2):
     """
     Applies the rotation described by q2 to q1

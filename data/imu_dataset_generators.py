@@ -1,6 +1,6 @@
 import numpy as np
 import collections
-from utils.algebra import log_mapping, exp_mapping, quaternion_error, rotate_vec
+from utils.algebra import log_mapping, exp_mapping, quaternion_error, rotate_vec, q_inv, correct_quaternion_flip
 from tensorflow.python.keras.utils import Progbar
 from pyquaternion import Quaternion
 
@@ -247,15 +247,15 @@ class StatePredictionDataset:
             cum_dt_vec = np.cumsum(imu_window[i, :, -1, 0]) / 1000
 
             # We calculate the quaternion that rotates q(i) to q(i+t) for all t in [0, window_len], and map it to so(3)
-            pre_int_rot[i, :, :] = log_mapping(
-                np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i+window_len, 6:])]))
+            pre_int_q = np.array([q.elements for q in quaternion_error(qi, gt_augmented[i:i + window_len, 6:])])
+            pre_int_rot[i, :, :] = log_mapping(correct_quaternion_flip(pre_int_q))
 
             g_contrib = np.expand_dims(cum_dt_vec * g_val, axis=1)*np.array([0, 0, 1])
-            pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi - g_contrib, qi)
+            pre_int_v[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 3:6] - vi - g_contrib, q_inv(qi))
 
             v_contrib = np.multiply(np.expand_dims(cum_dt_vec, axis=1), vi)
             g_contrib = 1/2 * np.expand_dims(cum_dt_vec ** 2 * g_val, axis=1)*np.array([0, 0, 1])
-            pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi - v_contrib - g_contrib, qi)
+            pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi - v_contrib - g_contrib, q_inv(qi))
 
             prog_bar.update(i+2)
 
