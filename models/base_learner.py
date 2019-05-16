@@ -79,9 +79,9 @@ class Learner(object):
 
         print(trainable_model.summary())
 
-        loss_connections = {"pre_integrated_R": 'mae',
-                            "pre_integrated_v": 'mae',
-                            "pre_integrated_p": 'mae', }
+        loss_connections = {"pre_integrated_R": 'mse',
+                            "pre_integrated_v": 'mse',
+                            "pre_integrated_p": 'mse', }
                             # "state_output": state_loss}
 
         if not is_testing:
