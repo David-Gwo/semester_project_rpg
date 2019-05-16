@@ -1,0 +1,4 @@
+[submodule "catkin_ws/src/rpg_vi_simulation"]
+	path = catkin_ws/src/rpg_vi_simulation
+	url = https://github.com/uzh-rpg/rpg_vi_simulation
+	branch = master

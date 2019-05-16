@@ -104,6 +104,7 @@ class PreIntegrationForwardDense(Layer):
 
         self.built = True
 
+    @tf.function()
     def call(self, inputs, **kwargs):
 
         if not inputs.shape[0]:
