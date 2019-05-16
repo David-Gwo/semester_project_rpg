@@ -35,3 +35,6 @@
 [submodule "catkin_ws/src/ceres_catkin"]
 	path = catkin_ws/src/ceres_catkin
 	url = git@github.com:ethz-asl/ceres_catkin.git
+[submodule "catkin_ws/src/ze_oss"]
+	path = catkin_ws/src/ze_oss
+	url = https://github.com/tmguillem/ze_oss
