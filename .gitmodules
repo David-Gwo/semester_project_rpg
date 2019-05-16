@@ -29,9 +29,6 @@
 [submodule "catkin_ws/src/rpg_vi_utils"]
 	path = catkin_ws/src/rpg_vi_utils
 	url = git@github.com:uzh-rpg/rpg_vi_utils.git
-[submodule "catkin_ws/src/ze_oss"]
-	path = catkin_ws/src/ze_oss
-	url = git@github.com:zhangzichao/ze_oss.git
 [submodule "catkin_ws/src/opengv"]
 	path = catkin_ws/src/opengv
 	url = git@github.com:ethz-asl/opengv.git
