@@ -1,5 +1,6 @@
 import subprocess
 import gflags
+import yaml
 import sys
 import csv
 import os
@@ -39,30 +40,17 @@ class GenGT(GT):
         self.att = data[4:8]
 
 
-class BlackbirdDSManager(InertialDataset):
+class GenDSManager(InertialDataset):
     def __init__(self, *args):
-        super(BlackbirdDSManager, self).__init__()
-
-        self.sampling_freq = 100
-
+        super(GenDSManager, self).__init__()
         self.ds_flags = FLAGS
+        self.simulation_dir = "./catkin_ws/src/ze_vi_simulation/"
+        self.params_file = "{0}vi_sim_interface/exp_configs/{1}.yaml".format(self.simulation_dir,
+                                                                             self.ds_flags.dataset_version)
+        self.ds_gen_config_file = None
+        self.sampling_freq = None
 
-        # Accepted Blackbird parameters
-        self.valid_yaw_types = ["yawConstant", "yawForward"]
-        self.valid_trajectory_names = \
-            ["3dFigure8", "ampersand", "bentDice", "clover", "dice", "figure8", "halfMoon",
-             "mouse", "oval", "patrick", "picasso", "sid", "sphinx", "star", "thrice", "tiltedThrice", "winter"]
-        self.valid_max_speeds = [0.5, 1, 2, 3, 4, 5, 6, 7]
-
-        # Inner pipeline variables
-        self.gt_file_name = "poses.csv"
-        self.data_file_name = "data.bag"
-        self.csv_imu_file_name = "data/_slash_blackbird_slash_imu.csv"
-        self.bag2csv_script = "./data/utils/convert_bag_to_csv.sh"
-
-        self.blackbird_local_dir = './data/dataset/blackbird_dataset/'
-        self.blackbird_url = 'http://blackbird-dataset.mit.edu/BlackbirdDatasetData'
-        self.rosbag_topics = '/blackbird/imu'
+        self.ds_params = self.get_ds_params()
 
         try:
             _ = FLAGS(args)  # parse flags
@@ -72,6 +60,15 @@ class BlackbirdDSManager(InertialDataset):
 
         self.ds_version = self.get_dataset_version()
         self.ds_local_dir = "{0}{1}/".format(self.blackbird_local_dir, self.ds_version)
+
+    def get_ds_params(self):
+
+        with open(self.params_file, 'r') as stream:
+            try:
+                print(yaml.safe_load(stream))
+            except yaml.YAMLError as exc:
+                print(exc)
+
 
     @staticmethod
     def encode_max_speed(max_speed):
