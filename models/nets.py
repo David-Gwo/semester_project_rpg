@@ -164,27 +164,24 @@ def fully_recurrent_net(args):
     gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels, window_len, final_shape, n_iterations)
     acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations)
 
-    imu_in_squeeze = layers.Reshape(imu_input_shape[:-1])(imu_in)
-    feat_vec = layers.Concatenate()([imu_in_squeeze, gyro_feat_vec, acc_feat_vec])
-
-    x = layers.GRU(64, return_sequences=True)(feat_vec)
+    # Pre-integrated rotation
+    rot_feat_vec = layers.Concatenate()([k_b.squeeze(gyro, axis=-1), gyro_feat_vec])
+    x = layers.GRU(64, return_sequences=True)(rot_feat_vec)
     rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_R")(x)
 
+    # Pre-integrated velocity
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
     rot_contrib = norm_activate(x, 'leakyRelu')
-    vel_in = layers.Concatenate()([feat_vec, rot_contrib])
-
-    # vel_in = layers.Concatenate()([feat_vec, rot_prior])
-    x = layers.GRU(64, return_sequences=True)(vel_in)
+    v_feat_vec = layers.Concatenate()([k_b.squeeze(acc, axis=-1), acc_feat_vec, rot_contrib])
+    x = layers.GRU(64, return_sequences=True)(v_feat_vec)
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
+    # Pre-integrated position
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
     rot_contrib = norm_activate(x, 'leakyRelu')
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
     vel_contrib = norm_activate(x, 'leakyRelu')
-    pos_in = layers.Concatenate()([feat_vec, rot_contrib, vel_contrib])
-
-    # pos_in = layers.Concatenate()([feat_vec, rot_prior, v_prior])
+    pos_in = layers.Concatenate()([k_b.squeeze(acc, axis=-1), acc_feat_vec, rot_contrib, vel_contrib])
     x = layers.GRU(64, return_sequences=True)(pos_in)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 

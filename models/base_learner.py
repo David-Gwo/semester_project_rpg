@@ -88,7 +88,7 @@ class Learner(object):
             loss_weight = {'pre_integrated_R': 1.0,
                            "pre_integrated_v": 1.0,
                            "pre_integrated_p": 1.0, }
-                           # "state_output": 1.0}
+                           # "state_output": .1}
 
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
                                     loss=loss_connections,
@@ -164,12 +164,19 @@ class Learner(object):
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
         val_steps_per_epoch = int(math.ceil((ds_lengths[1]/self.config.batch_size)))
 
+        def lr_scheduler(epoch, lr):
+            decay_rate = 0.5
+            if epoch % 5 == 0 and epoch:
+                return lr * decay_rate
+            return lr
+
         keras_callbacks = [
             callbacks.EarlyStopping(patience=self.config.patience, monitor='val_loss'),
             callbacks.TensorBoard(
                 write_images=True,
                 log_dir=self.config.checkpoint_dir + model_number + "/keras",
                 histogram_freq=self.config.summary_freq),
+            callbacks.LearningRateScheduler(lr_scheduler, verbose=1),
             CustomModelCheckpoint(
                 filepath=os.path.join(
                     self.config.checkpoint_dir + model_number, self.config.model_name + "_{epoch:02d}.h5"),
