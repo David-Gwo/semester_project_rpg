@@ -1,3 +1,40 @@
 [submodule "catkin_ws/src/rpg_vi_simulation"]
 	path = catkin_ws/src/rpg_vi_simulation
 	url = https://github.com/tmguillem/rpg_vi_simulation
+[submodule "catkin_ws/src/catkin_simple"]
+	path = catkin_ws/src/catkin_simple
+	url = git@github.com:catkin/catkin_simple.git
+[submodule "catkin_ws/src/eigen_catkin"]
+	path = catkin_ws/src/eigen_catkin
+	url = git@github.com:ethz-asl/eigen_catkin.git
+[submodule "catkin_ws/src/glog_catkin"]
+	path = catkin_ws/src/glog_catkin
+	url = git@github.com:ethz-asl/glog_catkin.git
+[submodule "catkin_ws/src/minkindr"]
+	path = catkin_ws/src/minkindr
+	url = git@github.com:ethz-asl/minkindr.git
+	branch = e6033edb46c7579fff1c35a1cfd38e8e26b891f1
+[submodule "catkin_ws/src/eigen_checks"]
+	path = catkin_ws/src/eigen_checks
+	url = git@github.com:ethz-asl/eigen_checks.git
+[submodule "catkin_ws/src/gflags_catkin"]
+	path = catkin_ws/src/gflags_catkin
+	url = git@github.com:ethz-asl/gflags_catkin.git
+[submodule "catkin_ws/src/minkindr_ros"]
+	path = catkin_ws/src/minkindr_ros
+	url = git@github.com:ethz-asl/minkindr_ros.git
+[submodule "catkin_ws/src/rpg_common"]
+	path = catkin_ws/src/rpg_common
+	url = git@github.com:uzh-rpg/rpg_common.git
+[submodule "catkin_ws/src/rpg_vi_utils"]
+	path = catkin_ws/src/rpg_vi_utils
+	url = git@github.com:uzh-rpg/rpg_vi_utils.git
+[submodule "catkin_ws/src/ze_oss"]
+	path = catkin_ws/src/ze_oss
+	url = git@github.com:zhangzichao/ze_oss.git
+[submodule "catkin_ws/src/opengv"]
+	path = catkin_ws/src/opengv
+	url = git@github.com:ethz-asl/opengv.git
+[submodule "catkin_ws/src/ceres_catkin"]
+	path = catkin_ws/src/ceres_catkin
+	url = git@github.com:ethz-asl/ceres_catkin.git
