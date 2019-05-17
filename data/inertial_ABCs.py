@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from pyquaternion import Quaternion
 from abc import ABC, abstractmethod
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.externals import joblib
@@ -11,6 +12,7 @@ from data.utils.data_utils import filter_with_coeffs, interpolate_ts
 
 class IMU:
     def __init__(self):
+        # Timestamp in ns!!
         self.timestamp = 0.0
         self.gyro = np.array([0.0, 0.0, 0.0])
         self.acc = np.array([0.0, 0.0, 0.0])
@@ -25,6 +27,8 @@ class IMU:
 
 class GT:
     def __init__(self):
+        # Timestamp expected in ns!!
+
         self.timestamp = 0.0
         self.pos = np.array([0.0, 0.0, 0.0])
         self.att = np.array([0.0, 0.0, 0.0, 0.0])
@@ -48,6 +52,24 @@ class GT:
     def unroll(self):
         return self.pos, self.vel, self.att, self.ang_vel, self.acc, self.timestamp
 
+    def integrate(self, gt_old, int_pos=True, int_att=True):
+        """
+        Integrates position and attitude. Saves integrated values to current GT object
+
+        :param gt_old: GT from previous timestamp
+        :param int_pos: whether position should be integrated, or velocity is already available instead
+        :param int_att: whether attitude should be integrated, or angular velocity is already available instead
+        """
+
+        # TODO: implement angular velocity integration
+
+        dt = (self.timestamp - gt_old.timestamp) * 10e-6
+        if int_pos:
+            self.vel = (self.pos - gt_old.pos) / dt
+        if int_att:
+            att_q = Quaternion(self.att[0], self.att[1], self.att[2], self.att[3])
+            self.ang_vel = self.ang_vel
+
 
 class InertialDataset(ABC):
     @abstractmethod
@@ -66,9 +88,9 @@ class InertialDataset(ABC):
         assert self.ds_local_dir is not None, "Directory has not yet been set"
         return self.ds_local_dir
 
-    def pre_process_data(self, gyro_scale_file, acc_scale_file, filter_freq):
+    def basic_preprocessing(self, gyro_scale_file, acc_scale_file, filter_freq):
         """
-        Pre-process euroc dataset (apply low-pass filter and minmax scaling)
+        Pre-process dataset (apply low-pass filter and minmax scaling)
 
         :param gyro_scale_file: file to save pre-processing functions for gyroscope
         :param acc_scale_file: file to save pre-processing functions for accelerometer

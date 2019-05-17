@@ -4,8 +4,6 @@ from sklearn.externals import joblib
 
 from data.imu_dataset_generators import StatePredictionDataset
 from data.utils.data_utils import save_train_and_test_datasets, load_mat_data
-from data.utils.blackbird_utils import BlackbirdDSManager
-from data.utils.euroc_utils import EurocDSManager
 from utils.directories import add_text_to_txt_file
 
 
@@ -37,9 +35,14 @@ class DatasetManager:
         self.dataset_formatting = None
 
         if dataset_name == 'blackbird':
+            from data.utils.blackbird_utils import BlackbirdDSManager
             self.dataset = BlackbirdDSManager()
         elif dataset_name == 'euroc':
+            from data.utils.euroc_utils import EurocDSManager
             self.dataset = EurocDSManager()
+        elif dataset_name == 'simulated':
+            from data.utils.simulated_ds_utils import GenDSManager
+            self.dataset = GenDSManager()
         else:
             raise NameError("Invalid dataset name")
 
