@@ -6,7 +6,7 @@ from tensorflow.python.keras import callbacks
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
-from models.nets import fully_recurrent_net as prediction_network
+from models.nets import cnn_rnn_pre_int_net as prediction_network
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
 from models.test_experiments import ExperimentManager
@@ -165,7 +165,7 @@ class Learner(object):
 
         def lr_scheduler(epoch, lr):
             decay_rate = 0.5
-            if epoch % 5 == 0 and epoch:
+            if epoch % 7 == 0 and epoch:
                 return lr * decay_rate
             return lr
 

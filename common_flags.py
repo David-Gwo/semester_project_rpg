@@ -3,7 +3,7 @@ FLAGS = gflags.FLAGS
 
 
 # Main parameters
-gflags.DEFINE_string("model_name", "flat_model", "Name for the deep model")
+gflags.DEFINE_string("model_name", "lstm_perfect_ds", "Name for the deep model")
 
 # Train parameters
 gflags.DEFINE_integer('batch_size', 32, 'Batch size in training and evaluation')
@@ -17,8 +17,7 @@ gflags.DEFINE_integer('window_length', 50, 'The number of past samples used to p
 
 gflags.DEFINE_string('train_ds', 'blackbird', 'Which dataset to use for training')
 gflags.DEFINE_string('dataset_type', "windowed_imu_preintegration", 'Dataset structure to be built')
-gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')
-gflags.DEFINE_bool('resume_train', True, 'Whether to restore a trained model for training')
+gflags.DEFINE_bool('resume_train', False, 'Whether to restore a trained model for training')
 gflags.DEFINE_integer("resume_train_model_number", 6, "Which model number to resume training")
 
 # Log parameters
@@ -31,3 +30,4 @@ gflags.DEFINE_integer("test_model_number", 0, "Which model number to test")
 
 # Debugging parameters
 gflags.DEFINE_boolean('force_ds_remake', False, 'Whether to force re-processing of the dataset file')
+gflags.DEFINE_bool('plot_ds', False, 'Whether to plot the dataset during its generation')

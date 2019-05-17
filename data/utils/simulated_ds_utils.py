@@ -31,7 +31,7 @@ class GenGT(GT):
     def read(self, data):
         ts_indx = 0
         pos_indx = [1, 2, 3]
-        att_indx = [4, 5, 6, 7]
+        att_indx = [7, 4, 5, 6]  # w,x,y,z
         vel_indx = [8, 9, 10]
 
         data = data.astype(np.float)

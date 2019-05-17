@@ -143,7 +143,7 @@ def pre_integration_net(args):
     return Model(inputs=(imu_in, state_in), outputs=(pre_integrated_rot_flat, pre_integrated_v_flat, pre_integrated_p_flat))
 
 
-def fully_recurrent_net(args):
+def cnn_rnn_pre_int_net(args):
     window_len = args[0]
     n_iterations = args[1]
 
@@ -157,7 +157,7 @@ def fully_recurrent_net(args):
 
     gyro, acc, dt_vec = custom_layers.PreProcessIMU()(imu_in)
 
-    # Convolutional features
+    # Convolution features
     channels = [2**i for i in range(2, 2 + n_iterations + 1)]
     final_shape = (pre_int_shape[0], pre_int_shape[1], channels[-1])
 
@@ -165,14 +165,13 @@ def fully_recurrent_net(args):
     acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations)
 
     # Pre-integrated rotation
-    rot_feat_vec = layers.Concatenate()([k_b.squeeze(gyro, axis=-1), gyro_feat_vec])
-    x = layers.GRU(64, return_sequences=True)(rot_feat_vec)
+    x = layers.GRU(64, return_sequences=True)(gyro_feat_vec)
     rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_R")(x)
 
     # Pre-integrated velocity
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
     rot_contrib = norm_activate(x, 'leakyRelu')
-    v_feat_vec = layers.Concatenate()([k_b.squeeze(acc, axis=-1), acc_feat_vec, rot_contrib])
+    v_feat_vec = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib])
     x = layers.GRU(64, return_sequences=True)(v_feat_vec)
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
@@ -181,22 +180,12 @@ def fully_recurrent_net(args):
     rot_contrib = norm_activate(x, 'leakyRelu')
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
     vel_contrib = norm_activate(x, 'leakyRelu')
-    pos_in = layers.Concatenate()([k_b.squeeze(acc, axis=-1), acc_feat_vec, rot_contrib, vel_contrib])
+    pos_in = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib, vel_contrib])
     x = layers.GRU(64, return_sequences=True)(pos_in)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
-    #
-    # x = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(rot_prior, axis=3))
-    # y = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(v_prior, axis=3))
-    # z = layers.Conv2D(3, kernel_size=(3, 3), activation='relu', padding='same')(k_b.expand_dims(p_prior, axis=3))
-    # x = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(x)
-    # y = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(y)
-    # z = layers.Conv2D(1, kernel_size=(3, 3), activation='relu', padding='same')(z)
-    # x = layers.Reshape(rot_prior.shape[1:])(x)
-    # y = layers.Reshape(v_prior.shape[1:])(y)
-    # z = layers.Reshape(p_prior.shape[1:])(z)
-    #
+
     # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, (x, y, z), dt_vec])
     #
     # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
@@ -251,29 +240,32 @@ def norm_activate(inputs, activation, do_norm=True, name=None):
 def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape, max_iterations):
 
     # Define parameters for model
-    kernel_width = min([window_len, 2])
+    kernel_width = min([window_len, 3])
     pooling_width = min([window_len, 2])
 
     x_shrink = final_shape[0] - (2 ** max_iterations) * round(final_shape[0] / (2 ** max_iterations)) + 1
     if i == 0:
         x1 = layers.Conv2D(1, kernel_size=(x_shrink, 1), strides=(1, 1))(x1)
 
-    conv_kernel = (kernel_width, 4)
+    conv_kernel = (kernel_width, 1)
 
-    x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1), padding='same')(x1)
+    x2 = custom_layers.ReflectionPadding2D(padding=(0, 2))(x1)
+    x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1))(x2)
     x2 = norm_activate(x2, 'relu')
-    x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1), padding='same')(x2)
+    x2 = custom_layers.ReflectionPadding2D(padding=(0, 2))(x2)
+    x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1))(x2)
     x3 = norm_activate(x3, 'relu')
 
     if iterations > 0:
 
-        x_up = layers.Conv2D(conv_channels[i], kernel_size=(2, 1), strides=(2, 1), padding='same')(x3)
+        # Downscale
+        x_down = layers.Conv2D(conv_channels[i], kernel_size=(2, 1), strides=(2, 1), padding='same')(x3)
         x4 = layers.Conv2D(final_shape[-1], kernel_size=(1, 4))(x1)
         x4 = norm_activate(x4, 'relu')
 
-        x_up = down_scaling_loop(x_up, iterations - 1, i + 1, conv_channels, window_len, final_shape, max_iterations)
+        x_down = down_scaling_loop(x_down, iterations - 1, i + 1, conv_channels, window_len, final_shape, max_iterations)
         x_up = layers.Conv2DTranspose(conv_channels[-1], kernel_size=conv_kernel, strides=(pooling_width, 1),
-                                      padding='same')(x_up)
+                                      padding='same')(x_down)
 
         x4 = tf.add(x4, x_up)
 

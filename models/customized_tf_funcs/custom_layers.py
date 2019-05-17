@@ -1,4 +1,4 @@
-from tensorflow.python.keras.layers import Layer
+from tensorflow.python.keras.layers import Layer, InputSpec
 from tensorflow.python.ops import gen_math_ops, math_ops, nn
 from tensorflow.python.ops.array_ops import expand_dims, concat, ops
 from tensorflow.python.keras import activations, initializers
@@ -180,3 +180,18 @@ class IntegratingLayer(Layer):
             1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_int_pos, state_in[:, 6:])
 
         return concat([pos_f, vel_f, rot_f], axis=1)
+
+
+class ReflectionPadding2D(Layer):
+    def __init__(self, padding=(1, 1), **kwargs):
+        self.padding = tuple(padding)
+        self.input_spec = [InputSpec(ndim=4)]
+        super(ReflectionPadding2D, self).__init__(**kwargs)
+
+    def compute_output_shape(self, s):
+        """ If you are using "channels_last" configuration"""
+        return s[0], s[1] + 2 * self.padding[0], s[2] + 2 * self.padding[1], s[3]
+
+    def call(self, x, mask=None):
+        w_pad, h_pad = self.padding
+        return tf.pad(x, [[0, 0], [h_pad, h_pad], [w_pad, w_pad], [0, 0]], 'SYMMETRIC')
