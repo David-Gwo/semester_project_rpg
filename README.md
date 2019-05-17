@@ -3,13 +3,13 @@
 
 This repository is set-up for processing of Inertial datasets with ground truth pose estimates, with the objective of training deep models for Inertial Odometry using eager tensorflow with the keras backend. The code is set up to run with tensorflow (tf) 2.0.0a and python >= 3.5 (see [setup script](./setup.py)).
 
-The pipeline followed by this repo is mainly optimized for CPU training (as the Inertial Odometry problem deals with low-dimensional data and models can be trained within minutes or a few hours), but it can be run on GPU architectures as well. In summary, this repository:
+The pipeline followed by this repo is mainly thought for CPU training, but it can be run on GPU architectures as well, as far as tensorflow-gpu 2.0a is used. Additionally, this repository:
 1. Uses the simplified callback to Tensorboard to log and debug the training processwith tf 2.0 and the keras backend
 2. Builds a basic file structure that follows some basic good practices
 3. Ensures the process of model saving, stopping and resuming training using the keras checkpoint callback
-4. Enables easy processing of inertial datasets for supervised training, provided they have some format of ground truth data
+4. Enables easy processing of inertial datasets for supervised training with ground truth data.
 
-We have used this repository to work with the [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) and [BlackBird](https://github.com/mit-fast/Blackbird-Dataset) datasets, but other similar ones can be easily added. 
+We have used this repository to work with the [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) and [BlackBird](https://github.com/mit-fast/Blackbird-Dataset) datasets, but other similar ones can be easily added. Also, it includes the [rpg_vi_simulation](./catkin_ws/src/rpg_vi_simulation) ROS package for generating synthetic IMU data from ground truth position and attitude measurements. For more information about the latter, please refer to [its GitHub repo](https://github.com/tmguillem/rpg_vi_simulation)
 
 ## Table of Contents
 
@@ -22,12 +22,18 @@ We have used this repository to work with the [EuRoC](https://projects.asl.ethz.
 
 ## Installation
 
-To use properly this repository, we recommend setting up a python>=3.5 virtual environment, especially since at the time this readme is being written (May 2019), tensorflow 2.0 is still in alpha version. If you want to work with a native python3.x interpreter, you can skip to [dependencies installation](#install-dependencies). If you already have virtualenvwrapper installed, skip to [virtualenv creation](#make-a-new-virtualenv)
-
 ### Clone the repository
 ```
 git clone https://github.com/uzh-rpg/rpg_imu_prior_learning/
 ```
+
+### Download all the submodules
+```
+git submodule update --init --recursive
+```
+
+To use properly this repository, we recommend setting up a python>=3.5 virtual environment, especially since at the time this readme is being written (May 2019), tensorflow 2.0 is still in alpha version. If you want to work with a native python3.x interpreter, you can skip to [dependencies installation](#install-dependencies). If you already have virtualenvwrapper installed, skip to [virtualenv creation](#make-a-new-virtualenv)
+
 
 ### Install virtualenvwrapper for python 3
 ```
@@ -129,21 +135,22 @@ This is the complete list of editable flags, and their purpose
 #### [EuRoC](https://projects.asl.ethz.ch/datasets/doku.php?id=kmavvisualinertialdatasets) dataset
 
 The EuRoC dataset, which is smaller (only 11 recorded flights) and more format friendly than the blackbird. [This link](http://robotics.ethz.ch/~asl-datasets/ijrr_euroc_mav_dataset/machine_hall/MH_01_easy/MH_01_easy.zip) will download one instance of the 11 flights. The repository is prepared to accept the following data structure for the EuRoC dataset:
-  * `./data/`
-    * `dataset/`
-      * `EuRoC_dataset/`
-        * `dataset_0/`
-        * `dataset_1/`
-        * ...
+
+    └── /data/
+        └── dataset/
+            └── EuRoC_dataset/
+                ├── dataset_0/
+                ├── dataset_1/
+                └── ...
 
 Where each `dataset_i` represents one of these 11 flights. Inside each of these folders, the downloaded zip must be manually decompressed (and left as it comes out), such that:
 
-  * `dataset_i/`
-    * `mav_0/`
-      * `imu_0/`
-      * `state_groundtruth_estimate0/`
-      * (the rest of the folders can be deleted, as they contain images, which are not used)
-      
+    └── dataset_i/
+        └── mav_0/
+            ├── imu_0/
+            ├── state_groundtruth_estimate0/
+            └── (the rest of the folders can be deleted, as they contain images, which are not used)
+
 The model can only be trained on one dataset at a time, so the number of the EuRoC dataset must be specified in the [EuRoC flags file](./data/config/euroc_flags.py), by the `dataset_version` flag (e.g. dataset_version=dataset_3, to use the flight stored in folder EuRoC_dataset/dataset_3)
 
 #### [BlackBird](https://github.com/mit-fast/Blackbird-Dataset) dataset
@@ -158,11 +165,12 @@ The instance of the blackbird dataset to be used must be specified in the [black
 With these three values, a request will be made to extract the flight information (provided that the combination exists) to download the inertial and ground truth data. The inertial data, however, is compressed inside a rosbag with many other topics. A [shell script](./data/utils/convert_bag_to_csv.sh) has been created, which is run automatically by the pipeline, which calls [this ROS python script](./catkin_ws/src/bag2csv), that will automatically extract the IMU topic into a .csv file. This script **assumes the native default python interpreter is 2.7 and has ROS installed.** If that's not the case the bash script should be changed, maybe to use a python 2.7 venv.
 
 Once the .csv files have been extracted from the rosbag, the pipeline will use them to generate the dataset. Although all these processes are automatic, for the user's interest, this is the compact folder structure tree generated:
-  * `.data/dataset/blackbird_dataset/`
-    * `bentDice/yawForward/maxSpeed2p0/`
-      * `data/_slash_blackbird_slash_imu.csv`
-      * `data.bag`
-      * `poses.csv`
+
+    └── .data/dataset/blackbird_dataset/
+        └── bentDice/yawForward/maxSpeed2p0/
+            ├── data/_slash_blackbird_slash_imu.csv
+            ├── data.bag
+            └── poses.csv
       
  #### Adding a new dataset
  
