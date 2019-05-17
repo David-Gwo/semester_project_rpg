@@ -98,7 +98,7 @@ python setup.py install
  * [__results/__](): All the trained models will be kept in this directory (gitignored by default)
  * [__setup.py__](./setup.py): *Python setup script to install dependencies*
  * [__test.py__](./test.py): *Runnable test script*
- * [__train.py__](./train.py) * Runnable training script*
+ * [__train.py__](./train.py) *Runnable training script*
  * [__utils/__](./utils): *Any utilities for the training and testing scripts*
      * [__algebra.py__](./utils/algebra.py): *Algebra functions (e.g. quaternion/Lie algebra)*
      * [__directories.py__](./utils/directories.py): *Directory utilities*
