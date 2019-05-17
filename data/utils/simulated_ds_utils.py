@@ -5,6 +5,7 @@ import sys
 import numpy as np
 import pandas as pd
 
+from utils.directories import safe_mkdir_recursive
 from utils.algebra import correct_quaternion_flip
 from data.config.simulated_ds_flags import FLAGS
 from data.inertial_ABCs import IMU, GT, InertialDataset
@@ -26,17 +27,18 @@ class GenIMU(IMU):
 class GenGT(GT):
     def __init__(self):
         super(GenGT, self).__init__()
-        self.ts_indx = 0
-        self.pos_indx = [1, 2, 3]
-        self.att_indx = [4, 5, 6, 7]
-        self.vel_indx = [8, 9, 10]
 
     def read(self, data):
+        ts_indx = 0
+        pos_indx = [1, 2, 3]
+        att_indx = [4, 5, 6, 7]
+        vel_indx = [8, 9, 10]
+
         data = data.astype(np.float)
-        self.timestamp = data[self.ts_indx]
-        self.pos = data[self.pos_indx]
-        self.att = data[self.att_indx]
-        self.vel = data[self.vel_indx]
+        self.timestamp = data[ts_indx] * 10e6
+        self.pos = data[pos_indx]
+        self.att = data[att_indx]
+        self.vel = data[vel_indx]
 
 
 class GenDSManager(InertialDataset):
@@ -57,9 +59,14 @@ class GenDSManager(InertialDataset):
             print('Usage: %s ARGS\\n%s' % (sys.argv[0], FLAGS))
             sys.exit(1)
 
-        self.ds_local_dir = "{0}vi_sim_interface/sim_datasets/{1}".format(self.simulation_dir, self.dataset_name)
-        self.gt_file = "{0}interpolated_gt.txt".format(self.ds_local_dir)
-        self.imu_file = "{0}imu_meas.txt".format(self.ds_local_dir)
+        # The dataset data is found at the simulator directory
+        self.ds_dir = "{0}vi_sim_interface/sim_datasets/{1}".format(self.simulation_dir, self.dataset_name)
+        self.gt_file = "{0}interpolated_gt.txt".format(self.ds_dir)
+        self.imu_file = "{0}imu_meas.txt".format(self.ds_dir)
+
+        # But all the necessary files for training will be stored in the local datasets path
+        self.ds_local_dir = './data/dataset/simulated_datasets/{0}'.format(self.dataset_name)
+        safe_mkdir_recursive(self.ds_local_dir, overwrite=True)
 
     def get_ds_params(self):
         """
@@ -83,7 +90,7 @@ class GenDSManager(InertialDataset):
         f = open(imu_params, "r")
         for i, x in enumerate(f):
             if i == 0:
-                self.sampling_freq = x
+                self.sampling_freq = float(x)
             elif i == 5:
                 self.g_value = x
 
@@ -115,8 +122,8 @@ class GenDSManager(InertialDataset):
         self.interpolate_ground_truth()
 
         # Cut away last 5% samples (noisy measurements)
-        self.imu_data = self.imu_data[0:int(np.ceil(0.95 * len(self.imu_data)))]
-        self.gt_data = self.gt_data[0:int(np.ceil(0.95 * len(self.gt_data)))]
+        # self.imu_data = self.imu_data[0:int(np.ceil(0.95 * len(self.imu_data)))]
+        # self.gt_data = self.gt_data[0:int(np.ceil(0.95 * len(self.gt_data)))]
 
         return self.imu_data, self.gt_data
 

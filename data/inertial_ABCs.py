@@ -74,6 +74,7 @@ class GT:
 class InertialDataset(ABC):
     @abstractmethod
     def __init__(self):
+        # The four variables should be set by overriding class
         self.imu_data = None
         self.gt_data = None
         self.sampling_freq = None

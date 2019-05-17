@@ -16,14 +16,14 @@ from data.utils.data_utils import get_file_from_url
 class BBIMU(IMU):
     def __init__(self):
         super(BBIMU, self).__init__()
-        self.gyro_indx = [14, 15, 16]
-        self.acc_indx = [19, 20, 21]
 
     def read(self, data):
+        gyro_indx = [14, 15, 16]
+        acc_indx = [19, 20, 21]
         data = np.array(data)
         self.timestamp = data[0].astype(np.float) / 1000
-        self.gyro = data[self.gyro_indx].astype(np.float)
-        self.acc = data[self.acc_indx].astype(np.float)
+        self.gyro = data[gyro_indx].astype(np.float)
+        self.acc = data[acc_indx].astype(np.float)
 
 
 class BBGT(GT):

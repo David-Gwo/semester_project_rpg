@@ -11,8 +11,6 @@ from data.config.euroc_flags import FLAGS
 class EurocIMU(IMU):
     def __init__(self):
         super(EurocIMU, self).__init__()
-        self.gyro_indx = [14, 15, 16]
-        self.acc_indx = [19, 20, 21]
 
     def read(self, data):
         data = np.array(data)
