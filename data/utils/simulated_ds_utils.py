@@ -66,7 +66,7 @@ class GenDSManager(InertialDataset):
 
         # But all the necessary files for training will be stored in the local datasets path
         self.ds_local_dir = './data/dataset/simulated_datasets/{0}'.format(self.dataset_name)
-        safe_mkdir_recursive(self.ds_local_dir, overwrite=True)
+        safe_mkdir_recursive(self.ds_local_dir, overwrite=False)
 
     def get_ds_params(self):
         """
@@ -120,10 +120,6 @@ class GenDSManager(InertialDataset):
 
         self.read_synthetic_data()
         self.interpolate_ground_truth()
-
-        # Cut away last 5% samples (noisy measurements)
-        # self.imu_data = self.imu_data[0:int(np.ceil(0.95 * len(self.imu_data)))]
-        # self.gt_data = self.gt_data[0:int(np.ceil(0.95 * len(self.gt_data)))]
 
         return self.imu_data, self.gt_data
 

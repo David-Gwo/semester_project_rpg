@@ -99,8 +99,8 @@ class Learner(object):
 
         self.trainable_model = trainable_model
 
-    def get_dataset(self, train, val_split, shuffle, plot=False, const_batch_size=False, normalize=True,
-                    repeat_ds=False, tensorflow_format=True):
+    def get_dataset(self, train, val_split, shuffle, const_batch_size=False, normalize=True, repeat_ds=False,
+                    tensorflow_format=True):
 
         force_remake = self.config.force_ds_remake
 
@@ -119,7 +119,7 @@ class Learner(object):
                                            batch_size=self.config.batch_size,
                                            validation_split=val_split,
                                            train=train,
-                                           plot=plot,
+                                           plot=self.config.plot_ds,
                                            shuffle=shuffle,
                                            full_batches=const_batch_size,
                                            normalize=normalize,
@@ -157,7 +157,6 @@ class Learner(object):
                                    val_split=True,
                                    shuffle=False,
                                    repeat_ds=True,
-                                   plot=self.config.plot_ds,
                                    normalize=False)
         train_ds, validation_ds, ds_lengths = dataset
 
@@ -258,7 +257,6 @@ class Learner(object):
         train = False
         val_split = False
         const_batch_size = False
-        plot = False
         shuffle = False
         normalize = True
         repeat_ds = False
@@ -274,7 +272,6 @@ class Learner(object):
         dataset = self.get_dataset(train=train,
                                    val_split=val_split,
                                    const_batch_size=const_batch_size,
-                                   plot=plot,
                                    shuffle=shuffle,
                                    normalize=normalize,
                                    repeat_ds=repeat_ds,
