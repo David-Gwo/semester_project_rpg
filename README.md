@@ -180,7 +180,8 @@ Adding a new dataset so it's fully compatible with the pipeline is simple. The f
     * The classes `GT` and `IMU` are used to read the ground truth and IMU data respectively. For each one, the method `read()` must be implemented
     * `InertialDataset` is the third abstract class to be implented, which provides and processes each dataset according to its specific needs. In fact, two methods from this class must be completed:
       * `get_raw_ds()`: which returns the IMU and ground truth data using the GT and IMU based classes. This method might get as complicated as the user wants. For instance, for the blackbird dataset, it performs the http request to download the data, decompresses the rosbags into csv files and constructs the data. For EuRoC, it assumes that the files are already downloaded. 
-      * `pre_process_data()`: which does any kind of pre-processing needed. There are some pre-processing functions available to call in the ABC which can be called using `super()`. 
+      * `pre_process_data()`: which does any kind of pre-processing needed. There is one basic pre-processing function in the `super` class called `basic_pre_processing()` which performs a low-pass filtering that can be used if needed.
+      * Assign the values to the class variables `ds_local_dir` and `sampling_freq`, which contain the location of the dataset within the repository (e.g. `./data/dataset/EuRoC/`, and the sampling frequency of the IMU used (e.g. 200 [Hz])
     * Add the new implementation of `InertialDataset` to the [DatasetManager](./data/inertial_dataset_manager.py) class (see lines 39-44
         
 If all these classes are methods are completed properly, the dataset should be fully embedded in the pipeline with any further effort.
