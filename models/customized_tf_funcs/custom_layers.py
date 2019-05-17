@@ -104,7 +104,6 @@ class PreIntegrationForwardDense(Layer):
 
         self.built = True
 
-    @tf.function()
     def call(self, inputs, **kwargs):
 
         if not inputs.shape[0]:
@@ -129,7 +128,9 @@ class PreIntegrationForwardDense(Layer):
         # Transform back outputs to original shape
         outputs = K.reshape(K.transpose(outputs), (self.target_shape[0], self.target_shape[1], batch_size))
         outputs = K.reshape(outputs, (self.target_shape[1], self.target_shape[0], batch_size))
-        return K.permute_dimensions(outputs, (2, 1, 0))
+        outputs = K.permute_dimensions(outputs, (2, 1, 0))
+
+        return outputs
 
 
 class ExponentialRemappingLayer(Layer):
