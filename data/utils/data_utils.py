@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import signal
 from scipy.interpolate import interp1d
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 from tensorflow.python.keras import datasets as k_ds
 from tensorflow.python.keras.utils import to_categorical
@@ -167,26 +168,46 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
     :return:
     """
 
-    if plot_stft:
-        assert sampling_f is not None, "A sampling frequency must be specified to plot the STFT"
-        plt.figure()
-        f, t, stft = signal.stft(time_series[:, 0], sampling_f)
-        plt.subplot(2, 1, 1)
-        plt.pcolormesh(t, f, np.abs(stft))
-        plt.title('STFT Magnitude')
-        plt.ylabel('Frequency [Hz]')
-        plt.xlabel('Time [sec]')
-
     filtered_signal = signal.lfilter(b, a, time_series, axis=0)
 
     if plot_stft:
-        f, t, stft = signal.stft(filtered_signal[:, 0], 200)
-        plt.subplot(2, 1, 2)
-        plt.pcolormesh(t, f, np.abs(stft))
-        plt.title('STFT Magnitude')
-        plt.ylabel('Frequency [Hz]')
-        plt.xlabel('Time [sec]')
-        plt.show()
+        assert sampling_f is not None, "A sampling frequency must be specified to plot the STFT"
+        figure = plt.figure()
+        figure.tight_layout()
+        time_series_dim = time_series.shape[1]
+
+        grid1 = ImageGrid(figure, 111, nrows_ncols=(2, time_series_dim), axes_pad=0.15, share_all=True,
+                          cbar_location="right", cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
+        axes = grid1.axes_all
+
+        stft = []
+        t = f = None
+        for i in range(time_series_dim):
+            f, t, stft1 = signal.stft(time_series[:, i], sampling_f)
+            f, t, stft2 = signal.stft(filtered_signal[:, i], sampling_f)
+
+            stft.append(np.log(np.abs(stft1)))
+            stft.append(np.log(np.abs(stft2)))
+
+        vmax = np.amax(stft)
+        vmin = np.amin(stft)
+        im = None
+        for i in range(time_series_dim):
+            ax = axes[i]
+            ax.pcolormesh(t, f, stft[i * 2], vmin=vmin, vmax=vmax)
+            if i == 0:
+                ax.set_ylabel('Frequency [Hz] Raw')
+
+            ax = axes[i + time_series_dim]
+
+            im = ax.pcolormesh(t, f, stft[i * 2 + 1], vmin=vmin, vmax=vmax)
+            if i == 0:
+                ax.set_ylabel('Frequency [Hz] Filtered')
+            ax.set_xlabel('Time [sec]')
+
+        grid1.cbar_axes[0].colorbar(im)
+
+        return filtered_signal, figure
 
     return filtered_signal
 

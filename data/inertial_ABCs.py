@@ -79,6 +79,8 @@ class InertialDataset(ABC):
         self.gt_data = None
         self.sampling_freq = None
         self.ds_local_dir = None
+
+        self.plot_stft = False
         ...
 
     @abstractmethod
@@ -108,31 +110,38 @@ class InertialDataset(ABC):
 
         # Get number of channels per data type (we subtract 1 because timestamp is not a channel we want to filter)
         imu_channels = np.shape(imu_unroll)[1] - 1
-        gt_channels = np.shape(gt_unroll)[1] - 1
 
         # Design butterworth filter
         fs = self.sampling_freq  # Sample frequency (Hz)
         f0 = filter_freq  # Frequency to be removed from signal (Hz)
         w0 = f0 / (fs / 2)  # Normalized Frequency
-        [b_bw, a_bw] = butterworth_filter(10, w0, output='ba')
+        [b_bw, a_bw] = butterworth_filter(3, w0, output='ba')
 
-        imu_data = np.stack([filter_with_coeffs(a_bw, b_bw, imu_unroll[:, i], fs) for i in range(imu_channels)],
-                            axis=1)
-        gt_data = np.stack([filter_with_coeffs(a_bw, b_bw, gt_unroll[:, i], fs) for i in range(gt_channels)],
-                           axis=1)
+        for i, tit in zip(range(imu_channels), ("log(STFT) gyro", "log(STFT) acc")):
+            filt_res = filter_with_coeffs(a_bw, b_bw, np.stack(imu_unroll[:, i]), fs, self.plot_stft)
+            if self.plot_stft:
+                fig = filt_res[1]
+                imu_unroll[:, i] = [tuple(j) for j in filt_res[0]]
+                fig.suptitle(tit)
+                fig.axes[0].set_title("x")
+                fig.axes[1].set_title("y")
+                fig.axes[2].set_title("z")
+                fig.show()
+            else:
+                imu_unroll[:, i] = [tuple(j) for j in filt_res]
 
         scale_g = MinMaxScaler()
-        scale_g.fit(np.stack(imu_data[:, 0]))
+        scale_g.fit(np.stack(imu_unroll[:, 0]))
         scale_a = MinMaxScaler()
-        scale_a.fit(np.stack(imu_data[:, 1]))
+        scale_a.fit(np.stack(imu_unroll[:, 1]))
 
         joblib.dump(scale_g, self.get_ds_directory() + gyro_scale_file)
         joblib.dump(scale_a, self.get_ds_directory() + acc_scale_file)
 
         # Add back the timestamps to the data matrix and return
         # Careful -> data from now on is in numpy format, instead of GT and IMU format
-        self.imu_data = np.append(imu_data, np.expand_dims(imu_unroll[:, -1], axis=1), axis=1)
-        self.gt_data = np.append(gt_data, np.expand_dims(gt_unroll[:, -1], axis=1), axis=1)
+        self.imu_data = imu_unroll
+        self.gt_data = gt_unroll
 
         return self.imu_data, self.gt_data
     
@@ -185,54 +194,79 @@ class InertialDataset(ABC):
         :return:
         """
 
+        self.plot_stft = True
+        x_axis = np.linspace(0, len(self.imu_data)/self.sampling_freq, len(self.imu_data))
+
         if from_numpy:
             fig = plt.figure()
+            fig.tight_layout()
             ax = fig.add_subplot(2, 1, 1)
-            ax.plot(np.stack(self.imu_data[:, 0]))
+            ax.plot(x_axis, np.stack(self.imu_data[:, 0]))
             ax.set_title("IMU: gyroscope")
+            ax.legend(['x', 'y', 'z'])
+            ax.set_ylabel('rad/s')
             ax = fig.add_subplot(2, 1, 2)
-            ax.plot(np.stack(self.imu_data[:, 1]))
+            ax.plot(x_axis, np.stack(self.imu_data[:, 1]))
             ax.set_title("IMU: accelerometer")
+            ax.legend(['x', 'y', 'z'])
+            ax.set_ylabel(r'$m/s^{2}$')
+            ax.set_xlabel('s')
             fig.suptitle(title)
 
             fig = plt.figure()
+            fig.tight_layout()
             ax = fig.add_subplot(2, 2, 1)
-            ax.plot(np.stack(self.gt_data[:, 0]))
+            ax.plot(x_axis, np.stack(self.gt_data[:, 0]))
             ax.set_title("GT: position")
+            ax.legend(['x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 2)
-            ax.plot(np.stack(self.gt_data[:, 1]))
+            ax.plot(x_axis, np.stack(self.gt_data[:, 1]))
             ax.set_title("GT: velocity")
+            ax.legend(['x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 3)
-            ax.plot(np.stack(self.gt_data[:, 2]))
+            ax.plot(x_axis, np.stack(self.gt_data[:, 2]))
             ax.set_title("GT: attitude")
+            ax.legend(['w', 'x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 4)
-            ax.plot(np.stack(self.gt_data[:, 3]))
+            ax.plot(x_axis, np.stack(self.gt_data[:, 3]))
             ax.set_title("GT: angular velocity")
+            ax.legend(['x', 'y', 'z'])
             fig.suptitle(title)
 
         else:
             fig = plt.figure()
+            fig.tight_layout()
             ax = fig.add_subplot(2, 1, 1)
-            ax.plot([imu.gyro for imu in self.imu_data])
+            ax.plot(x_axis, [imu.gyro for imu in self.imu_data])
             ax.set_title("IMU: gyroscope")
+            ax.legend(['x', 'y', 'z'])
+            ax.set_ylabel('rad/s')
             ax = fig.add_subplot(2, 1, 2)
-            ax.plot([imu.acc for imu in self.imu_data])
+            ax.plot(x_axis, [imu.acc for imu in self.imu_data])
             ax.set_title("IMU: accelerometer")
+            ax.legend(['x', 'y', 'z'])
+            ax.set_ylabel(r'$m/s^{2}$')
+            ax.set_xlabel('s')
             fig.suptitle(title)
 
             fig = plt.figure()
+            fig.tight_layout()
             ax = fig.add_subplot(2, 2, 1)
-            ax.plot([gt.pos for gt in self.gt_data])
+            ax.plot(x_axis, [gt.pos for gt in self.gt_data])
             ax.set_title("GT: position")
+            ax.legend(['x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 2)
-            ax.plot([gt.vel for gt in self.gt_data])
+            ax.plot(x_axis, [gt.vel for gt in self.gt_data])
             ax.set_title("GT: velocity")
+            ax.legend(['x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 3)
-            ax.plot([gt.att for gt in self.gt_data])
+            ax.plot(x_axis, [gt.att for gt in self.gt_data])
             ax.set_title("GT: attitude")
+            ax.legend(['w', 'x', 'y', 'z'])
             ax = fig.add_subplot(2, 2, 4)
-            ax.plot([gt.ang_vel for gt in self.gt_data])
+            ax.plot(x_axis, [gt.ang_vel for gt in self.gt_data])
             ax.set_title("GT: angular velocity")
+            ax.legend(['x', 'y', 'z'])
             fig.suptitle(title)
 
         if show:
