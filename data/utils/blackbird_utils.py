@@ -195,8 +195,8 @@ class BlackbirdDSManager(InertialDataset):
 
         return self.imu_data, self.gt_data
 
-    def pre_process_data(self, gyro_scale_file, acc_scale_file, filter_freq):
-        self.basic_preprocessing(gyro_scale_file, acc_scale_file, filter_freq)
+    def pre_process_data(self, gyro_scale_file, acc_scale_file):
+        self.basic_preprocessing(gyro_scale_file, acc_scale_file, 10)
 
         corrected_quaternion = correct_quaternion_flip(np.stack(self.gt_data[:, 2]))
         for i in range(len(self.gt_data)):

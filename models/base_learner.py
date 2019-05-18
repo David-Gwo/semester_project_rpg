@@ -6,10 +6,10 @@ from tensorflow.python.keras import callbacks
 
 from utils.directories import get_checkpoint_file_list, safe_mkdir_recursive
 from data.inertial_dataset_manager import DatasetManager
-from models.nets import cnn_rnn_pre_int_net as prediction_network
+from models.nets import *
 from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
-from models.test_experiments import ExperimentManager
+from experiments.test_experiments import ExperimentManager
 
 #############################################################################
 # IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
@@ -27,6 +27,11 @@ class Learner(object):
         self.last_epoch_number = 0
         self.trained_model_dir = ""
         self.experiment_manager = None
+
+        self.valid_model_types = ["speed_regression_net"]
+
+        if self.config.model_type not in self.valid_model_types:
+            raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
 
     def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
 
@@ -75,21 +80,15 @@ class Learner(object):
             optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
 
     def build_and_compile_model(self, is_testing=False):
-        trainable_model = prediction_network([self.config.window_length, 2])
+
+        if self.config.model_type == "speed_regression_net":
+            trainable_model = vel_cnn(self.config.window_length)
+            loss_connections = {"state_output": 'mae'}
+            loss_weight = {"state_output": 1.0}
 
         print(trainable_model.summary())
 
-        loss_connections = {"pre_integrated_R": 'mse',
-                            "pre_integrated_v": 'mse',
-                            "pre_integrated_p": 'mse', }
-                            # "state_output": state_loss}
-
         if not is_testing:
-            loss_weight = {'pre_integrated_R': 1.0,
-                           "pre_integrated_v": 1.0,
-                           "pre_integrated_p": 1.0, }
-                           # "state_output": .1}
-
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
                                     loss=loss_connections,
                                     loss_weight=loss_weight)

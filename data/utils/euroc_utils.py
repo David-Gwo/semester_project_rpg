@@ -120,15 +120,21 @@ class EurocDSManager(InertialDataset):
 
         return self.imu_data, self.gt_data
 
+    def pre_process_data(self, gyro_scale_file, acc_scale_file):
+        self.basic_preprocessing(gyro_scale_file, acc_scale_file, 10)
+
+        self.imu_data, self.gt_data = expand_dataset_region(self.imu_data, self.gt_data)
+
+        return self.imu_data, self.gt_data
+
 
 def expand_dataset_region(filt_imu_vec, filt_gt_v_interp):
-    # TODO: remove this function
     # Add more flat region so avoid model from learning average value
-    flat_region = filt_imu_vec[6000:7000, :, :]
+    flat_region = filt_imu_vec[6000:7000, :]
     flat_region_v = filt_gt_v_interp[6000:7000, :]
-    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :, :])), [4], axis=0)
+    flat_region = np.repeat(np.concatenate((flat_region, flat_region[::-1, :])), [4], axis=0)
     flat_region_v = np.repeat(np.concatenate((flat_region_v, flat_region_v[::-1])), [4], axis=0)
-    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :, :], flat_region, filt_imu_vec[7000:, :, :]))
+    filt_imu_vec = np.concatenate((filt_imu_vec[0:6000, :], flat_region, filt_imu_vec[7000:, :]))
     filt_gt_v_interp = np.concatenate((filt_gt_v_interp[0:6000, :], flat_region_v, filt_gt_v_interp[7000:, :]))
 
     return filt_imu_vec, filt_gt_v_interp

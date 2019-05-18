@@ -26,7 +26,7 @@ class ExperimentManager:
             "iterate_model_output": self.iterate_model_output
         }
 
-        self.valid_plot_types = ["10-dof-state", "pre_integration"]
+        self.valid_plot_types = ["10-dof-state", "pre_integration", "scalar"]
 
     def run_experiment(self, experiment_func, datasets_and_options):
 
@@ -44,8 +44,8 @@ class ExperimentManager:
                 if "type" not in plot_data[key].keys():
                     raise ValueError("The type of the data must be specified")
                 elif plot_data[key]["type"] not in self.valid_plot_types:
-                    raise ValueError("The type of the data must be one of the valid types: {0}".format(
-                        self.valid_plot_types))
+                    raise ValueError("The type of the data must be one of the valid types: {0}. Got {1} instead".format(
+                        self.valid_plot_types, plot_data[key]["type"]))
                 if "dynamic_plot" not in plot_data[key].keys():
                     plot_data[key]["dynamic_plot"] = False
                 if "sparsing_factor" not in plot_data[key].keys():
@@ -227,6 +227,9 @@ class ExperimentManager:
             if plot_options[key]["type"] == "pre_integration":
                 figs.append(self.draw_pre_integration(ground_truth[key], model_prediction[key], gt_x, model_x,
                                                       title=key))
+            if plot_options[key]["type"] == "scalar":
+                figs.append(self.draw_scalar_comparison(ground_truth[key], model_prediction[key], comp_prediction[key],
+                                                        gt_x, model_x, comp_x, plot_options[key]))
 
         return figs
 
@@ -404,4 +407,15 @@ class ExperimentManager:
 
         fig1.suptitle(title)
 
+        return fig1
+
+    def draw_scalar_comparison(self, ground_truth, model_prediction, comp_prediction, gt_x, model_x, comp_x, plot_op):
+        fig1 = plt.figure()
+        plt.plot(ground_truth, 'b')
+        plt.plot(model_prediction, 'r')
+        if isinstance(comp_prediction, np.ndarray):
+            plt.plot(comp_prediction, 'k')
+        plt.title(plot_op["title"])
+        plt.xlabel('sample')
+        plt.ylabel(plot_op["y_label"])
         return fig1

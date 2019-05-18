@@ -23,7 +23,7 @@ class StatePredictionDataset:
                 "y_keys": ["state_output"]
             },
             "windowed_imu_speed_regression": {
-                "x_keys": ["state_input"],
+                "x_keys": ["imu_input"],
                 "y_keys": ["state_output"]
             },
             "windowed_imu_integration_with_so3_rotation": {
@@ -46,9 +46,9 @@ class StatePredictionDataset:
         :param imu: vector of ordered IMU readings. Shape: <n, 7>, n = number of acquisitions, the first three columns
         correspond to the three gyro readings (x,y,z), the next three to the accelerometer readings, and the last one is
         the time difference between the previous and current acquisition. By convention raw_imu[0, 7] = 0
-        :param gt: ground truth velocity data. Shape: <n, 17>, n = number of acquisitions, and each acquisition is a
-        17-dimensional vector with the components: x,y,z position, x,y,z velocity, w,x,y,z attitude, x,y,z angular
-        velocity, x,y,z acceleration and timestamp difference (same as `raw_imu`)
+        :param gt: ground truth velocity data. Shape: <n, 6>, n = number of acquisitions, and each acquisition is a
+        6-dimensional vector where in order the components represent: x,y,z position, x,y,z velocity, w,x,y,z attitude,
+        x,y,z angular velocity, x,y,z acceleration and timestamp difference (same as `raw_imu`)
         """
 
         self.imu_raw = imu
@@ -128,20 +128,19 @@ class StatePredictionDataset:
         :param args: extra arguments for dataset generation
 
         Generates a dataset of imu images to regress linear speed.
-            Inputs 1: a window of imu samples of dimensions <imu_len x 7>, where 7 are the 6 dimensions of the IMU
-            readings (3 gyro + 3 acc) plus the time differences between imu acquisitions, and the number of rows are the
-            number of used imu samples.
+            Inputs 1: a window of imu samples of dimensions <imu_len x 6>, where 6 are the dimensions of the IMU
+            readings (3 gyro + 3 acc), and the number of rows are the number of used imu samples.
             Output 1: the regressed scalar value of the speed at the end of the window of IMU samples
         """
 
         window_len = args[0]
 
         # Initialize y data. Will be the absolute ground truth value of the speed of the drone
-        gt_v_tensor = np.linalg.norm(self.gt_raw[:, 3:6], axis=1)
+        gt_v_tensor = np.expand_dims(np.linalg.norm(np.stack(self.gt_raw[:, 1]), axis=1), axis=1)
 
-        imu_img_tensor = self.window_imu_data(window_len)
+        imu_img_tensor = self.window_imu_data(window_len)[:, :, :-1, :]
 
-        self.set_inputs(["state_input"], [imu_img_tensor])
+        self.set_inputs(["imu_input"], [imu_img_tensor])
         self.set_outputs(["state_output"], [gt_v_tensor])
 
     def windowed_imu_for_state_prediction(self, args):

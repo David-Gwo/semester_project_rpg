@@ -110,7 +110,13 @@ def load_mat_data(directory, x_keys, y_keys):
             aux = np.zeros(y_data[y_key].shape)
             for i in range(np.shape(aux)[0]):
                 for j in range(np.shape(aux)[1]):
-                    aux[i][j] = y_data[y_key][i][j][0][0]
+                    try:
+                        aux[i][j] = y_data[y_key][i][j][0][0]
+                    except IndexError:
+                        try:
+                            aux[i][j] = y_data[y_key][i][j][0]
+                        except IndexError:
+                            aux[i][j] = y_data[y_key][i][j]
             y_data[y_key] = aux
 
     return x_data, y_data
