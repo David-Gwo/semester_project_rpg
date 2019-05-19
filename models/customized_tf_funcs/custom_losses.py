@@ -52,7 +52,7 @@ def state_loss(y_true, y_pred):
 
     pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
     try:
-        att_contrib = [np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:])]
+        att_contrib = [np.abs(np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:]))]
     except TypeError:
         att_contrib = pos_vel_contrib
 

@@ -80,8 +80,8 @@ class ExperimentManager:
                     predictions = create_predictions_dict(predictions, model)
                     predictions = {k: predictions[k] for k in experiment_options["plot_data"].keys()}
                 elif option == "compare_prediction":
-                    comparisons = self.alt_prediction_algo(np.squeeze(dataset[0]["imu_input"]),
-                                                           np.squeeze(dataset[0]["state_input"]))
+                    comparisons["state_output"] = self.alt_prediction_algo(np.squeeze(dataset[0]["imu_input"]),
+                                                                           np.squeeze(dataset[0]["state_input"]))
                 elif option == "ground_truth":
                     gt = {k: dataset[1][k] for k in experiment_options["plot_data"].keys()}
 
@@ -356,7 +356,7 @@ class ExperimentManager:
             ax3.set_xticks([])
             ax4.set_xlabel('sample #')
 
-            q_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle)
+            q_pred_e = [abs(np.sin(quaternion_error(ground_truth[i, 6:10], model_prediction[i, 6:10]).angle))
                         for i in range(len(model_x))]
 
             if comp_available:
@@ -364,7 +364,7 @@ class ExperimentManager:
                 ax2.plot(comp_x, comparative_prediction[:, 7], 'k')
                 ax3.plot(comp_x, comparative_prediction[:, 8], 'k')
                 ax4.plot(comp_x, comparative_prediction[:, 8], 'k')
-                q_comp_pred_e = [np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle)
+                q_comp_pred_e = [abs(np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle))
                                  for i in range(len(comp_x))]
                 ax1.legend(['g_truth', 'prediction', 'integration'])
                 ax2.legend(['g_truth', 'prediction', 'integration'])
@@ -422,8 +422,8 @@ class ExperimentManager:
         ax1.set_title('position norm error')
         ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
         ax2.set_title('velocity norm error')
-        ax3.plot(model_x, q_pred_e, 'xkcd:orange' if comp_available else 'r')
-        ax3.set_title('attitude norm error' + (' lie' if comp_available else ''))
+        ax3.plot(model_x, q_pred_e, 'r' if options["type"] == "10-dof-state" else 'xkcd:orange')
+        ax3.set_title('attitude norm error' + ('' if options["type"] == "10-dof-state" else ' lie'))
         ax1.set_xticks([])
         ax2.set_xticks([])
         ax1.set_ylabel('m')
@@ -432,7 +432,7 @@ class ExperimentManager:
         if comp_available:
             ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
-            ax3.plot(comp_x, q_comp_pred_e, 'xkcd:grey' if comp_available else 'k')
+            ax3.plot(comp_x, q_comp_pred_e, 'k' if options["type"] == "10-dof-state" else 'xkcd:grey')
             
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
