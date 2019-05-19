@@ -19,6 +19,21 @@ def experiment_builder(model_type):
                 }
             }
         }
+    elif model_type == 'windowed_integration_net':
+        experiments_dict = {
+            "plot_predictions": {
+                "ds_training_non_tensorflow": ["predict"],
+                "ds_training_non_tensorflow_unnormalized": ["ground_truth", "compare_prediction"],
+                "options": {
+                    "output": "show",
+                    "plot_data": {
+                        "state_output": {
+                            "type": "10-dof-state",
+                        }
+                    }
+                }
+            }
+        }
 
     return experiments_dict
 

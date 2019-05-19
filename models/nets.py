@@ -289,8 +289,8 @@ def imu_integration_net(window_len):
     output_state_len = 10
 
     conv_kernel_width = min([window_len, 2])
-    net_in = layers.Input((window_len + input_state_len, 7, 1), name="imu_input")
-    state_0 = layers.Input((input_state_len, 1), name="state_input")
+    net_in = layers.Input((window_len, 7, 1), name="imu_input")
+    state_0 = layers.Input((input_state_len, ), name="state_input")
 
     imu_stack, time_diff_imu = custom_layers.ForkLayerIMUdt(name="forking_layer")(net_in)
 
@@ -323,6 +323,7 @@ def imu_integration_net(window_len):
     dense_3 = layers.Dense(100, name='dense_layer_3')(activation_2)
     activation_3 = layers.Activation('relu', name='activation_3')(dense_3)
 
-    net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
+    # Where did this 3 come from?
+    net_out = layers.Dense(output_state_len + 3, name='state_output')(activation_3)
 
-    return Model(net_in, net_out)
+    return Model(inputs=(net_in, state_0), outputs=net_out)

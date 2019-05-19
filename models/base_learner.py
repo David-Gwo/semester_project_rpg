@@ -28,7 +28,7 @@ class Learner(object):
         self.trained_model_dir = ""
         self.experiment_manager = None
 
-        self.valid_model_types = ["speed_regression_net"]
+        self.valid_model_types = ["speed_regression_net", "windowed_integration_net"]
 
         if self.config.model_type not in self.valid_model_types:
             raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
@@ -81,9 +81,17 @@ class Learner(object):
 
     def build_and_compile_model(self, is_testing=False):
 
+        trainable_model = None
+        loss_connections = {}
+        loss_weight = {}
+
         if self.config.model_type == "speed_regression_net":
             trainable_model = vel_cnn(self.config.window_length)
             loss_connections = {"state_output": 'mae'}
+            loss_weight = {"state_output": 1.0}
+        elif self.config.model_type == "windowed_integration_net":
+            trainable_model = imu_integration_net(self.config.window_length)
+            loss_connections = {"state_output": state_loss}
             loss_weight = {"state_output": 1.0}
 
         print(trainable_model.summary())

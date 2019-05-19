@@ -4,16 +4,14 @@ from tensorflow.python.keras.utils import Progbar
 import tensorflow as tf
 
 
-def imu_integration(imu_data, window_len, track_progress=True):
+def imu_integration(imu_data, x_0_v, track_progress=True):
 
     # TODO: get a better comparison
 
     samples = len(imu_data)
-    output_dim = np.shape(imu_data)[1] - window_len
+    out = np.zeros((samples, 10))
 
-    out = np.zeros((samples, output_dim))
-
-    imu_v, t_diff_v, x_0_v = imu_data[:, :window_len, :6], imu_data[:, :window_len, 6:], imu_data[:, window_len:, 0]
+    imu_v, t_diff_v = imu_data[:, :, :6], imu_data[:, :, 6:]
 
     # Convert time diff to seconds
     t_diff_v = np.squeeze(np.stack(t_diff_v/1000), axis=2)
@@ -31,7 +29,7 @@ def imu_integration(imu_data, window_len, track_progress=True):
         v_i = x_0_v[sample, 3:6]
         q_i = Quaternion(x_0_v[sample, 6:]).unit
 
-        for i in range(window_len):
+        for i in range(len(t_diff)):
 
             dt = t_diff[i]
 
