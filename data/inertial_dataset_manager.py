@@ -72,14 +72,15 @@ class DatasetManager:
 
         self.dataset_formatting = dataset_type
 
-        if not self.is_dataset_ready(args) or force_remake:
-
+        if not self.is_dataset_ready(dataset_type, args) or force_remake:
+            print("Generating the dataset. This may take a while")
             self.dataset.get_raw_ds()
             if plot:
                 self.dataset.plot_all_data(title="raw")
 
             # TODO: export as json/yaml
-            add_text_to_txt_file(str(args), self.dataset.get_ds_directory(), self.dataset_conf_file, overwrite=True)
+            add_text_to_txt_file(dataset_type + str(args), self.dataset.get_ds_directory(), self.dataset_conf_file,
+                                 overwrite=True)
             processed_imu, processed_gt = self.dataset.pre_process_data(self.scaler_gyro_file, self.scaler_acc_file)
 
             if plot:
@@ -124,10 +125,11 @@ class DatasetManager:
         save_train_and_test_datasets(storage_train_ds_file, storage_test_ds_file, training_data, ground_truth_data,
                                      test_split, shuffle)
 
-    def is_dataset_ready(self, args):
+    def is_dataset_ready(self, dataset_type, args):
         """
         Checks if the generated dataset files are compatible with the requested dataset
 
+        :param dataset_type: dataset structure type
         :param args: extra arguments for dataset generation
         :return: whether the dataset is available and compatible
         """
@@ -135,7 +137,7 @@ class DatasetManager:
         try:
             file = open(self.dataset.get_ds_directory() + self.dataset_conf_file, "r")
             generated_ds_params = file.read()
-            return generated_ds_params == str(args)
+            return generated_ds_params == dataset_type + str(args)
         except (NotADirectoryError, FileNotFoundError):
             return False
 

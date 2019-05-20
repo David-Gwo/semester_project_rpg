@@ -255,7 +255,7 @@ class StatePredictionDataset:
             g_contrib = 1/2 * np.expand_dims(cum_dt_vec ** 2 * g_val, axis=1)*np.array([0, 0, 1])
             pre_int_p[i, :, :] = rotate_vec(gt_augmented[i:i+window_len, 0:3] - pi - v_contrib - g_contrib, q_inv(qi))
 
-            prog_bar.update(i+2)
+            prog_bar.update(i+1)
 
         self.set_outputs(
             ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p"], [pre_int_rot, pre_int_v, pre_int_p])
