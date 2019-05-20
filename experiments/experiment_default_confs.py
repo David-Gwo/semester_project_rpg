@@ -34,6 +34,38 @@ def experiment_builder(model_type):
                 }
             }
         }
+    elif model_type == 'windowed_integration_net_so3':
+        experiments_dict = {
+            # "plot_predictions": {
+            #     "ds_testing_non_tensorflow": ["predict"],
+            #     "ds_testing_non_tensorflow_unnormalized": ["ground_truth", "compare_prediction"],
+            #     "options": {
+            #         "output": "show",
+            #         "plot_data": {
+            #             "state_output": {
+            #                 "type": "9-dof-state-lie",
+            #             }
+            #         }
+            #     }
+            # },
+            "iterate_model_output": {
+                "ds_training_non_tensorflow": ["predict"],
+                "ds_training_non_tensorflow_unnormalized": ["ground_truth"],
+                "options": {
+                    "output": "show",
+                    "state_out": {
+                        "name": "state_output",
+                        "lie": True
+                    },
+                    "state_in": "state_input",
+                    "plot_data": {
+                        "state_output": {
+                            "type": "9-dof-state-lie"
+                        }
+                    }
+                }
+            },
+        }
 
     return experiments_dict
 

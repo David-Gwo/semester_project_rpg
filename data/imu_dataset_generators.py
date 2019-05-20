@@ -1,8 +1,7 @@
 import numpy as np
 import collections
-from utils.algebra import log_mapping, exp_mapping, quaternion_error, rotate_vec, q_inv, correct_quaternion_flip
+from utils.algebra import log_mapping, quaternion_error, rotate_vec, q_inv, correct_quaternion_flip
 from tensorflow.python.keras.utils import Progbar
-from pyquaternion import Quaternion
 
 
 class StatePredictionDataset:
@@ -192,8 +191,8 @@ class StatePredictionDataset:
         """
         self.windowed_imu_for_state_prediction(args)
 
-        self.y_ds["state_output"] = np.concatenate((self.y_ds["state_output"][:, :6],
-                                                    log_mapping(self.y_ds["state_output"][:, 6:])), axis=1)
+        self.y_ds["state_output"] = np.concatenate(
+            (self.y_ds["state_output"][:, :6], log_mapping(self.y_ds["state_output"][:, 6:])), axis=1)
 
     def windowed_imu_preintegration_dataset(self, args):
         """

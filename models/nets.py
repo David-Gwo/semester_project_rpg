@@ -22,55 +22,6 @@ def vel_cnn(window_len):
     return model
 
 
-def imu_so3_integration_net(window_len):
-
-    imu_final_channels = 5
-    input_state_len = 10
-    output_state_len = 9
-
-    conv_kernel_width = min([window_len, 2])
-
-    # Input layers
-    net_in = layers.Input((window_len + input_state_len, 7, 1), name="imu_input")
-    state_0 = layers.Input((input_state_len, 1), name="state_input")
-
-    imu_stack, time_diff_imu = custom_layers.ForkLayerIMUdt(name="forking_layer")(net_in)
-
-    imu_conv_1 = layers.Conv2D(filters=15, kernel_size=(conv_kernel_width, 3), strides=(1, 3), padding='same',
-                               activation='relu', name='imu_conv_layer_1')(imu_stack)
-    imu_conv_2 = layers.Conv2D(filters=30, kernel_size=(conv_kernel_width, 1), padding='same',
-                               activation='relu', name='imu_conv_layer_2')(imu_conv_1)
-    imu_conv_3 = layers.Conv2D(filters=60, kernel_size=(conv_kernel_width, 1), padding='same',
-                               activation='relu', name='imu_conv_layer_3')(imu_conv_2)
-
-    imu_conv_reduced = layers.Conv2D(filters=imu_final_channels, kernel_size=(conv_kernel_width, 1), padding='same',
-                                     activation='tanh', name='imu_1x_conv_layer')(imu_conv_3)
-    imu_conv_flat = layers.Reshape((window_len, imu_final_channels * 2, 1), name='reshape_layer')(imu_conv_reduced)
-    re_stacked_imu = layers.Concatenate(name='imu_concatenating_layer', axis=2)([imu_conv_flat, time_diff_imu])
-
-    imu_ts_conv = layers.Conv2D(filters=1+2*imu_final_channels, kernel_size=(conv_kernel_width, 1+2*imu_final_channels),
-                                padding='valid', activation='relu', name='imu_final_conv_layer')(re_stacked_imu)
-
-    flatten_conv_imu = layers.Flatten(name='imu_flattening_layer')(imu_ts_conv)
-    flatten_state_0 = layers.Flatten(name='state_input_flattening_layer')(state_0)
-
-    stacked = layers.Concatenate(name='data_concatenating_layer')([flatten_conv_imu, flatten_state_0])
-
-    dense_1 = layers.Dense(400, name='dense_layer_1')(stacked)
-    activation_1 = layers.Activation('relu', name='activation_1')(dense_1)
-
-    dense_2 = layers.Dense(200, name='dense_layer_2')(activation_1)
-    activation_2 = layers.Activation('relu', name='activation_2')(dense_2)
-
-    dense_3 = layers.Dense(100, name='dense_layer_3')(activation_2)
-    activation_3 = layers.Activation('relu', name='activation_3')(dense_3)
-
-    net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
-
-    state_out = custom_layers.ExponentialRemappingLayer(name='state_output')(net_out)
-    return Model(inputs=net_in, outputs=net_out), Model(inputs=net_in, outputs=state_out)
-
-
 def pre_integration_net(args):
 
     window_len = args[0]
@@ -282,11 +233,10 @@ def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape,
     return x4
 
 
-def imu_integration_net(window_len):
+def imu_integration_net(window_len, output_state_len):
 
     imu_final_channels = 5
     input_state_len = 10
-    output_state_len = 10
 
     conv_kernel_width = min([window_len, 2])
     net_in = layers.Input((window_len, 7, 1), name="imu_input")
@@ -323,7 +273,6 @@ def imu_integration_net(window_len):
     dense_3 = layers.Dense(100, name='dense_layer_3')(activation_2)
     activation_3 = layers.Activation('relu', name='activation_3')(dense_3)
 
-    # Where did this 3 come from?
-    net_out = layers.Dense(output_state_len + 3, name='state_output')(activation_3)
+    net_out = layers.Dense(output_state_len, name='state_output')(activation_3)
 
     return Model(inputs=(net_in, state_0), outputs=net_out)

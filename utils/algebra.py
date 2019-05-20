@@ -54,6 +54,7 @@ def imu_integration(imu_data, x_0_v, track_progress=True):
         out[sample, 3:6] = v_i
         out[sample, 6:] = q_i.elements
 
+    out[:, 6:] = correct_quaternion_flip(out[:, 6:])
     return out
 
 

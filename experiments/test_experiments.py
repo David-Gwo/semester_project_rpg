@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from utils.algebra import imu_integration, log_mapping, quaternion_error
+from utils.algebra import imu_integration, log_mapping, exp_mapping, quaternion_error
 from utils.visualization import Dynamic3DTrajectory
 from utils.models import create_predictions_dict
 from utils.directories import safe_mkdir_recursive
@@ -26,7 +26,7 @@ class ExperimentManager:
             "iterate_model_output": self.iterate_model_output
         }
 
-        self.valid_plot_types = ["10-dof-state", "pre_integration", "scalar"]
+        self.valid_plot_types = ["10-dof-state", "9-dof-state-lie", "pre_integration", "scalar"]
 
     def run_experiment(self, experiment_func, datasets_and_options):
 
@@ -122,42 +122,55 @@ class ExperimentManager:
 
     def iterate_model_output(self, datasets, dataset_options, experiment_options, experiment_name):
 
-        gt = []
-        predictions = []
-        comparisons = []
+        gt = {k: [] for k in experiment_options["plot_data"].keys()}
+        predictions = {k: [] for k in experiment_options["plot_data"].keys()}
+        comparisons = {k: [] for k in experiment_options["plot_data"].keys()}
 
-        max_n_predictions = min([len(datasets[i][0]) for i in range(len(datasets))])
+        max_n_predictions = min([len(datasets[i][0]["imu_input"]) for i in range(len(datasets))])
         n_predictions = None
         if "iterations" in experiment_options.keys():
             n_predictions = experiment_options["iterations"]
             assert n_predictions * self.window_len - 1 < max_n_predictions, \
                 "The maximum number of iterations are {0} for the current window length of {1}".format(
                     int(np.floor(max_n_predictions / self.window_len)), self.window_len)
+        assert len(experiment_options["plot_data"].keys()) == 1, \
+            "Currently this experiment only supports one output. Got {0} instead: {1}".format(
+                len(experiment_options["plot_data"].keys()), experiment_options["plot_data"].keys())
+        assert "state_in" in experiment_options.keys()
+        assert "state_out" in experiment_options.keys()
+
+        output_name = list(experiment_options["plot_data"].keys())[0]
 
         for i, dataset in enumerate(datasets):
-
             if n_predictions is None:
-                n_predictions = int(np.floor(len(dataset[0]) / self.window_len)) - 1
+                n_predictions = int(np.floor(len(dataset[0]["imu_input"]) / self.window_len))
 
             for option in dataset_options[i]:
 
                 if option == "predict":
                     model = self.model_loader()
-                    model_predictions = np.zeros((n_predictions + 1, 10))
-                    model_in = np.expand_dims(dataset[0][0, :, :, :], axis=0)
-                    model_predictions[0, :] = model_in[0, self.window_len:, 0, 0]
+                    output_size = model.get_layer(output_name).output_shape[1:]
+                    model_predictions = np.zeros((n_predictions + 1, ) + output_size)
                     progress_bar = Progbar(n_predictions)
-
+                    model_out = {}
                     for it in range(n_predictions):
                         progress_bar.update(it)
+                        ds_i = self.window_len * it
+                        model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
+                        if it > 0:
+                            past_pred = model_out[experiment_options["state_out"]["name"]]
+                            if experiment_options["state_out"]["lie"]:
+                                past_pred = np.concatenate((past_pred[:, :6], exp_mapping(past_pred[:, 6:])), axis=1)
+                            model_in[experiment_options["state_in"]] = past_pred
                         model_out = model.predict(model_in, verbose=0)
-                        model_predictions[it, :] = model_out
-                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, :], axis=0)
-                        model_in[0, self.window_len:, 0, :] = np.transpose(model_out)
+                        model_out = create_predictions_dict(model_out, model)
+                        model_predictions[it, :] = model_out[output_name]
 
-                    model_predictions[-1, :] = model.predict(model_in, verbose=0)
+                    ds_i = self.window_len * n_predictions
+                    model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
+                    model_predictions[n_predictions, :] = model.predict(model_in, verbose=0)
                     progress_bar.update(n_predictions)
-                    predictions = model_predictions
+                    predictions[output_name] = model_predictions
 
                 elif option == "compare_prediction":
                     model_predictions = np.zeros((n_predictions + 1, 10))
@@ -177,13 +190,14 @@ class ExperimentManager:
                     comparisons = model_predictions
 
                 elif option == "ground_truth":
-                    gt = dataset[1][:n_predictions * self.window_len, :9]
+                    gt = {k: dataset[1][k][:n_predictions * self.window_len, :] for k in experiment_options["plot_data"].keys()}
 
         predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
         predictions_x_axis[1:] -= 1
         fig = self.draw_predictions(ground_truth=gt,
                                     model_prediction=predictions,
                                     comp_prediction=comparisons,
+                                    plot_options=experiment_options["plot_data"],
                                     gt_x=np.arange(0, n_predictions * self.window_len),
                                     model_x=predictions_x_axis,
                                     comp_x=predictions_x_axis)
@@ -225,10 +239,13 @@ class ExperimentManager:
             if plot_options[key]["type"] == "10-dof-state":
                 figs.append(self.draw_state_output(ground_truth[key], model_prediction[key], comp_prediction[key],
                                                    plot_options[key], gt_x, model_x, comp_x))
-            if plot_options[key]["type"] == "pre_integration":
+            elif plot_options[key]["type"] == "9-dof-state-lie":
+                figs.append(self.draw_state_output(ground_truth[key], model_prediction[key], comp_prediction[key],
+                                                   plot_options[key], gt_x, model_x, comp_x))
+            elif plot_options[key]["type"] == "pre_integration":
                 figs.append(self.draw_pre_integration(ground_truth[key], model_prediction[key], gt_x, model_x,
                                                       title=key))
-            if plot_options[key]["type"] == "scalar":
+            elif plot_options[key]["type"] == "scalar":
                 figs.append(self.draw_scalar_comparison(ground_truth[key], model_prediction[key], comp_prediction[key],
                                                         gt_x, model_x, comp_x, plot_options[key]))
 
@@ -260,6 +277,12 @@ class ExperimentManager:
         ax = axes3d.Axes3D(fig3d)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], ground_truth[:, 2], '-', color='b')
         ax.plot(model_prediction[:, 0], model_prediction[:, 1], model_prediction[:, 2], '-', color='r')
+        if comp_available:
+            ax.plot(comparative_prediction[:, 0], comparative_prediction[:, 1], comparative_prediction[:, 2], '-',
+                    color='k')
+            ax.legend(['g_truth', 'prediction', 'integration'])
+        else:
+            ax.legend(['g_truth', 'prediction'])
         ax.set_xlabel('m')
         ax.set_ylabel('m')
         ax.set_zlabel('m')
@@ -277,27 +300,21 @@ class ExperimentManager:
         ax2.plot(model_x, model_prediction[:, 1], 'r')
         ax3.plot(gt_x, ground_truth[:, 2], 'b')
         ax3.plot(model_x, model_prediction[:, 2], 'r')
-        ax1.set_title('pos_x')
-        ax2.set_title('pos_y')
-        ax3.set_title('pos_z')
         ax1.set_xticks([])
         ax2.set_xticks([])
-        ax1.set_ylabel('m')
-        ax2.set_ylabel('m')
-        ax3.set_ylabel('m')
+        ax1.set_ylabel(r'$p_x\;[m]$')
+        ax2.set_ylabel(r'$p_y\;[m]$')
+        ax3.set_ylabel(r'$p_z\;[m]$')
         ax3.set_xlabel('sample #')
 
         if comp_available:
             ax1.plot(comp_x, comparative_prediction[:, 0], 'k')
             ax2.plot(comp_x, comparative_prediction[:, 1], 'k')
             ax3.plot(comp_x, comparative_prediction[:, 2], 'k')
-            ax1.legend(['g_truth', 'prediction', 'integration'])
-            ax2.legend(['g_truth', 'prediction', 'integration'])
-            ax3.legend(['g_truth', 'prediction', 'integration'])
+            ax1.legend(['g_truth', 'prediction', 'integration'], loc='upper right')
         else:
-            ax1.legend(['g_truth', 'prediction'])
-            ax2.legend(['g_truth', 'prediction'])
-            ax3.legend(['g_truth', 'prediction'])
+            ax1.legend(['g_truth', 'prediction'], loc='upper right')
+        fig1.tight_layout()
 
         fig2 = plt.figure()
         ax1 = fig2.add_subplot(3, 1, 1)
@@ -310,28 +327,23 @@ class ExperimentManager:
         ax2.plot(model_x, model_prediction[:, 4], 'r')
         ax3.plot(gt_x, ground_truth[:, 5], 'b')
         ax3.plot(model_x, model_prediction[:, 5], 'r')
-        ax1.set_title('vel_x')
-        ax2.set_title('vel_y')
-        ax3.set_title('vel_z')
         ax1.set_xticks([])
         ax2.set_xticks([])
-        ax1.set_ylabel('m/s')
-        ax2.set_ylabel('m/s')
-        ax3.set_ylabel('m/s')
+        ax1.set_ylabel(r'$v_x\;[m/s]$')
+        ax2.set_ylabel(r'$v_y\;[m/s]$')
+        ax3.set_ylabel(r'$v_z\;[m/s]$')
         ax3.set_xlabel('sample #')
 
         if comp_available:
             ax1.plot(comp_x, comparative_prediction[:, 3], 'k')
             ax2.plot(comp_x, comparative_prediction[:, 4], 'k')
             ax3.plot(comp_x, comparative_prediction[:, 5], 'k')
-            ax1.legend(['g_truth', 'prediction', 'integration'])
-            ax2.legend(['g_truth', 'prediction', 'integration'])
-            ax3.legend(['g_truth', 'prediction', 'integration'])
+            ax1.legend(['g_truth', 'prediction', 'integration'], loc='upper right')
         else:
-            ax1.legend(['g_truth', 'prediction'])
-            ax2.legend(['g_truth', 'prediction'])
-            ax3.legend(['g_truth', 'prediction'])
+            ax1.legend(['g_truth', 'prediction'], loc='upper right')
+        fig2.tight_layout()
 
+        q_pred_e = q_comp_pred_e = None
         fig3 = plt.figure()
         if options["type"] == "10-dof-state":
             ax1 = fig3.add_subplot(4, 1, 1)
@@ -347,10 +359,10 @@ class ExperimentManager:
             ax3.plot(model_x, model_prediction[:, 8], 'r')
             ax4.plot(gt_x, ground_truth[:, 9], 'b')
             ax4.plot(model_x, model_prediction[:, 9], 'r')
-            ax1.set_title('quat w')
-            ax2.set_title('quat x')
-            ax3.set_title('quat y')
-            ax4.set_title('quat z')
+            ax1.set_ylabel(r'$q_w$')
+            ax2.set_ylabel(r'$q_x$')
+            ax3.set_ylabel(r'$q_y$')
+            ax4.set_ylabel(r'$q_z$')
             ax1.set_xticks([])
             ax2.set_xticks([])
             ax3.set_xticks([])
@@ -366,18 +378,12 @@ class ExperimentManager:
                 ax4.plot(comp_x, comparative_prediction[:, 8], 'k')
                 q_comp_pred_e = [abs(np.sin(quaternion_error(ground_truth[i, 6:10], comparative_prediction[i, 6:10]).angle))
                                  for i in range(len(comp_x))]
-                ax1.legend(['g_truth', 'prediction', 'integration'])
-                ax2.legend(['g_truth', 'prediction', 'integration'])
-                ax3.legend(['g_truth', 'prediction', 'integration'])
-                ax4.legend(['g_truth', 'prediction', 'integration'])
+                ax1.legend(['g_truth', 'prediction', 'integration'], loc='upper right')
             else:
                 q_comp_pred_e = None
-                ax1.legend(['g_truth', 'prediction'])
-                ax2.legend(['g_truth', 'prediction'])
-                ax3.legend(['g_truth', 'prediction'])
-                ax4.legend(['g_truth', 'prediction'])
+                ax1.legend(['g_truth', 'prediction'], loc='upper right')
 
-        else:
+        elif options["type"] == "9-dof-state-lie":
             ax1 = fig3.add_subplot(3, 1, 1)
             ax2 = fig3.add_subplot(3, 1, 2)
             ax3 = fig3.add_subplot(3, 1, 3)
@@ -388,14 +394,17 @@ class ExperimentManager:
             ax2.plot(model_x, model_prediction[:, 7], 'xkcd:orange')
             ax3.plot(gt_x, ground_truth[:, 8], 'xkcd:aquamarine')
             ax3.plot(model_x, model_prediction[:, 8], 'xkcd:orange')
-            ax1.set_title('lie x')
-            ax2.set_title('lie y')
-            ax3.set_title('lie z')
+            ax1.set_ylabel(r'$\mathfrak{q}_x$')
+            ax2.set_ylabel(r'$\mathfrak{q}_y$')
+            ax3.set_ylabel(r'$\mathfrak{q}_z$')
             ax1.set_xticks([])
             ax2.set_xticks([])
             ax3.set_xlabel('sample #')
 
             q_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - model_prediction[:, 6:9], axis=1)
+            q_error = quaternion_error(exp_mapping(ground_truth[model_x, 6:9]), exp_mapping(model_prediction[:, 6:9]))
+            q_pred_e = np.append(np.expand_dims(q_pred_e, axis=1),
+                                 np.expand_dims(np.array([abs(np.sin(q_e.angle)) for q_e in q_error]), axis=1), axis=1)
 
             if comp_available:
                 comp_pred_q = log_mapping([comparative_prediction[i, 6:10] for i in range(len(comp_x))])
@@ -403,14 +412,16 @@ class ExperimentManager:
                 ax2.plot(comp_x, comp_pred_q[:, 1], 'xkcd:grey')
                 ax3.plot(comp_x, comp_pred_q[:, 2], 'xkcd:grey')
                 q_comp_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - comp_pred_q, axis=1)
-                ax1.legend(['g_truth', 'prediction', 'integration'])
-                ax2.legend(['g_truth', 'prediction', 'integration'])
-                ax3.legend(['g_truth', 'prediction', 'integration'])
+                q_error = quaternion_error(exp_mapping(ground_truth[:, 6:9]), comparative_prediction[:, 6:10])
+                q_comp_pred_e = np.append(np.expand_dims(q_comp_pred_e, axis=1),
+                                          np.expand_dims(np.array([abs(np.sin(q_e.angle)) for q_e in q_error]), axis=1),
+                                          axis=1)
+
+                ax1.legend(['g_truth', 'prediction', 'integration'], loc='upper right')
             else:
                 q_comp_pred_e = None
-                ax1.legend(['g_truth', 'prediction'])
-                ax2.legend(['g_truth', 'prediction'])
-                ax3.legend(['g_truth', 'prediction'])
+                ax1.legend(['g_truth', 'prediction'], loc='upper right')
+        fig3.tight_layout()
 
         fig4 = plt.figure()
         ax1 = fig4.add_subplot(3, 1, 1)
@@ -419,21 +430,38 @@ class ExperimentManager:
         ax3.set_xlabel('sample #')
 
         ax1.plot(model_x, np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1), 'r')
-        ax1.set_title('position norm error')
         ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
-        ax2.set_title('velocity norm error')
-        ax3.plot(model_x, q_pred_e, 'r' if options["type"] == "10-dof-state" else 'xkcd:orange')
-        ax3.set_title('attitude norm error' + ('' if options["type"] == "10-dof-state" else ' lie'))
-        ax1.set_xticks([])
-        ax2.set_xticks([])
-        ax1.set_ylabel('m')
-        ax2.set_ylabel('m/s')
-
+        if options["type"] == "10-dof-state":
+            ax3.plot(model_x, q_pred_e, 'r')
+        elif options["type"] == "9-dof-state-lie":
+            ax3.plot(model_x, q_pred_e[:, 1], 'r')
+            ax3.plot(model_x, q_pred_e[:, 0], 'xkcd:orange')
         if comp_available:
             ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
-            ax3.plot(comp_x, q_comp_pred_e, 'k' if options["type"] == "10-dof-state" else 'xkcd:grey')
-            
+            if options["type"] == "10-dof-state":
+                ax3.plot(model_x, q_comp_pred_e, 'k')
+            elif options["type"] == "9-dof-state-lie":
+                ax3.plot(model_x, q_comp_pred_e[:, 1], 'k')
+                ax3.plot(model_x, q_comp_pred_e[:, 0], 'xkcd:grey')
+
+            ax1.legend(['prediction', 'integration'], loc='upper right')
+            ax3.legend(['prediction', 'pred. lie', 'integration', 'integ. lie'], loc='upper right')
+
+        else:
+            ax1.legend(['prediction'], loc='upper right')
+            ax3.legend(['prediction', 'pred. lie'], loc='upper right')
+
+        ax1.set_xticks([])
+        ax2.set_xticks([])
+        ax1.set_ylabel(r'$\|\|\mathbf{p}-\mathbf{\hat{p}}\|\|_2^2\;[m]$')
+        ax2.set_ylabel(r'$\|\|\mathbf{v}-\mathbf{\hat{v}}\|\|_2^2\;[m/s]$')
+        ax3.set_ylabel(r'$\|\sin\left(\left(\mathbf{q}^{-1}\mathbf{\hat{q}}\right)_\measuredangle \right)\|$'
+                       if options["type"] == "10-dof-state" else
+                       r'$\|\|\mathfrak{q}-\mathfrak{\hat{q}}\|\|_2^2$')
+
+        fig4.tight_layout()
+
         figs.append([fig1, fig2, fig3, fig4])
         return tuple(figs)
 

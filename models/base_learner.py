@@ -28,7 +28,7 @@ class Learner(object):
         self.trained_model_dir = ""
         self.experiment_manager = None
 
-        self.valid_model_types = ["speed_regression_net", "windowed_integration_net"]
+        self.valid_model_types = ["speed_regression_net", "windowed_integration_net", "windowed_integration_net_so3"]
 
         if self.config.model_type not in self.valid_model_types:
             raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
@@ -90,8 +90,12 @@ class Learner(object):
             loss_connections = {"state_output": 'mae'}
             loss_weight = {"state_output": 1.0}
         elif self.config.model_type == "windowed_integration_net":
-            trainable_model = imu_integration_net(self.config.window_length)
+            trainable_model = imu_integration_net(self.config.window_length, 10)
             loss_connections = {"state_output": state_loss}
+            loss_weight = {"state_output": 1.0}
+        elif self.config.model_type == "windowed_integration_net_so3":
+            trainable_model = imu_integration_net(self.config.window_length, 9)
+            loss_connections = {"state_output": 'mse'}
             loss_weight = {"state_output": 1.0}
 
         print(trainable_model.summary())
@@ -111,10 +115,7 @@ class Learner(object):
 
         force_remake = self.config.force_ds_remake
 
-        if train:
-            dataset_name = self.config.train_ds
-        else:
-            dataset_name = self.config.test_ds
+        dataset_name = self.config.dataset
 
         dataset_manager = DatasetManager(prepared_train_data_file='imu_dataset_train.mat',
                                          prepared_test_data_file='imu_dataset_test.mat',
@@ -172,7 +173,7 @@ class Learner(object):
 
         def lr_scheduler(epoch, lr):
             decay_rate = 0.5
-            if epoch % 7 == 0 and epoch:
+            if epoch % self.config.lr_scheduler == 0 and epoch:
                 return lr * decay_rate
             return lr
 
@@ -205,15 +206,12 @@ class Learner(object):
             validation_data=validation_ds,
             callbacks=keras_callbacks)
 
-    def recover_model_from_checkpoint(self, mode="train", model_used_pos=-1):
+    def recover_model_from_checkpoint(self, model_used_pos=-1):
         """
         Loads the weights of the default model from the checkpoint files
         """
 
-        if mode == "train":
-            model_number = self.config.resume_train_model_number
-        else:
-            model_number = self.config.test_model_number
+        model_number = self.config.model_number
 
         # Directory from where to load the saved weights of the model
         self.model_version_number = self.config.model_name + "_" + str(model_number)
@@ -243,7 +241,7 @@ class Learner(object):
                                                     model_loader_func=self.experiment_model_request,
                                                     dataset_loader_func=self.experiment_dataset_request)
 
-        self.recover_model_from_checkpoint(mode="test")
+        self.recover_model_from_checkpoint()
         self.trained_model_dir = self.config.checkpoint_dir + self.model_version_number + '/'
 
         for experiment in experiments.keys():
@@ -254,10 +252,10 @@ class Learner(object):
         model_pos = -1
 
         if requested_model_num is None:
-            self.recover_model_from_checkpoint(mode="test", model_used_pos=model_pos)
+            self.recover_model_from_checkpoint(model_used_pos=model_pos)
             return self.trainable_model
         else:
-            new_model_num = self.recover_model_from_checkpoint(mode="test", model_used_pos=requested_model_num)
+            new_model_num = self.recover_model_from_checkpoint(model_used_pos=requested_model_num)
             return self.trainable_model, new_model_num
 
     def experiment_dataset_request(self, dataset_tags):
