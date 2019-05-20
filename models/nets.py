@@ -115,7 +115,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
 
     # Pre-integrated rotation
     x = layers.GRU(64, return_sequences=True)(gyro_feat_vec)
-    x = layers.TimeDistributed(layers.Dense(50))(x)
+    x = layers.TimeDistributed(layers.Dense(50, activation='relu'))(x)
     rot_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_R")(x)
 
     # Pre-integrated velocity
@@ -123,7 +123,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     rot_contrib = norm_activate(x, 'leakyRelu')
     v_feat_vec = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib])
     x = layers.GRU(64, return_sequences=True)(v_feat_vec)
-    x = layers.TimeDistributed(layers.Dense(50))(x)
+    x = layers.TimeDistributed(layers.Dense(50, activation='relu'))(x)
     v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_v")(x)
 
     # Pre-integrated position
@@ -133,7 +133,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     vel_contrib = norm_activate(x, 'leakyRelu')
     pos_in = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib, vel_contrib])
     x = layers.GRU(64, return_sequences=True)(pos_in)
-    x = layers.TimeDistributed(layers.Dense(50))(x)
+    x = layers.TimeDistributed(layers.Dense(50, activation='relu'))(x)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
