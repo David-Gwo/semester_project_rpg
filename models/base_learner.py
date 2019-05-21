@@ -88,7 +88,7 @@ class Learner(object):
 
         if self.config.model_type == "speed_regression_net":
             trainable_model = vel_cnn(self.config.window_length)
-            loss_connections = {"state_output": 'mae'}
+            loss_connections = {"state_output": l1_loss}
             loss_weight = {"state_output": 1.0}
         elif self.config.model_type == "windowed_integration_net":
             trainable_model = imu_integration_net(self.config.window_length, 10)

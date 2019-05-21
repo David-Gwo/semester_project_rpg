@@ -99,6 +99,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     input_state_shape = (10,)
     pre_int_shape = (window_len, 3)
     imu_input_shape = (window_len, 7, 1)
+    b_norm = True
 
     # Input layers. Don't change names
     imu_in = layers.Input(imu_input_shape, name="imu_input")
@@ -110,8 +111,8 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     channels = [2**i for i in range(2, 2 + n_iterations + 1)]
     final_shape = (pre_int_shape[0], pre_int_shape[1], channels[-1])
 
-    gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels, window_len, final_shape, n_iterations)
-    acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations)
+    gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels, window_len, final_shape, n_iterations, b_norm)
+    acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations, b_norm)
 
     # Pre-integrated rotation
     x = layers.GRU(64, return_sequences=True)(gyro_feat_vec)
@@ -120,7 +121,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
 
     # Pre-integrated velocity
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
-    rot_contrib = norm_activate(x, 'leakyRelu')
+    rot_contrib = norm_activate(x, 'leakyRelu', b_norm)
     v_feat_vec = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib])
     x = layers.GRU(64, return_sequences=True)(v_feat_vec)
     x = layers.TimeDistributed(layers.Dense(50, activation='relu'))(x)
@@ -128,19 +129,19 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
 
     # Pre-integrated position
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(rot_prior)
-    rot_contrib = norm_activate(x, 'leakyRelu')
+    rot_contrib = norm_activate(x, 'leakyRelu', b_norm)
     x = custom_layers.PreIntegrationForwardDense(pre_int_shape)(v_prior)
-    vel_contrib = norm_activate(x, 'leakyRelu')
+    vel_contrib = norm_activate(x, 'leakyRelu', b_norm)
     pos_in = layers.Concatenate()([gyro_feat_vec, acc_feat_vec, rot_contrib, vel_contrib])
     x = layers.GRU(64, return_sequences=True)(pos_in)
     x = layers.TimeDistributed(layers.Dense(50, activation='relu'))(x)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
-    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
+    # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
 
-    # state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, (x, y, z), dt_vec])
-    #
-    # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
+    state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, (rot_prior, v_prior, p_prior), dt_vec])
+
+    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
 
 
 def fully_connected_net(args):
@@ -189,7 +190,7 @@ def norm_activate(inputs, activation, do_norm=True, name=None):
 
 
 # Convolution layers
-def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape, max_iterations):
+def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape, max_iterations, b_norm):
 
     # Define parameters for model
     kernel_width = min([window_len, 3])
@@ -203,17 +204,17 @@ def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape,
 
     x2 = custom_layers.ReflectionPadding2D(padding=(0, 2))(x1)
     x2 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1))(x2)
-    x2 = norm_activate(x2, 'relu')
+    x2 = norm_activate(x2, 'relu', b_norm)
     x2 = custom_layers.ReflectionPadding2D(padding=(0, 2))(x2)
     x3 = layers.Conv2D(conv_channels[i], kernel_size=conv_kernel, dilation_rate=(2, 1))(x2)
-    x3 = norm_activate(x3, 'relu')
+    x3 = norm_activate(x3, 'relu', b_norm)
 
     if iterations > 0:
 
         # Downscale
         x_down = layers.Conv2D(conv_channels[i], kernel_size=(2, 1), strides=(2, 1), padding='same')(x3)
         x4 = layers.Conv2D(final_shape[-1], kernel_size=(1, 4))(x1)
-        x4 = norm_activate(x4, 'relu')
+        x4 = norm_activate(x4, 'relu', b_norm)
 
         x_down = down_scaling_loop(x_down, iterations - 1, i + 1, conv_channels, window_len, final_shape, max_iterations)
         x_up = layers.Conv2DTranspose(conv_channels[-1], kernel_size=conv_kernel, strides=(pooling_width, 1),
@@ -223,7 +224,7 @@ def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape,
 
     else:
         x4 = layers.Conv2D(conv_channels[i], kernel_size=(1, 4))(x3)
-        x4 = norm_activate(x4, 'relu')
+        x4 = norm_activate(x4, 'relu', b_norm)
 
     if i == 0:
         # Recover original shape
