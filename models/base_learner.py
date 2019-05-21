@@ -172,11 +172,7 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        dataset = self.get_dataset(train=True,
-                                   val_split=True,
-                                   shuffle=False,
-                                   repeat_ds=True,
-                                   normalize=False)
+        dataset = self.get_dataset(train=True, val_split=True, shuffle=True, repeat_ds=True, normalize=True)
         train_ds, validation_ds, ds_lengths = dataset
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
