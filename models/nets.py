@@ -216,7 +216,7 @@ def down_scaling_loop(x1, iterations, i, conv_channels, window_len, final_shape,
         x4 = layers.Conv2D(final_shape[-1], kernel_size=(1, 4))(x1)
         x4 = norm_activate(x4, 'relu', b_norm)
 
-        x_down = down_scaling_loop(x_down, iterations - 1, i + 1, conv_channels, window_len, final_shape, max_iterations)
+        x_down = down_scaling_loop(x_down, iterations - 1, i + 1, conv_channels, window_len, final_shape, max_iterations, b_norm)
         x_up = layers.Conv2DTranspose(conv_channels[-1], kernel_size=conv_kernel, strides=(pooling_width, 1),
                                       padding='same')(x_down)
 
