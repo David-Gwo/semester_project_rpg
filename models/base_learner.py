@@ -102,10 +102,12 @@ class Learner(object):
             trainable_model = cnn_rnn_pre_int_net(self.config.window_length, 2)
             loss_connections = {"pre_integrated_R": 'mse',
                                 "pre_integrated_v": 'mse',
-                                "pre_integrated_p": 'mse'}
+                                "pre_integrated_p": 'mse',
+                                "state_output": 'mse'}
             loss_weight = {"pre_integrated_R": 1.0,
                            "pre_integrated_v": 1.0,
-                           "pre_integrated_p": 1.0}
+                           "pre_integrated_p": 1.0,
+                           "state_output": 0.2}
 
         print(trainable_model.summary())
 

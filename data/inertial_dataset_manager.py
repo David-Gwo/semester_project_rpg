@@ -49,8 +49,8 @@ class DatasetManager:
         self.dataset_generator = StatePredictionDataset()
 
     def get_dataset(self, dataset_type, *args, train, batch_size, validation_split, split_percentage=0.1, plot=False,
-                    shuffle=True, normalize=True, full_batches=False, repeat_ds=False, force_remake=False,
-                    tensorflow_format=True):
+                    shuffle=True, random_split=True, normalize=True, full_batches=False, repeat_ds=False,
+                    force_remake=False, tensorflow_format=True):
         """
         Generates datasets for training or testing
 
@@ -62,6 +62,7 @@ class DatasetManager:
         :param split_percentage: the percentage of dataset to be split for validation/testing
         :param plot: whether to plot the dataset
         :param shuffle: whether to shuffle the dataset
+        :param random_split: whether to randomly split into train and test datasets
         :param normalize: whether to normalize the dataset
         :param full_batches: whether to enforce same-sized batches in the dataset
         :param repeat_ds: whether to repeat indefinitely the main generated dataset
@@ -87,7 +88,7 @@ class DatasetManager:
                 self.dataset.plot_all_data(title="filtered", from_numpy=True, show=True)
 
             # Generate the training and testing datasets
-            self.save_dataset_to_files(processed_imu, processed_gt, args, split_percentage, shuffle=shuffle)
+            self.save_dataset_to_files(processed_imu, processed_gt, args, split_percentage, random_split=random_split)
 
         if train:
             add_text_to_txt_file(self.dataset.get_ds_directory(), self.training_dir, self.scaler_dir_file)
@@ -95,6 +96,7 @@ class DatasetManager:
         return self.generate_tf_ds(args,
                                    normalize=normalize,
                                    shuffle=shuffle,
+                                   random_split=random_split,
                                    training=train,
                                    validation_split=validation_split,
                                    split_percentage=split_percentage,
@@ -103,7 +105,7 @@ class DatasetManager:
                                    repeat_main_ds=repeat_ds,
                                    tensorflow_format=tensorflow_format)
 
-    def save_dataset_to_files(self, x_data, y_data, args, test_split, shuffle):
+    def save_dataset_to_files(self, x_data, y_data, args, test_split, random_split):
         """
         Generates training and testing datasets, and saves a copy of them
 
@@ -111,7 +113,7 @@ class DatasetManager:
         :param y_data: list of 3D arrays with the ground truth measurements
         :param args: extra arguments for dataset generation
         :param test_split: the percentage of dataset to be split for testing
-        :param shuffle: whether datasets should be shuffled
+        :param random_split: whether datasets should be randomly splitted
         """
 
         ds_dir = self.dataset.get_ds_directory()
@@ -123,7 +125,7 @@ class DatasetManager:
         storage_train_ds_file = "{0}{1}".format(ds_dir, self.train_data_file)
         storage_test_ds_file = "{0}{1}".format(ds_dir, self.test_data_file)
         save_train_and_test_datasets(storage_train_ds_file, storage_test_ds_file, training_data, ground_truth_data,
-                                     test_split, shuffle)
+                                     test_split, random_split)
 
     def is_dataset_ready(self, dataset_type, args):
         """
@@ -141,8 +143,8 @@ class DatasetManager:
         except (NotADirectoryError, FileNotFoundError):
             return False
 
-    def generate_tf_ds(self, args, normalize, shuffle, training, validation_split, split_percentage, batch_size,
-                       full_batches, repeat_main_ds, tensorflow_format):
+    def generate_tf_ds(self, args, normalize, shuffle, random_split, training, validation_split, split_percentage,
+                       batch_size, full_batches, repeat_main_ds, tensorflow_format):
         """
         Recovers the dataset from the files, and generates tensorflow-compatible datasets
 
@@ -151,6 +153,7 @@ class DatasetManager:
         :param validation_split: whether a validation split should be generated
         :param split_percentage: the percentage of dataset to be split for validation/testing
         :param shuffle: whether to shuffle the dataset
+        :param random_split: whether to split the dataset randomly in train and validation
         :param normalize: whether to normalize the dataset
         :param batch_size: batch size of training, validation and testing dataset (same batch size for the three)
         :param full_batches: whether to enforce same-sized batches in the dataset
@@ -169,6 +172,7 @@ class DatasetManager:
         x_keys, y_keys = self.dataset_generator.get_dataset_keys(self.dataset_formatting)
         training_x, training_y = load_mat_data(filename, x_keys, y_keys)
 
+        import matplotlib.pyplot as plt
         # TODO: find more elegant way to chose the tensor to normalize?
         if normalize:
             file = open(self.training_dir + self.scaler_dir_file, "r")
@@ -195,7 +199,7 @@ class DatasetManager:
         main_ds_len = total_ds_len - val_ds_len
 
         # Get validation dataset indexes
-        if shuffle:
+        if random_split:
             val_ds_indexes = np.random.choice(range(total_ds_len), int(val_ds_len), replace=False)
         else:
             val_ds_indexes = range(total_ds_len - val_ds_len, total_ds_len)

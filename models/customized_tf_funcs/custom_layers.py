@@ -166,18 +166,19 @@ class IntegratingLayer(Layer):
             return inputs[0]
 
         state_in = inputs[0]
-        pre_int_vecs = inputs[1]
-        pre_int_rot = exp_mapping(pre_int_vecs[0][:, -1, :])
-        pre_int_vel = pre_int_vecs[1][:, -1, :]
-        pre_int_pos = pre_int_vecs[2][:, -1, :]
+        pre_int_rot = exp_mapping(inputs[1])
+        pre_int_vel = inputs[2]
+        pre_int_pos = inputs[3]
+        total_dt = tf.expand_dims(inputs[4], axis=1)
 
-        total_dt = K.expand_dims(K.sum(K.squeeze(K.squeeze(inputs[2], axis=2), axis=2), axis=1), 1) / 1000
+        pos_i = tf.slice(state_in, [0, 0], [-1, 3])
+        vel_i = tf.slice(state_in, [0, 3], [-1, 3])
+        rot_i = tf.slice(state_in, [0, 6], [-1, 4])
 
-        rot_f = rotate_quat(state_in[:, 6:], pre_int_rot)
-        vel_f = state_in[:, 3:6] + gen_math_ops.mat_mul(total_dt, self.g_vec) + \
-            rotate_vec(pre_int_vel, state_in[:, 6:])
-        pos_f = state_in[:, :3] + math_ops.multiply(state_in[:, 3:6], total_dt) + \
-            1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_int_pos, state_in[:, 6:])
+        rot_f = rotate_quat(rot_i, pre_int_rot)
+        vel_f = vel_i + gen_math_ops.mat_mul(total_dt, self.g_vec) + rotate_vec(pre_int_vel, rot_i)
+        pos_f = pos_i + math_ops.multiply(vel_i, total_dt) + \
+            1/2 * gen_math_ops.mat_mul(total_dt ** 2, self.g_vec) + rotate_vec(pre_int_pos, rot_i)
 
         return concat([pos_f, vel_f, rot_f], axis=1)
 

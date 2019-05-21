@@ -1,7 +1,6 @@
-
-
 def experiment_builder(model_type):
 
+    experiments_dict = {}
     if model_type == 'speed_regression_net':
         experiments_dict = {
             "plot_predictions": {

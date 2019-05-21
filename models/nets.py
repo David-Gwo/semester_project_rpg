@@ -139,7 +139,13 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
 
     # return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior))
 
-    state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, (rot_prior, v_prior, p_prior), dt_vec])
+    # slice tensors
+    delta_rot = tf.squeeze(tf.slice(rot_prior, begin=[0, window_len-1, 0], size=[-1, 1, -1]), axis=1)
+    delta_v = tf.squeeze(tf.slice(v_prior, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
+    delta_p = tf.squeeze(tf.slice(p_prior, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
+    delta_t = tf.reduce_sum(tf.squeeze(dt_vec), axis=1) / 1000
+
+    state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, delta_rot, delta_v, delta_p, delta_t])
 
     return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
 

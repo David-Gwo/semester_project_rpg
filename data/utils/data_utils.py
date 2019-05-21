@@ -212,7 +212,7 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
     return filtered_signal
 
 
-def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, test_split, shuffle):
+def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, test_split, random_split):
     """
     Saves a copy of the train & test datasets as a mat file in a specified file names
 
@@ -221,7 +221,7 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
     :param x_data: x data (samples in first dimension)
     :param y_data: y data (samples in first dimension)
     :param test_split: the percentage of dataset to be split for testing
-    :param shuffle: whether datasets should be shuffled
+    :param random_split: whether datasets should be randomly split
     """
     if os.path.exists(train_ds_node):
         os.remove(train_ds_node)
@@ -237,7 +237,7 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
     test_ds_len = int(np.ceil(total_ds_len * test_split))
 
     # Choose some entries to separate for the test set
-    if shuffle:
+    if random_split:
         test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
     else:
         test_indexes = range(total_ds_len - test_ds_len, total_ds_len)
