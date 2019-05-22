@@ -34,52 +34,6 @@ class Learner(object):
         if self.config.model_type not in self.valid_model_types:
             raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
 
-    def custom_backprop(self, training_ds, validation_ds, ds_lengths, epoch):
-
-        optimizer = tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1)
-
-        for i, (x, y) in enumerate(training_ds):
-
-            if i % 100 == 0:
-                self.last_epoch_number = epoch
-
-            if isinstance(x, dict):
-                for x_key in x.keys():
-                    x[x_key] = tf.cast(x[x_key], tf.float32)
-            else:
-                x = tf.cast(x, tf.float32)
-
-            with tf.GradientTape() as tape:
-                # Forward pass
-                predictions = self.trainable_model(x)
-                predictions = {out.name.split(':')[0]: predictions[i] for i, out in enumerate(
-                    self.trainable_model.outputs)}
-                predictions = {i.split('/')[0]: predictions[i] for i in predictions.keys()}
-
-                # External loss calculation
-                loss_connections = {"state_output": mock_loss,
-                                    "pre_integrated_R": pre_integration_loss,
-                                    "pre_integrated_v": pre_integration_loss,
-                                    "pre_integrated_p": pre_integration_loss}
-                loss = []
-                for key in loss_connections.keys():
-                    loss.append(loss_connections[key](y[key], predictions[key]))
-
-                loss = tf.add_n([loss_i for loss_i in loss])
-
-                # Manual loss combination:
-                loss += sum(self.trainable_model.losses)
-
-            if i % 10 == 0:
-                tf.print("Batch {0} of {1}".format(i, ds_lengths[0]))
-                tf.print("Training loss of batch {0}/{2} is: {1}".format(i, loss, ds_lengths[0]))
-
-            # Get gradients
-            gradient = tape.gradient(loss, self.trainable_model.trainable_weights)
-
-            # Update weights of layer
-            optimizer.apply_gradients(zip(gradient, self.trainable_model.trainable_weights))
-
     def build_and_compile_model(self, is_testing=False):
 
         trainable_model = None
@@ -199,9 +153,6 @@ class Learner(object):
                 period=self.config.save_freq,
                 extra_epoch_number=self.last_epoch_number + 1),
         ]
-
-        # for epoch in range(self.config.max_epochs):
-        #     self.custom_backprop(train_ds, validation_ds, (train_steps_per_epoch, val_steps_per_epoch), epoch)
 
         # Train!
         self.trainable_model.fit(
