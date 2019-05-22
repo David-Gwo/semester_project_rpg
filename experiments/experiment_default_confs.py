@@ -68,7 +68,7 @@ def experiment_builder(model_type):
     elif model_type == 'pre_integration_net':
         experiments_dict = {
             "plot_predictions": {
-                "ds_testing_non_tensorflow_unnormalized": ["predict", "ground_truth"],
+                "ds_training_non_tensorflow_unnormalized": ["predict", "ground_truth"],
                 "options": {
                     "output": "show",
                     "plot_data": {

@@ -147,7 +147,7 @@ class IntegratingLayer(Layer):
     def __init__(self, name=None):
         super(IntegratingLayer, self).__init__(name=name, trainable=False)
         # TODO: pass sign as argument
-        self.g_vec = np.expand_dims(np.array([0, 0, 9.81]), 0)
+        self.g_vec = np.expand_dims(np.array([0, 0, -9.81]), 0)
 
     def call(self, inputs, **kwargs):
 
@@ -163,7 +163,7 @@ class IntegratingLayer(Layer):
         pre_int_rot = tf.squeeze(tf.slice(pre_int_rot, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
         pre_int_vel = tf.squeeze(tf.slice(pre_int_vel, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
         pre_int_pos = tf.squeeze(tf.slice(pre_int_pos, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
-        total_dt = tf.reduce_sum(tf.squeeze(total_dt, axis=[2,3]), axis=1) / 1000
+        total_dt = tf.reduce_sum(tf.squeeze(total_dt, axis=[2, 3]), axis=1) / 1000
 
         pre_int_rot = exp_mapping(pre_int_rot)
         total_dt = tf.expand_dims(total_dt, axis=1)

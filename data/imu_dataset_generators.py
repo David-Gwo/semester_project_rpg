@@ -215,11 +215,16 @@ class StatePredictionDataset:
         window_len = args[0]
 
         # TODO: get as a parameter of the dataset
-        g_val = 9.81
+        g_val = -9.81
 
-        n_samples = len(self.imu_raw) - window_len
+        n_samples = len(self.imu_raw) - window_len - 1
 
         self.windowed_imu_for_state_prediction(args)
+
+        # Adjustments for the pre-integration dataset
+        self.x_ds["imu_input"] = self.x_ds["imu_input"][1:]
+        self.x_ds["state_input"] = self.x_ds["state_input"][1:]
+        self.y_ds["state_output"] = self.y_ds["state_output"][:-1]
 
         gt_augmented = self.x_ds["state_input"]
         gt_augmented = np.concatenate((gt_augmented, self.y_ds["state_output"][-window_len:, :]), axis=0)
