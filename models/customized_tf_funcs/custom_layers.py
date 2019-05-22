@@ -1,8 +1,8 @@
 from tensorflow.python.keras.layers import Layer, InputSpec
 from tensorflow.python.ops import gen_math_ops, math_ops, nn
-from tensorflow.python.ops.array_ops import expand_dims, concat, ops
+from tensorflow.python.ops.array_ops import concat, ops
 from tensorflow.python.keras import activations, initializers
-from tensorflow.python.framework import dtypes, tensor_shape
+from tensorflow.python.framework import dtypes
 from tensorflow.python.keras import backend as K
 
 from utils.algebra import exp_mapping, apply_state_diff, rotate_quat, rotate_vec
@@ -133,18 +133,6 @@ class PreIntegrationForwardDense(Layer):
         return outputs
 
 
-class ExponentialRemappingLayer(Layer):
-    def __init__(self, name=None):
-        super(ExponentialRemappingLayer, self).__init__(name=name, trainable=False)
-
-    def call(self, inputs, **kwargs):
-        if not inputs.shape[0]:
-            return concat([inputs, expand_dims(inputs[:, 0], axis=1)], axis=1)
-
-        q = exp_mapping(inputs[:, 6:9])
-        return concat([inputs[:, :6], q], axis=1)
-
-
 class DiffConcatenationLayer(Layer):
     def __init__(self, name=None):
         super(DiffConcatenationLayer, self).__init__(name=name, trainable=False)
@@ -162,8 +150,6 @@ class IntegratingLayer(Layer):
         self.g_vec = np.expand_dims(np.array([0, 0, 9.81]), 0)
 
     def call(self, inputs, **kwargs):
-        if not inputs[0].shape[0]:
-            return inputs[0]
 
         state_in = inputs[0]
         pre_int_rot = exp_mapping(inputs[1])

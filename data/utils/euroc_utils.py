@@ -115,15 +115,15 @@ class EurocDSManager(InertialDataset):
         self.interpolate_ground_truth()
 
         # Cut away last 1% samples (noisy measurements)
-        self.imu_data = self.imu_data[0:int(np.ceil(0.2 * len(self.imu_data)))]
-        self.gt_data = self.gt_data[0:int(np.ceil(0.2 * len(self.gt_data)))]
+        self.imu_data = self.imu_data[0:int(np.ceil(0.99 * len(self.imu_data)))]
+        self.gt_data = self.gt_data[0:int(np.ceil(0.99 * len(self.gt_data)))]
 
         return self.imu_data, self.gt_data
 
     def pre_process_data(self, gyro_scale_file, acc_scale_file):
         self.basic_preprocessing(gyro_scale_file, acc_scale_file, 10)
 
-        # self.imu_data, self.gt_data = expand_dataset_region(self.imu_data, self.gt_data)
+        self.imu_data, self.gt_data = expand_dataset_region(self.imu_data, self.gt_data)
 
         return self.imu_data, self.gt_data
 

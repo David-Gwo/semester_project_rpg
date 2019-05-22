@@ -45,8 +45,8 @@ def pre_integration_net(args):
     channels = [2**i for i in range(3, 3 + n_iterations + 1)]
     final_shape = (pre_int_shape[0], pre_int_shape[1], channels[-1])
 
-    gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels, window_len, final_shape, n_iterations)
-    acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations)
+    gyro_feat_vec = down_scaling_loop(gyro, n_iterations, 0, channels, window_len, final_shape, n_iterations, True)
+    acc_feat_vec = down_scaling_loop(acc, n_iterations, 0, channels, window_len, final_shape, n_iterations, True)
     feat_vec = layers.Concatenate()([gyro_feat_vec, acc_feat_vec])
 
     # Pre-integrated rotation
@@ -64,8 +64,8 @@ def pre_integration_net(args):
     x = layers.Reshape(pre_int_shape)(x)
     x = layers.Concatenate(axis=2)([x, feat_vec])
     x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
-    v_prior = layers.LSTM(3, return_sequences=True)(x)
-    # v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    # v_prior = layers.LSTM(3, return_sequences=True)(x)
+    v_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     pre_integrated_v_flat = layers.Flatten(name="pre_integrated_v")(v_prior)
 
     # Pre-integrated position
@@ -79,8 +79,8 @@ def pre_integration_net(args):
     x = layers.Reshape(pre_int_shape)(x)
     x = layers.Concatenate(axis=2)([x, feat_vec])
     x = layers.Bidirectional(layers.LSTM(64, return_sequences=True), merge_mode='concat')(x)
-    p_prior = layers.LSTM(3, return_sequences=True)(x)
-    # p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
+    # p_prior = layers.LSTM(3, return_sequences=True)(x)
+    p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]))(x)
     pre_integrated_p_flat = layers.Flatten(name="pre_integrated_p")(p_prior)
 
     #
@@ -99,7 +99,7 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     input_state_shape = (10,)
     pre_int_shape = (window_len, 3)
     imu_input_shape = (window_len, 7, 1)
-    b_norm = True
+    b_norm = False
 
     # Input layers. Don't change names
     imu_in = layers.Input(imu_input_shape, name="imu_input")
