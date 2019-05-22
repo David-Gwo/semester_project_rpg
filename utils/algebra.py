@@ -111,7 +111,7 @@ def rotate_quat(q1, q2):
 def rotate_vec(v, q):
     if any([isinstance(q, tf.Tensor), isinstance(v, tf.Tensor)]):
         return tf.map_fn(lambda x: tf.squeeze(tf.matmul(
-                tfq.Quaternion(x[1]).as_rotation_matrix(), tf.expand_dims(x[0], axis=1))
+                tfq.Quaternion(x[1]).as_rotation_matrix(), tf.expand_dims(x[0], axis=1)), axis=1
            ), (v, q), dtype=tf.float32)
     if len(np.shape(v)) == 2:
         if len(np.shape(q)) == 2:

@@ -27,6 +27,14 @@ class ExperimentManager:
         }
 
         self.valid_plot_types = ["10-dof-state", "9-dof-state-lie", "pre_integration", "scalar"]
+        self.output_type_vars = {
+            "10-dof-state": {
+                "shape": (10, )
+            },
+            "9-dof-state-lie": {
+                "shape": (9, )
+            }
+        }
 
     def run_experiment(self, experiment_func, datasets_and_options):
 
@@ -140,6 +148,7 @@ class ExperimentManager:
         assert "state_out" in experiment_options.keys()
 
         output_name = list(experiment_options["plot_data"].keys())[0]
+        output_size = self.output_type_vars[experiment_options["plot_data"][output_name]["type"]]["shape"]
 
         for i, dataset in enumerate(datasets):
             if n_predictions is None:
@@ -149,11 +158,10 @@ class ExperimentManager:
 
                 if option == "predict":
                     model = self.model_loader()
-                    output_size = model.get_layer(output_name).output_shape[1:]
                     model_predictions = np.zeros((n_predictions + 1, ) + output_size)
                     progress_bar = Progbar(n_predictions)
                     model_out = {}
-                    for it in range(n_predictions):
+                    for it in range(n_predictions + 1):
                         progress_bar.update(it)
                         ds_i = self.window_len * it
                         model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
@@ -166,10 +174,6 @@ class ExperimentManager:
                         model_out = create_predictions_dict(model_out, model)
                         model_predictions[it, :] = model_out[output_name]
 
-                    ds_i = self.window_len * n_predictions
-                    model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
-                    model_predictions[n_predictions, :] = model.predict(model_in, verbose=0)
-                    progress_bar.update(n_predictions)
                     predictions[output_name] = model_predictions
 
                 elif option == "compare_prediction":

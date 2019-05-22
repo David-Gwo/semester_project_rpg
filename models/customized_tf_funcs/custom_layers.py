@@ -152,10 +152,21 @@ class IntegratingLayer(Layer):
     def call(self, inputs, **kwargs):
 
         state_in = inputs[0]
-        pre_int_rot = exp_mapping(inputs[1])
+        pre_int_rot = inputs[1]
         pre_int_vel = inputs[2]
         pre_int_pos = inputs[3]
-        total_dt = tf.expand_dims(inputs[4], axis=1)
+        total_dt = inputs[4]
+
+        window_len = pre_int_rot.shape[1]
+
+        # slice tensors
+        pre_int_rot = tf.squeeze(tf.slice(pre_int_rot, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
+        pre_int_vel = tf.squeeze(tf.slice(pre_int_vel, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
+        pre_int_pos = tf.squeeze(tf.slice(pre_int_pos, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
+        total_dt = tf.reduce_sum(tf.squeeze(total_dt, axis=[2,3]), axis=1) / 1000
+
+        pre_int_rot = exp_mapping(pre_int_rot)
+        total_dt = tf.expand_dims(total_dt, axis=1)
 
         pos_i = tf.slice(state_in, [0, 0], [-1, 3])
         vel_i = tf.slice(state_in, [0, 3], [-1, 3])
