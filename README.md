@@ -60,9 +60,17 @@ mkvirtualenv tensorflow_2.0_venv # Use any name you prefer for the venv
 This will activate the virtual environment by default. 
 
 ### Install dependencies
-Finally, install the python dependencies:
+Finally, install the python dependencies for the project:
 ```
 cd rpg_imu_prior_learning
+python setup.py install
+```
+
+Additionally, you will need to install the tf-quaternion library, which allows to do quaternion oeprations in a differentiable way for Tensorflow. This library has been customly adapted to work with tf 2.0a. Go back to your working directory and clone & install the package:
+```
+cd ..
+git clone https://github.com/tmguillem/tf-quaternion
+cd tf-quaternion
 python setup.py install
 ```
 
