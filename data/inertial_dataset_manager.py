@@ -172,7 +172,6 @@ class DatasetManager:
         x_keys, y_keys = self.dataset_generator.get_dataset_keys(self.dataset_formatting)
         training_x, training_y = load_mat_data(filename, x_keys, y_keys)
 
-        import matplotlib.pyplot as plt
         # TODO: find more elegant way to chose the tensor to normalize?
         if normalize:
             file = open(self.training_dir + self.scaler_dir_file, "r")

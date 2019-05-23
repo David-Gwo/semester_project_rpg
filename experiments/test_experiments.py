@@ -161,9 +161,9 @@ class ExperimentManager:
                     model_predictions = np.zeros((n_predictions + 1, ) + output_size)
                     progress_bar = Progbar(n_predictions)
                     model_out = {}
+                    ds_i = 0
                     for it in range(n_predictions + 1):
                         progress_bar.update(it)
-                        ds_i = self.window_len * it
                         model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
                         if it > 0:
                             past_pred = model_out[experiment_options["state_out"]["name"]]
@@ -173,25 +173,26 @@ class ExperimentManager:
                         model_out = model.predict(model_in, verbose=0)
                         model_out = create_predictions_dict(model_out, model)
                         model_predictions[it, :] = model_out[output_name]
+                        ds_i += self.window_len - 1
 
                     predictions[output_name] = model_predictions
 
                 elif option == "compare_prediction":
-                    model_predictions = np.zeros((n_predictions + 1, 10))
-                    model_in = np.expand_dims(dataset[0][0, :, :, 0], axis=0)
-                    model_predictions[0, :] = model_in[0, self.window_len:, 0]
+                    model_predictions = np.zeros((n_predictions + 1, ) + output_size)
                     progress_bar = Progbar(n_predictions)
+                    state_in = np.expand_dims(dataset[0][experiment_options["state_in"]][0], axis=0)
+                    ds_i = 0
 
-                    for it in range(n_predictions):
+                    for it in range(n_predictions + 1):
                         progress_bar.update(it)
-                        model_out = self.alt_prediction_algo(model_in, self.window_len, track_progress=False)
+                        model_out = self.alt_prediction_algo(
+                            np.squeeze(np.expand_dims(dataset[0]["imu_input"][ds_i], axis=0), axis=-1), state_in, False)
                         model_predictions[it, :] = model_out
-                        model_in = np.expand_dims(dataset[0][self.window_len * (it + 1), :, :, 0], axis=0)
-                        model_in[0, self.window_len:, 0] = np.squeeze(np.transpose(model_out))
+                        state_in = model_out
+                        ds_i += self.window_len - 1
 
-                    model_predictions[-1, :] = self.alt_prediction_algo(model_in, self.window_len, track_progress=False)
                     progress_bar.update(n_predictions)
-                    comparisons = model_predictions
+                    comparisons[output_name] = model_predictions
 
                 elif option == "ground_truth":
                     gt = {k: dataset[1][k][:n_predictions * self.window_len, :] for k in experiment_options["plot_data"].keys()}

@@ -75,8 +75,8 @@ class Learner(object):
 
         self.trainable_model = trainable_model
 
-    def get_dataset(self, train, val_split, shuffle, const_batch_size=False, normalize=True, repeat_ds=False,
-                    tensorflow_format=True):
+    def get_dataset(self, train, val_split, shuffle, random_split=True, const_batch_size=False, normalize=True,
+                    repeat_ds=False, tensorflow_format=True):
 
         force_remake = self.config.force_ds_remake
 
@@ -91,6 +91,7 @@ class Learner(object):
                                            self.config.window_length,
                                            batch_size=self.config.batch_size,
                                            validation_split=val_split,
+                                           random_split=random_split,
                                            train=train,
                                            plot=self.config.plot_ds,
                                            shuffle=shuffle,
@@ -126,7 +127,8 @@ class Learner(object):
         self.trained_model_dir = self.config.checkpoint_dir + model_number + '/'
 
         # Get training and validation datasets from saved files
-        dataset = self.get_dataset(train=True, val_split=True, shuffle=True, repeat_ds=True, normalize=True)
+        dataset = self.get_dataset(train=True, val_split=True, random_split=False, shuffle=True, repeat_ds=True,
+                                   normalize=False)
         train_ds, validation_ds, ds_lengths = dataset
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
@@ -223,6 +225,7 @@ class Learner(object):
         shuffle = False
         normalize = True
         repeat_ds = False
+        random_split = False
         tensorflow_format = True
 
         if 'training' in dataset_tags:
@@ -236,6 +239,7 @@ class Learner(object):
                                    val_split=val_split,
                                    const_batch_size=const_batch_size,
                                    shuffle=shuffle,
+                                   random_split=random_split,
                                    normalize=normalize,
                                    repeat_ds=repeat_ds,
                                    tensorflow_format=tensorflow_format)

@@ -115,7 +115,7 @@ class InertialDataset(ABC):
         fs = self.sampling_freq  # Sample frequency (Hz)
         f0 = filter_freq  # Frequency to be removed from signal (Hz)
         w0 = f0 / (fs / 2)  # Normalized Frequency
-        [b_bw, a_bw] = butterworth_filter(3, w0, output='ba')
+        [b_bw, a_bw] = butterworth_filter(10, w0, output='ba')
 
         for i, tit in zip(range(imu_channels), ("log(STFT) gyro", "log(STFT) acc")):
             filt_res = filter_with_coeffs(a_bw, b_bw, np.stack(imu_unroll[:, i]), fs, self.plot_stft)
