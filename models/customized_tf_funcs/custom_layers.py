@@ -187,9 +187,21 @@ class ReflectionPadding2D(Layer):
         super(ReflectionPadding2D, self).__init__(**kwargs)
 
     def compute_output_shape(self, s):
-        """ If you are using "channels_last" configuration"""
         return s[0], s[1] + 2 * self.padding[0], s[2] + 2 * self.padding[1], s[3]
 
     def call(self, x, mask=None):
         w_pad, h_pad = self.padding
         return tf.pad(x, [[0, 0], [h_pad, h_pad], [w_pad, w_pad], [0, 0]], 'SYMMETRIC')
+
+
+class DifferenceRegularizer(Layer):
+    def __init__(self, weight, **kwargs):
+        super(DifferenceRegularizer, self).__init__(**kwargs)
+        self.weight = weight
+
+    def call(self, inputs, **kwargs):
+        y = ops.convert_to_tensor(inputs)
+        y = tf.map_fn(lambda x: tf.reduce_sum(tf.square(x[:, 1:]-x[:, :-1]), axis=(0, 1, 2)) +
+                      tf.reduce_sum(x[:, 0, :], axis=(0, 1)), tf.transpose(y, perm=[1, 2, 3, 0]))
+        self.add_loss(tf.reduce_mean(y) * self.weight)
+        return inputs

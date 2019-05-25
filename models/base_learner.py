@@ -11,10 +11,6 @@ from models.customized_tf_funcs.custom_callbacks import CustomModelCheckpoint
 from models.customized_tf_funcs.custom_losses import *
 from experiments.test_experiments import ExperimentManager
 
-#############################################################################
-# IMPORT HERE A LIBRARY TO PRODUCE ALL THE FILENAMES (and optionally labels)#
-# OF YOUR DATASET. HAVE A LOOK AT `DirectoryIterator' FOR AN EXAMPLE        #
-#############################################################################
 sys.path.append("../")
 
 
@@ -35,10 +31,6 @@ class Learner(object):
             raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
 
     def build_and_compile_model(self, is_testing=False):
-
-        trainable_model = None
-        loss_connections = {}
-        loss_weight = {}
 
         if self.config.model_type == "speed_regression_net":
             trainable_model = vel_cnn(self.config.window_length)
@@ -62,6 +54,8 @@ class Learner(object):
                            "pre_integrated_v": 1.0,
                            "pre_integrated_p": 1.0,
                            "state_output": 0.2}
+        else:
+            raise NameError("Model type not known. Expected one of {0}".format(self.valid_model_types))
 
         print(trainable_model.summary())
 
@@ -128,7 +122,7 @@ class Learner(object):
 
         # Get training and validation datasets from saved files
         dataset = self.get_dataset(train=True, val_split=True, random_split=False, shuffle=True, repeat_ds=True,
-                                   normalize=True)
+                                   normalize=False)
         train_ds, validation_ds, ds_lengths = dataset
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))
@@ -159,7 +153,7 @@ class Learner(object):
         # Train!
         self.trainable_model.fit(
             train_ds,
-            verbose=2,
+            verbose=1,
             epochs=self.config.max_epochs,
             steps_per_epoch=train_steps_per_epoch,
             validation_steps=val_steps_per_epoch,
