@@ -159,7 +159,7 @@ class IntegratingLayer(Layer):
 
         window_len = pre_int_rot.shape[1]
 
-        # slice tensors
+        # slice tensors to get last element
         pre_int_rot = tf.squeeze(tf.slice(pre_int_rot, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
         pre_int_vel = tf.squeeze(tf.slice(pre_int_vel, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)
         pre_int_pos = tf.squeeze(tf.slice(pre_int_pos, begin=[0, window_len - 1, 0], size=[-1, 1, -1]), axis=1)

@@ -29,7 +29,7 @@ class Learner(object):
         self.experiment_manager = None
 
         self.valid_model_types = [
-            "speed_regression_net", "windowed_integration_net", "windowed_integration_net_so3", "pre_integration_net"]
+            "speed_regression_net", "integration_net", "integration_so3_net", "preintegration_net"]
 
         if self.config.model_type not in self.valid_model_types:
             raise ValueError("This type of the model is not one of the valid ones: %s" % self.valid_model_types)
@@ -44,15 +44,15 @@ class Learner(object):
             trainable_model = vel_cnn(self.config.window_length)
             loss_connections = {"state_output": l1_loss}
             loss_weight = {"state_output": 1.0}
-        elif self.config.model_type == "windowed_integration_net":
+        elif self.config.model_type == "integration_net":
             trainable_model = imu_integration_net(self.config.window_length, 10)
             loss_connections = {"state_output": state_loss}
             loss_weight = {"state_output": 1.0}
-        elif self.config.model_type == "windowed_integration_net_so3":
+        elif self.config.model_type == "integration_so3_net":
             trainable_model = imu_integration_net(self.config.window_length, 9)
             loss_connections = {"state_output": 'mse'}
             loss_weight = {"state_output": 1.0}
-        elif self.config.model_type == "pre_integration_net":
+        elif self.config.model_type == "preintegration_net":
             trainable_model = cnn_rnn_pre_int_net(self.config.window_length, 2)
             loss_connections = {"pre_integrated_R": 'mse',
                                 "pre_integrated_v": 'mse',

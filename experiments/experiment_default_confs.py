@@ -18,7 +18,7 @@ def experiment_builder(model_type):
                 }
             }
         }
-    elif model_type == 'windowed_integration_net':
+    elif model_type == 'integration_net':
         experiments_dict = {
             "plot_predictions": {
                 "ds_testing_non_tensorflow": ["predict"],
@@ -33,7 +33,7 @@ def experiment_builder(model_type):
                 }
             }
         }
-    elif model_type == 'windowed_integration_net_so3':
+    elif model_type == 'integration_so3_net':
         experiments_dict = {
             # "plot_predictions": {
             #     "ds_testing_non_tensorflow": ["predict"],
@@ -67,7 +67,7 @@ def experiment_builder(model_type):
                 }
             },
         }
-    elif model_type == 'pre_integration_net':
+    elif model_type == 'preintegration_net':
         experiments_dict = {
             "plot_predictions": {
                 "ds_testing_non_tensorflow_unnormalized": ["predict", "ground_truth", "compare_prediction"],

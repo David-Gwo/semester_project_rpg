@@ -11,25 +11,23 @@ class StatePredictionDataset:
         self.gt_raw = None
         self.x_ds = {}
         self.y_ds = {}
-        self.accepted_datasets = ["windowed_imu_integration",
-                                  "windowed_imu_speed_regression",
-                                  "windowed_imu_integration_with_so3_rotation",
-                                  "windowed_imu_preintegration"]
+        self.accepted_datasets = [
+            "imu_integration", "imu_speed_regression", "imu_so3_integration", "imu_preintegration"]
 
         self.dataset_keys = {
-            "windowed_imu_integration": {
+            "imu_integration": {
                 "x_keys": ["state_input", "imu_input"],
                 "y_keys": ["state_output"]
             },
-            "windowed_imu_speed_regression": {
+            "imu_speed_regression": {
                 "x_keys": ["imu_input"],
                 "y_keys": ["state_output"]
             },
-            "windowed_imu_integration_with_so3_rotation": {
+            "imu_so3_integration": {
                 "x_keys": ["state_input", "imu_input"],
                 "y_keys": ["state_output"]
             },
-            "windowed_imu_preintegration": {
+            "imu_preintegration": {
                 "x_keys": ["state_input", "imu_input"],
                 "y_keys": ["pre_integrated_R", "pre_integrated_v", "pre_integrated_p", "state_output"]
             }
@@ -63,13 +61,13 @@ class StatePredictionDataset:
 
         assert dataset in self.accepted_datasets, "The dataset version must be among {0}".format(self.accepted_datasets)
 
-        if dataset == "windowed_imu_integration":
+        if dataset == "imu_integration":
             self.windowed_imu_for_state_prediction(args)
-        elif dataset == "windowed_imu_integration_with_so3_rotation":
+        elif dataset == "imu_so3_integration":
             self.windowed_with_so3_rotation(args)
-        elif dataset == "windowed_imu_speed_regression":
+        elif dataset == "imu_speed_regression":
             self.imu_speed_regression(args)
-        elif dataset == "windowed_imu_preintegration":
+        elif dataset == "imu_preintegration":
             self.windowed_imu_preintegration_dataset(args)
 
     def set_outputs(self, keys, outputs):
