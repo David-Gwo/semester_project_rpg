@@ -7,6 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from scipy import signal
 from scipy.interpolate import interp1d
+from mpl_toolkits.axes_grid1 import ImageGrid
 
 from tensorflow.python.keras import datasets as k_ds
 from tensorflow.python.keras.utils import to_categorical
@@ -110,7 +111,13 @@ def load_mat_data(directory, x_keys, y_keys):
             aux = np.zeros(y_data[y_key].shape)
             for i in range(np.shape(aux)[0]):
                 for j in range(np.shape(aux)[1]):
-                    aux[i][j] = y_data[y_key][i][j][0][0]
+                    try:
+                        aux[i][j] = y_data[y_key][i][j][0][0]
+                    except IndexError:
+                        try:
+                            aux[i][j] = y_data[y_key][i][j][0]
+                        except IndexError:
+                            aux[i][j] = y_data[y_key][i][j]
             y_data[y_key] = aux
 
     return x_data, y_data
@@ -161,31 +168,50 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
     :return:
     """
 
+    filtered_signal = signal.lfilter(b, a, time_series, axis=0)
     if plot_stft:
         assert sampling_f is not None, "A sampling frequency must be specified to plot the STFT"
-        plt.figure()
-        f, t, stft = signal.stft(time_series[:, 0], sampling_f)
-        plt.subplot(2, 1, 1)
-        plt.pcolormesh(t, f, np.abs(stft))
-        plt.title('STFT Magnitude')
-        plt.ylabel('Frequency [Hz]')
-        plt.xlabel('Time [sec]')
+        figure = plt.figure()
+        figure.tight_layout()
+        time_series_dim = time_series.shape[1]
 
-    filtered_signal = signal.lfilter(b, a, time_series, axis=0)
+        grid1 = ImageGrid(figure, 111, nrows_ncols=(2, time_series_dim), axes_pad=0.15, share_all=True,
+                          cbar_location="right", cbar_mode="single", cbar_size="7%", cbar_pad=0.15, aspect=False)
+        axes = grid1.axes_all
 
-    if plot_stft:
-        f, t, stft = signal.stft(filtered_signal[:, 0], 200)
-        plt.subplot(2, 1, 2)
-        plt.pcolormesh(t, f, np.abs(stft))
-        plt.title('STFT Magnitude')
-        plt.ylabel('Frequency [Hz]')
-        plt.xlabel('Time [sec]')
-        plt.show()
+        stft = []
+        t = f = None
+        for i in range(time_series_dim):
+            f, t, stft1 = signal.stft(time_series[:, i], sampling_f)
+            f, t, stft2 = signal.stft(filtered_signal[:, i], sampling_f)
+
+            stft.append(np.log(np.abs(stft1)))
+            stft.append(np.log(np.abs(stft2)))
+
+        vmax = np.amax(stft)
+        vmin = np.amin(stft)
+        im = None
+        for i in range(time_series_dim):
+            ax = axes[i]
+            ax.pcolormesh(t, f, stft[i * 2], vmin=vmin, vmax=vmax)
+            if i == 0:
+                ax.set_ylabel('Frequency [Hz] Raw')
+
+            ax = axes[i + time_series_dim]
+
+            im = ax.pcolormesh(t, f, stft[i * 2 + 1], vmin=vmin, vmax=vmax)
+            if i == 0:
+                ax.set_ylabel('Frequency [Hz] Filtered')
+            ax.set_xlabel('Time [sec]')
+
+        grid1.cbar_axes[0].colorbar(im)
+
+        return filtered_signal, figure
 
     return filtered_signal
 
 
-def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, test_split, shuffle):
+def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, test_split, random_split):
     """
     Saves a copy of the train & test datasets as a mat file in a specified file names
 
@@ -194,7 +220,7 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
     :param x_data: x data (samples in first dimension)
     :param y_data: y data (samples in first dimension)
     :param test_split: the percentage of dataset to be split for testing
-    :param shuffle: whether datasets should be shuffled
+    :param random_split: whether datasets should be randomly split
     """
     if os.path.exists(train_ds_node):
         os.remove(train_ds_node)
@@ -210,7 +236,7 @@ def save_train_and_test_datasets(train_ds_node, test_ds_node, x_data, y_data, te
     test_ds_len = int(np.ceil(total_ds_len * test_split))
 
     # Choose some entries to separate for the test set
-    if shuffle:
+    if random_split:
         test_indexes = np.random.choice(total_ds_len, test_ds_len, replace=False)
     else:
         test_indexes = range(total_ds_len - test_ds_len, total_ds_len)

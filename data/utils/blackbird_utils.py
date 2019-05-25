@@ -5,7 +5,6 @@ import csv
 import os
 
 import numpy as np
-from pyquaternion import Quaternion
 
 from utils.directories import safe_mkdir_recursive
 from utils.algebra import correct_quaternion_flip
@@ -17,14 +16,14 @@ from data.utils.data_utils import get_file_from_url
 class BBIMU(IMU):
     def __init__(self):
         super(BBIMU, self).__init__()
-        self.gyro_indx = [14, 15, 16]
-        self.acc_indx = [19, 20, 21]
 
     def read(self, data):
+        gyro_indx = [14, 15, 16]
+        acc_indx = [19, 20, 21]
         data = np.array(data)
         self.timestamp = data[0].astype(np.float) / 1000
-        self.gyro = data[self.gyro_indx].astype(np.float)
-        self.acc = data[self.acc_indx].astype(np.float)
+        self.gyro = data[gyro_indx].astype(np.float)
+        self.acc = data[acc_indx].astype(np.float)
 
 
 class BBGT(GT):
@@ -37,21 +36,6 @@ class BBGT(GT):
         self.timestamp = data[0]
         self.pos = data[1:4]
         self.att = data[4:8]
-
-    def integrate(self, gt_old):
-        """
-        Integrates position and attitude to obtain velocity and angular velocity. Saves integrated values to current
-        BBGT object
-
-        :param gt_old: BBGT from previous timestamp
-        """
-
-        # TODO: implement angular velocity integration
-
-        dt = (self.timestamp - gt_old.timestamp) * 10e-6
-        self.vel = (self.pos - gt_old.pos) / dt
-        att_q = Quaternion(self.att[0], self.att[1], self.att[2], self.att[3])
-        self.ang_vel = self.ang_vel
 
 
 class BlackbirdDSManager(InertialDataset):
@@ -211,8 +195,8 @@ class BlackbirdDSManager(InertialDataset):
 
         return self.imu_data, self.gt_data
 
-    def pre_process_data(self, gyro_scale_file, acc_scale_file, filter_freq):
-        super(BlackbirdDSManager, self).pre_process_data(gyro_scale_file, acc_scale_file, filter_freq)
+    def pre_process_data(self, gyro_scale_file, acc_scale_file):
+        self.basic_preprocessing(gyro_scale_file, acc_scale_file, 10)
 
         corrected_quaternion = correct_quaternion_flip(np.stack(self.gt_data[:, 2]))
         for i in range(len(self.gt_data)):

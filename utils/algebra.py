@@ -2,18 +2,17 @@ import numpy as np
 from pyquaternion import Quaternion
 from tensorflow.python.keras.utils import Progbar
 import tensorflow as tf
+import tfquaternion as tfq
 
 
-def imu_integration(imu_data, window_len, track_progress=True):
+def imu_integration(imu_data, x_0_v, track_progress=True):
 
     # TODO: get a better comparison
 
     samples = len(imu_data)
-    output_dim = np.shape(imu_data)[1] - window_len
+    out = np.zeros((samples, 10))
 
-    out = np.zeros((samples, output_dim))
-
-    imu_v, t_diff_v, x_0_v = imu_data[:, :window_len, :6], imu_data[:, :window_len, 6:], imu_data[:, window_len:, 0]
+    imu_v, t_diff_v = imu_data[:, :, :6], imu_data[:, :, 6:]
 
     # Convert time diff to seconds
     t_diff_v = np.squeeze(np.stack(t_diff_v/1000), axis=2)
@@ -31,7 +30,7 @@ def imu_integration(imu_data, window_len, track_progress=True):
         v_i = x_0_v[sample, 3:6]
         q_i = Quaternion(x_0_v[sample, 6:]).unit
 
-        for i in range(window_len):
+        for i in range(len(t_diff)):
 
             dt = t_diff[i]
 
@@ -56,11 +55,27 @@ def imu_integration(imu_data, window_len, track_progress=True):
         out[sample, 3:6] = v_i
         out[sample, 6:] = q_i.elements
 
+    out[:, 6:] = correct_quaternion_flip(out[:, 6:])
     return out
 
 
 def inv_rotate_quat(q1, q2):
     return q2 * q1.inverse
+
+
+def q_inv(q):
+    """
+    Returns the inverse of quaternion q
+    :param q: Rotation quaternion
+    :return: The inverse quaternion
+    """
+
+    if len(np.shape(q)) == 2:
+        return np.array([Quaternion(q_i).inverse.elements for q_i in q])
+    elif len(np.shape(q)) == 1:
+        return np.array(Quaternion(q).inverse.elements)
+    else:
+        raise TypeError("The initial quaternion must be a vector or a 2D array")
 
 
 def rotate_quat(q1, q2):
@@ -71,6 +86,9 @@ def rotate_quat(q1, q2):
     :param q2: Rotation quaternion
     :return: The rotated quaternion
     """
+
+    if any([isinstance(q1, tf.Tensor), isinstance(q2, tf.Tensor)]):
+        return tfq.Quaternion(q2) * tfq.Quaternion(q1)
 
     if len(np.shape(q1)) == 2:
         if len(np.shape(q2)) == 2:
@@ -91,6 +109,10 @@ def rotate_quat(q1, q2):
 
 
 def rotate_vec(v, q):
+    if any([isinstance(q, tf.Tensor), isinstance(v, tf.Tensor)]):
+        return tf.map_fn(lambda x: tf.squeeze(tf.matmul(
+                tfq.Quaternion(x[1]).as_rotation_matrix(), tf.expand_dims(x[0], axis=1)), axis=1
+           ), (v, q), dtype=tf.float32)
     if len(np.shape(v)) == 2:
         if len(np.shape(q)) == 2:
             return np.array([Quaternion(q_i).unit.rotate(v_i) for q_i, v_i in zip(q, v)])
@@ -185,11 +207,21 @@ def exp_mapping(w_vec):
     :param w_vec: 3 component vector or array of vectors
     :return: the Lie group SU2 (in quaternion format) of the so3 Lie algebra
     """
-    
-    q_vec = np.array(
-        [Quaternion().elements if all(np.isclose(list(w), [0, 0, 0]))
-         else np.append(np.cos(np.linalg.norm(w)/2), np.sin(np.linalg.norm(w)/2)/np.linalg.norm(w)*w)
-         for w in w_vec])
+
+    if isinstance(w_vec, tf.Tensor):
+        w_norm = tf.map_fn(
+            lambda x: tf.cond(tf.reduce_all(tf.map_fn(lambda x_i: tf.abs(x_i) < 0.00001, x, dtype=tf.bool)),
+                              lambda: 0.00001, lambda: tf.norm(x)), w_vec, dtype=tf.float32)
+
+        w_term = tf.expand_dims(tf.math.cos(w_norm/2), axis=1)
+        xyz_term = tf.multiply(tf.expand_dims(tf.math.divide(tf.math.sin(w_norm/2), w_norm), axis=1), w_vec)
+        q_vec = tf.concat((w_term, xyz_term), axis=1)
+
+    else:
+        q_vec = np.array(
+            [Quaternion().elements if all(np.isclose(list(w), [0, 0, 0]))
+             else np.append(np.cos(np.linalg.norm(w)/2), np.sin(np.linalg.norm(w)/2)/np.linalg.norm(w)*w)
+             for w in w_vec])
 
     return q_vec
 

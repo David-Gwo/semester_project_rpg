@@ -20,10 +20,14 @@ def l2_loss(y_true, y_pred):
 
 
 def pre_integration_loss(y_true, y_pred):
-    if not y_pred.shape[0]:
-        return tf.reduce_sum(y_pred, axis=1)
 
-    return mean_absolute_error(tf.reshape(y_true, [y_true.shape[0], -1]), y_pred)
+    if not y_pred.shape[0]:
+        return tf.reshape(y_pred, [-1, np.prod(y_pred.shape[1:])])
+
+    batch_size = y_pred.shape[0]
+    flattened_size = np.prod(y_pred.shape[1:])
+    return mean_absolute_error(tf.reshape(y_true, (batch_size, flattened_size)),
+                               tf.reshape(y_pred, (batch_size, flattened_size)))
 
 
 def mock_loss(y_true, _):
@@ -48,7 +52,7 @@ def state_loss(y_true, y_pred):
 
     pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
     try:
-        att_contrib = [np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:])]
+        att_contrib = [np.abs(np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:]))]
     except TypeError:
         att_contrib = pos_vel_contrib
 
