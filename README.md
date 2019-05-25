@@ -135,7 +135,6 @@ This is the complete list of editable flags, and their purpose
  * __model_name__: Name for the deep model, both for training (model to be trained) and for testing (model to be tested). Each model is automatically appended an id value to avoid overlaps (e.g. my_model_0, my_model_5)
  * __model_number__: Number (id) of the deep model that we want to work with
  * __model_type__: Which type of network to use. Must be one of *("speed_regression_net", "integration_net", "integration_so3_net", "preintegration_net")*
-*
  * __dataset__: Which dataset to use (for both training or testing)
  * __dataset_type__: Choose the dataset structure. Must be one of *("imu_integration", "imu_speed_regression", "imu_so3_integration", "imu_preintegration")*
  * __window_length__: The number of used IMU samples for all IMU-related tasks
