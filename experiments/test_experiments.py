@@ -134,11 +134,15 @@ class ExperimentManager:
         predictions = {k: [] for k in experiment_options["plot_data"].keys()}
         comparisons = {k: [] for k in experiment_options["plot_data"].keys()}
 
+        predictions_x_axis = None
+        comparisons_x_axis = None
+        gt_x_axis = None
+
         max_n_predictions = min([len(datasets[i][0]["imu_input"]) for i in range(len(datasets))])
-        n_predictions = None
+        n_pred = None
         if "iterations" in experiment_options.keys():
-            n_predictions = experiment_options["iterations"]
-            assert n_predictions * self.window_len - 1 < max_n_predictions, \
+            n_pred = experiment_options["iterations"]
+            assert n_pred * self.window_len - 1 < max_n_predictions, \
                 "The maximum number of iterations are {0} for the current window length of {1}".format(
                     int(np.floor(max_n_predictions / self.window_len)), self.window_len)
         assert len(experiment_options["plot_data"].keys()) == 1, \
@@ -151,61 +155,79 @@ class ExperimentManager:
         output_size = self.output_type_vars[experiment_options["plot_data"][output_name]["type"]]["shape"]
 
         for i, dataset in enumerate(datasets):
-            if n_predictions is None:
-                n_predictions = int(np.floor(len(dataset[0]["imu_input"]) / self.window_len))
+            d_len = len(dataset[0]["imu_input"])
+
+            if n_pred is None:
+                n_predictions_p = int(np.floor((d_len - self.window_len) / (self.window_len - 1)) + 2)
+                n_predictions_c = int(np.floor((d_len - self.window_len) / self.window_len) + 2)
+            else:
+                n_predictions_p = n_pred
+                n_predictions_c = n_pred
+
+            state_out_name = experiment_options["state_out"]["name"]
+            state_in_name = experiment_options["state_in"]["name"]
 
             for option in dataset_options[i]:
-
                 if option == "predict":
+                    predictions_x_axis = np.zeros(n_predictions_p, dtype=np.int)
                     model = self.model_loader()
-                    model_predictions = np.zeros((n_predictions + 1, ) + output_size)
-                    progress_bar = Progbar(n_predictions)
+                    model_predictions = np.zeros((n_predictions_p, ) + output_size)
+                    progress_bar = Progbar(n_predictions_p - 1)
                     model_out = {}
                     ds_i = 0
-                    for it in range(n_predictions + 1):
-                        progress_bar.update(it)
+                    model_predictions[0] = dataset[1][output_name][0]
+                    for it in range(n_predictions_p - 1):
+                        progress_bar.update(it+1)
                         model_in = {k: np.expand_dims(dataset[0][k][ds_i], axis=0) for k in dataset[0].keys()}
                         if it > 0:
-                            past_pred = model_out[experiment_options["state_out"]["name"]]
+                            past_pred = model_out[state_out_name]
                             if experiment_options["state_out"]["lie"]:
                                 past_pred = np.concatenate((past_pred[:, :6], exp_mapping(past_pred[:, 6:])), axis=1)
-                            model_in[experiment_options["state_in"]] = past_pred
+                            model_in[state_in_name] = past_pred
                         model_out = model.predict(model_in, verbose=0)
                         model_out = create_predictions_dict(model_out, model)
-                        model_predictions[it, :] = model_out[output_name]
+                        model_predictions[it+1, :] = model_out[output_name]
                         ds_i += self.window_len - 1
+                        predictions_x_axis[it+1] = int(ds_i)
+                        predictions_x_axis = predictions_x_axis.astype(np.int)
 
                     predictions[output_name] = model_predictions
 
                 elif option == "compare_prediction":
-                    model_predictions = np.zeros((n_predictions + 1, ) + output_size)
-                    progress_bar = Progbar(n_predictions)
-                    state_in = np.expand_dims(dataset[0][experiment_options["state_in"]][0], axis=0)
+                    model_predictions = np.zeros((n_predictions_c, 10))
+                    comparisons_x_axis = np.zeros(n_predictions_c, dtype=np.int)
+                    progress_bar = Progbar(n_predictions_c)
+                    state_in = np.expand_dims(dataset[0][state_in_name][0], axis=0)
+                    model_predictions[0, :] = state_in
                     ds_i = 0
-
-                    for it in range(n_predictions + 1):
-                        progress_bar.update(it)
+                    for it in range(n_predictions_c):
+                        progress_bar.update(it + 1)
                         model_out = self.alt_prediction_algo(
                             np.squeeze(np.expand_dims(dataset[0]["imu_input"][ds_i], axis=0), axis=-1), state_in, False)
                         model_predictions[it, :] = model_out
                         state_in = model_out
-                        ds_i += self.window_len - 1
+                        comparisons_x_axis[it] = int(ds_i)
+                        comparisons_x_axis = comparisons_x_axis.astype(np.int)
+                        ds_i += self.window_len - (1 if it == 0 else 0)
 
-                    progress_bar.update(n_predictions)
                     comparisons[output_name] = model_predictions
 
                 elif option == "ground_truth":
-                    gt = {k: dataset[1][k][:n_predictions * self.window_len, :] for k in experiment_options["plot_data"].keys()}
+                    state_in = np.expand_dims(dataset[0][state_in_name][0], axis=0)
+                    if experiment_options["state_out"]["lie"]:
+                        state_in = np.concatenate((state_in[:, :6], log_mapping(state_in[:, 6:])), axis=1)
+                    state_in = np.tile(state_in, (self.window_len-1, 1))
+                    gt = {k: dataset[1][k] for k in experiment_options["plot_data"].keys()}
+                    gt[state_out_name] = np.concatenate((state_in, gt[state_out_name]), axis=0)
+                    gt_x_axis = np.arange(0, len(gt[state_out_name]))
 
-        predictions_x_axis = np.arange(0, n_predictions + 1) * self.window_len
-        predictions_x_axis[1:] -= 1
         fig = self.draw_predictions(ground_truth=gt,
                                     model_prediction=predictions,
                                     comp_prediction=comparisons,
                                     plot_options=experiment_options["plot_data"],
-                                    gt_x=np.arange(0, n_predictions * self.window_len),
+                                    gt_x=gt_x_axis.astype(np.int),
                                     model_x=predictions_x_axis,
-                                    comp_x=predictions_x_axis)
+                                    comp_x=comparisons_x_axis)
         self.experiment_plot(fig, experiment_options, experiment_name=experiment_name)
 
     @staticmethod
@@ -416,8 +438,8 @@ class ExperimentManager:
                 ax1.plot(comp_x, comp_pred_q[:, 0], 'xkcd:grey')
                 ax2.plot(comp_x, comp_pred_q[:, 1], 'xkcd:grey')
                 ax3.plot(comp_x, comp_pred_q[:, 2], 'xkcd:grey')
-                q_comp_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - comp_pred_q, axis=1)
-                q_error = quaternion_error(exp_mapping(ground_truth[:, 6:9]), comparative_prediction[:, 6:10])
+                q_comp_pred_e = np.linalg.norm(ground_truth[comp_x, 6:9] - comp_pred_q, axis=1)
+                q_error = quaternion_error(exp_mapping(ground_truth[comp_x, 6:9]), comparative_prediction[:, 6:10])
                 q_comp_pred_e = np.append(np.expand_dims(q_comp_pred_e, axis=1),
                                           np.expand_dims(np.array([abs(np.sin(q_e.angle)) for q_e in q_error]), axis=1),
                                           axis=1)
@@ -445,10 +467,10 @@ class ExperimentManager:
             ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
             ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
             if options["type"] == "10-dof-state":
-                ax3.plot(model_x, q_comp_pred_e, 'k')
+                ax3.plot(comp_x, q_comp_pred_e, 'k')
             elif options["type"] == "9-dof-state-lie":
-                ax3.plot(model_x, q_comp_pred_e[:, 1], 'k')
-                ax3.plot(model_x, q_comp_pred_e[:, 0], 'xkcd:grey')
+                ax3.plot(comp_x, q_comp_pred_e[:, 1], 'k')
+                ax3.plot(comp_x, q_comp_pred_e[:, 0], 'xkcd:grey')
 
             ax1.legend(['prediction', 'integration'], loc='upper right')
             ax3.legend(['prediction', 'pred. lie', 'integration', 'integ. lie'], loc='upper right')
@@ -529,11 +551,15 @@ class ExperimentManager:
         return fig1
 
     def draw_scalar_comparison(self, ground_truth, model_prediction, comp_prediction, gt_x, model_x, comp_x, plot_op):
+
         fig1 = plt.figure()
         plt.plot(ground_truth, 'b')
         plt.plot(model_prediction, 'r')
         if isinstance(comp_prediction, np.ndarray):
             plt.plot(comp_prediction, 'k')
+            plt.legend(["g_truth", "prediction", "integration"])
+        else:
+            plt.legend(["g_truth", "prediction"])
         plt.title(plot_op["title"])
         plt.xlabel('sample')
         plt.ylabel(plot_op["y_label"])

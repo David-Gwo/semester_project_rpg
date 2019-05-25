@@ -57,7 +57,7 @@ class Learner(object):
             loss_connections = {"pre_integrated_R": 'mse',
                                 "pre_integrated_v": 'mse',
                                 "pre_integrated_p": 'mse',
-                                "state_output": 'mse'}
+                                "state_output": state_loss}
             loss_weight = {"pre_integrated_R": 1.0,
                            "pre_integrated_v": 1.0,
                            "pre_integrated_p": 1.0,
@@ -128,7 +128,7 @@ class Learner(object):
 
         # Get training and validation datasets from saved files
         dataset = self.get_dataset(train=True, val_split=True, random_split=False, shuffle=True, repeat_ds=True,
-                                   normalize=False)
+                                   normalize=True)
         train_ds, validation_ds, ds_lengths = dataset
 
         train_steps_per_epoch = int(math.ceil(ds_lengths[0]/self.config.batch_size))

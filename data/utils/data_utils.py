@@ -169,7 +169,6 @@ def filter_with_coeffs(a, b, time_series, sampling_f=None, plot_stft=False):
     """
 
     filtered_signal = signal.lfilter(b, a, time_series, axis=0)
-
     if plot_stft:
         assert sampling_f is not None, "A sampling frequency must be specified to plot the STFT"
         figure = plt.figure()

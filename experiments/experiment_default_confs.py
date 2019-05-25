@@ -56,7 +56,9 @@ def experiment_builder(model_type):
                         "name": "state_output",
                         "lie": True
                     },
-                    "state_in": "state_input",
+                    "state_in": {
+                        "name": "state_input"
+                    },
                     "plot_data": {
                         "state_output": {
                             "type": "9-dof-state-lie"
@@ -68,7 +70,7 @@ def experiment_builder(model_type):
     elif model_type == 'pre_integration_net':
         experiments_dict = {
             "plot_predictions": {
-                "ds_training_non_tensorflow_unnormalized": ["predict", "ground_truth"],
+                "ds_testing_non_tensorflow_unnormalized": ["predict", "ground_truth", "compare_prediction"],
                 "options": {
                     "output": "show",
                     "plot_data": {
