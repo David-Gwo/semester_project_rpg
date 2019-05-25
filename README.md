@@ -138,7 +138,6 @@ This is the complete list of editable flags, and their purpose
  * __dataset__: Which dataset to use (for both training or testing)
  * __dataset_type__: Choose the dataset structure (i.e. speed regression / IMU integration...)
  * __window_length__: The number of used IMU samples for all IMU-related tasks
-
  * __batch_size__: Batch size in training and evaluation
  * __learning_rate__: Learning rate for adam optimizer (as configured by default)
  * __beta1__: Momentum term of adam optimizer
@@ -178,7 +177,7 @@ The model can only be trained on one dataset at a time, so the number of the EuR
 
 #### [BlackBird](https://github.com/mit-fast/Blackbird-Dataset) dataset
 
-The blackbird dataset is somewhat less user friendly since it has many more recorded flights, and the data is only provided in rosbag format. Interested readers are referenced to the [dataset main page]((https://github.com/mit-fast/Blackbird-Dataset). To cope with this, the pipeline to work with this dataset has been automatized. 
+The blackbird dataset is somewhat less user friendly since it has many more recorded flights, and the data is only provided in rosbag format. Interested readers are referenced to the [dataset main page](https://github.com/mit-fast/Blackbird-Dataset). To cope with this, the pipeline to work with this dataset has been automatized. 
 
 The instance of the blackbird dataset to be used must be specified in the [blackbird flags file](./data/config/blackbird_flags.py). Such specification implies setting up three parameters:
   * `trajectory_name`: e.g. 'bentDice'
