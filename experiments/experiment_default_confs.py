@@ -35,18 +35,18 @@ def experiment_builder(model_type):
         }
     elif model_type == 'integration_so3_net':
         experiments_dict = {
-            # "plot_predictions": {
-            #     "ds_testing_non_tensorflow": ["predict"],
-            #     "ds_testing_non_tensorflow_unnormalized": ["ground_truth", "compare_prediction"],
-            #     "options": {
-            #         "output": "show",
-            #         "plot_data": {
-            #             "state_output": {
-            #                 "type": "9-dof-state-lie",
-            #             }
-            #         }
-            #     }
-            # },
+            "plot_predictions": {
+                "ds_testing_non_tensorflow": ["predict"],
+                "ds_testing_non_tensorflow_unnormalized": ["ground_truth", "compare_prediction"],
+                "options": {
+                    "output": "show",
+                    "plot_data": {
+                        "state_output": {
+                            "type": "9-dof-state-lie",
+                        }
+                    }
+                }
+            },
             "iterate_model_output": {
                 "ds_training_non_tensorflow": ["predict"],
                 "ds_training_non_tensorflow_unnormalized": ["ground_truth"],

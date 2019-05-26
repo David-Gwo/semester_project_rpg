@@ -1,7 +1,6 @@
 import tensorflow as tf
-from tensorflow.python.keras.losses import mean_squared_error, mean_absolute_error
+from tensorflow.python.keras.losses import mean_squared_error
 from utils.algebra import quaternion_error
-import numpy as np
 
 
 def l1_loss(y_true, y_pred):
@@ -19,15 +18,13 @@ def l2_loss(y_true, y_pred):
     return l2_diff
 
 
-def pre_integration_loss(y_true, y_pred):
-
-    if not y_pred.shape[0]:
-        return tf.reshape(y_pred, [-1, np.prod(y_pred.shape[1:])])
-
-    batch_size = y_pred.shape[0]
-    flattened_size = np.prod(y_pred.shape[1:])
-    return mean_absolute_error(tf.reshape(y_true, (batch_size, flattened_size)),
-                               tf.reshape(y_pred, (batch_size, flattened_size)))
+def pre_int_loss(weight):
+    def loss_fn(y_true, y_pred):
+        loss = tf.concat((mean_squared_error(y_true[:, :-1], y_pred[:, :-1]),
+                          tf.expand_dims(mean_squared_error(y_true[:, -1], y_pred[:, -1]) * (1 + weight), axis=1)),
+                         axis=-1)
+        return loss
+    return loss_fn
 
 
 def mock_loss(y_true, _):
@@ -49,10 +46,10 @@ def so3_loss_func(y_true, y_pred):
 
 
 def state_loss(y_true, y_pred):
+    pos_vel_contrib = l2_loss(y_true[:, :3], y_pred[:, :3]) + l2_loss(y_true[:, 3:6], y_pred[:, 3:6])
 
-    pos_vel_contrib = l1_loss(y_true[:, :3], y_pred[:, :3]) + l1_loss(y_true[:, 3:6], y_pred[:, 3:6])
     try:
-        att_contrib = [np.abs(np.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:]))]
+        att_contrib = [tf.abs(tf.math.sin(q.angle) for q in quaternion_error(y_true[:, 6:], y_pred[:, 6:]))]
     except TypeError:
         att_contrib = pos_vel_contrib
 

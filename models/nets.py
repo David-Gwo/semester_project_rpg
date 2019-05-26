@@ -64,11 +64,12 @@ def cnn_rnn_pre_int_net(window_len, n_iterations):
     x = layers.TimeDistributed(layers.Dense(50, activation='tanh'))(x)
     p_prior = layers.TimeDistributed(layers.Dense(pre_int_shape[1]), name="pre_integrated_p")(x)
 
-    rot_prior_, v_prior_, p_prior_ = custom_layers.DifferenceRegularizer(0.01)((rot_prior, v_prior, p_prior))
+    rot_prior_, v_prior_, p_prior_ = custom_layers.DifferenceRegularizer(0.005)((rot_prior, v_prior, p_prior))
 
     state_out = custom_layers.IntegratingLayer(name="state_output")([state_in, rot_prior_, v_prior_, p_prior_, dt_vec])
 
-    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
+    return Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior)), \
+        Model(inputs=(imu_in, state_in), outputs=(rot_prior, v_prior, p_prior, state_out))
 
 
 def fully_connected_net(args):

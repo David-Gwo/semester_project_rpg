@@ -202,6 +202,6 @@ class DifferenceRegularizer(Layer):
     def call(self, inputs, **kwargs):
         y = ops.convert_to_tensor(inputs)
         y = tf.map_fn(lambda x: tf.reduce_sum(tf.square(x[:, 1:]-x[:, :-1]), axis=(0, 1, 2)) +
-                      tf.reduce_sum(x[:, 0, :], axis=(0, 1)), tf.transpose(y, perm=[1, 2, 3, 0]))
+                      tf.reduce_sum(tf.square(x[:, 0, :])*1/self.weight, axis=(0, 1)), tf.transpose(y, perm=[1, 2, 3, 0]))
         self.add_loss(tf.reduce_mean(y) * self.weight)
         return inputs

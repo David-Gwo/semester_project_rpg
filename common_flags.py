@@ -3,12 +3,12 @@ FLAGS = gflags.FLAGS
 
 
 # Main parameters
-gflags.DEFINE_string("model_name", "cnn_vel_net", "Name for the deep model")
-gflags.DEFINE_integer("model_number", 0, "Which model to train or test")
-gflags.DEFINE_string("model_type", "speed_regression_net", "Type of the deep model")
-gflags.DEFINE_string('dataset', 'euroc', 'Which dataset to use for training and testing')
-gflags.DEFINE_integer('window_length', 200, 'The number of past samples used to predict next velocity value')
-gflags.DEFINE_string('dataset_type', "windowed_imu_speed_regression", 'Dataset structure to be built')
+gflags.DEFINE_string("model_name", "lstm_custom_forward", "Name for the deep model")
+gflags.DEFINE_integer("model_number", 8, "Which model to train or test")
+gflags.DEFINE_string("model_type", "preintegration_net", "Type of the deep model")
+gflags.DEFINE_string('dataset', 'blackbird', 'Which dataset to use for training and testing')
+gflags.DEFINE_integer('window_length', 50, 'The number of past samples used to predict next velocity value')
+gflags.DEFINE_string('dataset_type', "imu_preintegration", 'Dataset structure to be built')
 
 # Train parameters
 gflags.DEFINE_integer('batch_size', 32, 'Batch size in training and evaluation')

@@ -18,6 +18,7 @@ class Learner(object):
     def __init__(self, config):
         self.config = config
         self.trainable_model = None
+        self.test_model = None
         self.model_name = None
         self.model_version_number = None
         self.last_epoch_number = 0
@@ -33,27 +34,30 @@ class Learner(object):
     def build_and_compile_model(self, is_testing=False):
 
         if self.config.model_type == "speed_regression_net":
-            trainable_model = vel_cnn(self.config.window_length)
-            loss_connections = {"state_output": l1_loss}
-            loss_weight = {"state_output": 1.0}
+            test_model = trainable_model = vel_cnn(self.config.window_length)
+            test_losses = train_losses = {"state_output": l1_loss}
+            train_loss_weights = {"state_output": 1.0}
         elif self.config.model_type == "integration_net":
-            trainable_model = imu_integration_net(self.config.window_length, 10)
-            loss_connections = {"state_output": state_loss}
-            loss_weight = {"state_output": 1.0}
+            test_model = trainable_model = imu_integration_net(self.config.window_length, 10)
+            test_losses = train_losses = {"state_output": state_loss}
+            train_loss_weights = {"state_output": 1.0}
         elif self.config.model_type == "integration_so3_net":
             trainable_model = imu_integration_net(self.config.window_length, 9)
-            loss_connections = {"state_output": 'mse'}
-            loss_weight = {"state_output": 1.0}
+            test_model = trainable_model
+            test_losses = train_losses = {"state_output": 'mse'}
+            train_loss_weights = {"state_output": 1.0}
         elif self.config.model_type == "preintegration_net":
-            trainable_model = cnn_rnn_pre_int_net(self.config.window_length, 2)
-            loss_connections = {"pre_integrated_R": 'mse',
-                                "pre_integrated_v": 'mse',
-                                "pre_integrated_p": 'mse',
-                                "state_output": state_loss}
-            loss_weight = {"pre_integrated_R": 1.0,
-                           "pre_integrated_v": 1.0,
-                           "pre_integrated_p": 1.0,
-                           "state_output": 0.2}
+            trainable_model, test_model = cnn_rnn_pre_int_net(self.config.window_length, 2)
+            train_losses = {"pre_integrated_R": pre_int_loss(0),
+                            "pre_integrated_v": pre_int_loss(0),
+                            "pre_integrated_p": pre_int_loss(0)}
+            train_loss_weights = {"pre_integrated_R": 1.0,
+                                  "pre_integrated_v": 1.0,
+                                  "pre_integrated_p": 1.0}
+            test_losses = {"pre_integrated_R": pre_int_loss(0),
+                           "pre_integrated_v": pre_int_loss(0),
+                           "pre_integrated_p": pre_int_loss(0),
+                           "state_output": state_loss}
         else:
             raise NameError("Model type not known. Expected one of {0}".format(self.valid_model_types))
 
@@ -61,13 +65,14 @@ class Learner(object):
 
         if not is_testing:
             trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                    loss=loss_connections,
-                                    loss_weight=loss_weight)
+                                    loss=train_losses,
+                                    loss_weight=train_loss_weights)
         else:
-            trainable_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
-                                    loss=loss_connections)
+            test_model.compile(optimizer=tf.keras.optimizers.Adam(self.config.learning_rate, self.config.beta1),
+                               loss=test_losses)
 
         self.trainable_model = trainable_model
+        self.test_model = test_model
 
     def get_dataset(self, train, val_split, shuffle, random_split=True, const_batch_size=False, normalize=True,
                     repeat_ds=False, tensorflow_format=True):
@@ -207,10 +212,10 @@ class Learner(object):
 
         if requested_model_num is None:
             self.recover_model_from_checkpoint(model_used_pos=model_pos)
-            return self.trainable_model
+            return self.test_model
         else:
             new_model_num = self.recover_model_from_checkpoint(model_used_pos=requested_model_num)
-            return self.trainable_model, new_model_num
+            return self.test_model, new_model_num
 
     def experiment_dataset_request(self, dataset_tags):
         train = False

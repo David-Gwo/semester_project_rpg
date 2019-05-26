@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from utils.algebra import imu_integration, log_mapping, exp_mapping, quaternion_error
+from utils.algebra import imu_integration, log_mapping, exp_mapping, quaternion_error, correct_quaternion_flip
 from utils.visualization import Dynamic3DTrajectory
 from utils.models import create_predictions_dict
 from utils.directories import safe_mkdir_recursive
@@ -377,6 +377,8 @@ class ExperimentManager:
             ax2 = fig3.add_subplot(4, 1, 2)
             ax3 = fig3.add_subplot(4, 1, 3)
             ax4 = fig3.add_subplot(4, 1, 4)
+
+            model_prediction[:, 6:] = correct_quaternion_flip(model_prediction[:, 6:])
 
             ax1.plot(gt_x, ground_truth[:, 6], 'b')
             ax1.plot(model_x, model_prediction[:, 6], 'r')
