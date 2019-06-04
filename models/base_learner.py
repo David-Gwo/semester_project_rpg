@@ -48,9 +48,9 @@ class Learner(object):
             train_loss_weights = {"state_output": 1.0}
         elif self.config.model_type == "preintegration_net":
             trainable_model, test_model = cnn_rnn_pre_int_net(self.config.window_length, 2)
-            train_losses = {"pre_integrated_R": pre_int_loss(0),
-                            "pre_integrated_v": pre_int_loss(0),
-                            "pre_integrated_p": pre_int_loss(0)}
+            train_losses = {"pre_integrated_R": pre_int_loss(0.5),
+                            "pre_integrated_v": pre_int_loss(0.5),
+                            "pre_integrated_p": pre_int_loss(0.5)}
             train_loss_weights = {"pre_integrated_R": 1.0,
                                   "pre_integrated_v": 1.0,
                                   "pre_integrated_p": 1.0}

@@ -294,10 +294,14 @@ class ExperimentManager:
                 tiled_prediction = np.zeros(ground_truth[:, 0:3].shape)
                 for i in np.arange(len(model_prediction) - 1, 0, -1) - 1:
                     tiled_prediction[i * self.window_len:(i + 1) * self.window_len, :] = model_prediction[i, 0:3]
+                rm_indx = np.where(tiled_prediction == [0, 0, 0])[0]
+                tiled_prediction = np.delete(tiled_prediction, rm_indx, axis=0)
+                d_plot_gt = np.delete(ground_truth[:, 0:3], rm_indx, axis=0)
             else:
                 tiled_prediction = model_prediction[:, 0:3]
+                d_plot_gt = ground_truth[:, 0:3]
 
-            dynamic_plot = Dynamic3DTrajectory([ground_truth[:, 0:3], tiled_prediction], options["sparsing_factor"])
+            dynamic_plot = Dynamic3DTrajectory([d_plot_gt, tiled_prediction], options["sparsing_factor"])
             _ = dynamic_plot()
 
         fig3d = plt.figure()
@@ -430,7 +434,7 @@ class ExperimentManager:
             ax2.set_xticks([])
             ax3.set_xlabel('sample #')
 
-            q_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - model_prediction[:, 6:9], axis=1)
+            q_pred_e = np.linalg.norm(ground_truth[model_x, 6:9] - model_prediction[:, 6:9], axis=1)**2
             q_error = quaternion_error(exp_mapping(ground_truth[model_x, 6:9]), exp_mapping(model_prediction[:, 6:9]))
             q_pred_e = np.append(np.expand_dims(q_pred_e, axis=1),
                                  np.expand_dims(np.array([abs(np.sin(q_e.angle)) for q_e in q_error]), axis=1), axis=1)
@@ -440,7 +444,7 @@ class ExperimentManager:
                 ax1.plot(comp_x, comp_pred_q[:, 0], 'xkcd:grey')
                 ax2.plot(comp_x, comp_pred_q[:, 1], 'xkcd:grey')
                 ax3.plot(comp_x, comp_pred_q[:, 2], 'xkcd:grey')
-                q_comp_pred_e = np.linalg.norm(ground_truth[comp_x, 6:9] - comp_pred_q, axis=1)
+                q_comp_pred_e = np.linalg.norm(ground_truth[comp_x, 6:9] - comp_pred_q, axis=1)**2
                 q_error = quaternion_error(exp_mapping(ground_truth[comp_x, 6:9]), comparative_prediction[:, 6:10])
                 q_comp_pred_e = np.append(np.expand_dims(q_comp_pred_e, axis=1),
                                           np.expand_dims(np.array([abs(np.sin(q_e.angle)) for q_e in q_error]), axis=1),
@@ -458,24 +462,34 @@ class ExperimentManager:
         ax3 = fig4.add_subplot(3, 1, 3)
         ax3.set_xlabel('sample #')
 
-        ax1.plot(model_x, np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1), 'r')
-        ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1), 'r')
+        ax1.plot(model_x, np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1)**2, 'r')
+        ax2.plot(model_x, np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1)**2, 'r')
+        print("Predicted position average error: {0}".format(
+            np.mean(np.linalg.norm(ground_truth[model_x, :3] - model_prediction[:, :3], axis=1) ** 2)))
+        print("Predicted velocity average error: {0}".format(
+            np.mean(np.linalg.norm(ground_truth[model_x, 3:6] - model_prediction[:, 3:6], axis=1) ** 2)))
+
         if options["type"] == "10-dof-state":
             ax3.plot(model_x, q_pred_e, 'r')
+            print("Predicted rotation (quat) average error {0}".format(np.average(q_pred_e)))
         elif options["type"] == "9-dof-state-lie":
             ax3.plot(model_x, q_pred_e[:, 1], 'r')
-            ax3.plot(model_x, q_pred_e[:, 0], 'xkcd:orange')
+            print("Predicted rotation (quat) average error {0}".format(np.average(q_pred_e[:, 1])))
         if comp_available:
-            ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1), 'k')
-            ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1), 'k')
+            ax1.plot(comp_x, np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1)**2, 'k')
+            ax2.plot(comp_x, np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1)**2, 'k')
+            print("Integrated position average error: {0}".format(
+                np.mean(np.linalg.norm(ground_truth[comp_x, :3] - comparative_prediction[:, :3], axis=1) ** 2)))
+            print("Integrated velocity average error: {0}".format(
+                np.mean(np.linalg.norm(ground_truth[comp_x, 3:6] - comparative_prediction[:, 3:6], axis=1) ** 2)))
             if options["type"] == "10-dof-state":
                 ax3.plot(comp_x, q_comp_pred_e, 'k')
+                print("Integrated rotation (quat) average error {0}".format(np.average(q_comp_pred_e)))
             elif options["type"] == "9-dof-state-lie":
                 ax3.plot(comp_x, q_comp_pred_e[:, 1], 'k')
-                ax3.plot(comp_x, q_comp_pred_e[:, 0], 'xkcd:grey')
+                print("Integrated rotation (quat) average error {0}".format(np.average(q_comp_pred_e[:, 1])))
 
             ax1.legend(['prediction', 'integration'], loc='upper right')
-            ax3.legend(['prediction', 'pred. lie', 'integration', 'integ. lie'], loc='upper right')
 
         else:
             ax1.legend(['prediction'], loc='upper right')

@@ -106,6 +106,8 @@ class Dynamic3DTrajectory:
         ani = animation.FuncAnimation(self.figure, self.animate, init_func=self.on_init, frames=self.data_len,
                                       interval=5, blit=True, repeat=False)
 
+        ani.save('./animation.gif', writer='imagemagick', fps=60)
+
         plt.show()
 
         return self.figure
